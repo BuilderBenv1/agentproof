@@ -123,14 +123,15 @@ const ap = new AgentProof({
   chainId: 43113,
 })
 
+// Reads from official ERC-8004 registries
 const total = await ap.totalAgents()
 const agent = await ap.getAgent(1)
-const profile = await ap.getAgentProfile(1)`,
+const summary = await ap.getReputationSummary(1)`,
   },
   {
-    title: "Register an Agent",
+    title: "Register an Agent (ERC-8004)",
     language: "typescript",
-    code: `import { AgentProof, encodeMetadataURI, parseAvax } from '@agentproof/sdk'
+    code: `import { AgentProof, encodeMetadataURI } from '@agentproof/sdk'
 
 const ap = new AgentProof({
   rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
@@ -144,18 +145,20 @@ const uri = encodeMetadataURI({
   category: 'defi',
 })
 
-await ap.registerAgent(uri, { value: parseAvax('0.1') })`,
+// No bond required — official ERC-8004 registry
+await ap.registerAgent(uri)`,
   },
   {
-    title: "Submit Feedback",
+    title: "Give Feedback (ERC-8004)",
     language: "typescript",
-    code: `import { hashTask } from '@agentproof/sdk'
+    code: `// Official ERC-8004 reputation: int128 value + decimals
+await ap.giveFeedback(1, 85, 0, {
+  feedbackURI: 'https://feedback.json',
+  feedbackHash: hashTask('completed-task-42'),
+})
 
-const taskHash = hashTask('completed-task-42')
-await ap.submitFeedback(1, 85, 'https://feedback.json', taskHash)
-
-const avg = await ap.getAverageRating(1)
-console.log('Average rating:', avg)`,
+const summary = await ap.getReputationSummary(1)
+console.log('Average:', summary.averageValue)`,
   },
   {
     title: "Listen for Events",
@@ -164,32 +167,36 @@ console.log('Average rating:', avg)`,
   console.log(\`Agent #\${event.agentId} registered by \${event.owner}\`)
 })
 
-ap.onFeedbackSubmitted((event) => {
-  console.log(\`Agent #\${event.agentId} rated \${event.rating} by \${event.reviewer}\`)
+ap.onNewFeedback((event) => {
+  console.log(\`Agent #\${event.agentId} rated \${event.value} by \${event.reviewer}\`)
 })`,
   },
 ];
 
 const CONTRACTS = [
   {
-    name: "IdentityRegistry",
-    address: "0x4Ec097F5441F24B567C4c741eAEeBcBE3D107825",
-    description: "ERC-721 agent identity NFTs. Mints agent tokens with metadata URI. 0.1 AVAX registration bond.",
+    name: "ERC-8004 Identity Registry",
+    address: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    description: "Official Ava Labs ERC-8004 Identity Registry. ERC-721 agent identity NFTs with metadata URI.",
+    official: true,
   },
   {
-    name: "ReputationRegistry",
-    address: "0xC5ED5Bd84680e503072C4F13Aa0585cc38D2B846",
-    description: "On-chain feedback storage. 1-100 ratings, anti-self-rating, 24h cooldown per reviewer per agent.",
+    name: "ERC-8004 Reputation Registry",
+    address: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    description: "Official Ava Labs ERC-8004 Reputation Registry. Feedback with int128 values, tags, and revocation.",
+    official: true,
   },
   {
     name: "ValidationRegistry",
     address: "0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a",
-    description: "Task validation requests and responses. Tracks validation success rates.",
+    description: "AgentProof custom validation registry. Task validation requests and responses with success rate tracking.",
+    official: false,
   },
   {
     name: "AgentProofCore",
     address: "0x833cAd4dfBBEa832C56526bc82a85BaC85015594",
-    description: "Orchestrator contract. Aggregated profiles, top agents, category management.",
+    description: "AgentProof orchestrator. Aggregated profiles, top agents, category management.",
+    official: false,
   },
 ];
 
@@ -348,20 +355,22 @@ export default function DocsPage() {
             <p className="text-xs font-mono text-gray-500 uppercase mb-2">SDK Methods</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
               {[
-                "registerAgent(uri, opts?)",
-                "updateAgentURI(id, uri)",
+                "registerAgent(uri)",
+                "setAgentURI(id, uri)",
                 "getAgent(id)",
                 "isRegistered(address)",
                 "totalAgents()",
-                "submitFeedback(id, rating, uri, hash)",
-                "getAverageRating(id)",
+                "giveFeedback(id, value, decimals, opts?)",
+                "readFeedback(feedbackId)",
+                "getReputationSummary(id)",
                 "getFeedbackCount(id)",
+                "revokeFeedback(feedbackId)",
                 "requestValidation(id, hash, uri)",
                 "submitValidation(id, valid, uri)",
                 "getAgentProfile(id)",
                 "getTopAgents(count)",
                 "onAgentRegistered(cb)",
-                "onFeedbackSubmitted(cb)",
+                "onNewFeedback(cb)",
               ].map((method) => (
                 <div key={method} className="text-gray-400 flex items-center gap-1">
                   <span className="text-emerald-400/50">&#9679;</span> {method}
@@ -388,9 +397,16 @@ export default function DocsPage() {
 
           <div className="space-y-3">
             {CONTRACTS.map((contract) => (
-              <div key={contract.name} className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+              <div key={contract.name} className={`bg-gray-900/50 border rounded-lg p-4 ${contract.official ? "border-emerald-500/20" : "border-gray-800"}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-white">{contract.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white">{contract.name}</h3>
+                    {contract.official && (
+                      <span className="text-[9px] font-bold font-mono uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">
+                        Official
+                      </span>
+                    )}
+                  </div>
                   <a
                     href={`https://testnet.snowtrace.io/address/${contract.address}`}
                     target="_blank"
@@ -412,13 +428,13 @@ export default function DocsPage() {
           <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
             <p className="text-xs font-mono text-gray-500 uppercase mb-2">Key Features</p>
             <ul className="space-y-1 text-xs text-gray-400">
+              <li>&#9679; Official ERC-8004 Identity and Reputation registries (Ava Labs)</li>
               <li>&#9679; ERC-721 agent identity NFTs with metadata URI</li>
-              <li>&#9679; 0.1 AVAX registration bond (anti-sybil)</li>
-              <li>&#9679; 1-100 rating scale with on-chain average</li>
-              <li>&#9679; Self-rating prevention (reviewer != owner)</li>
-              <li>&#9679; 24-hour rate limit per reviewer per agent</li>
-              <li>&#9679; Task validation with success rate tracking</li>
-              <li>&#9679; Pausable contracts with owner controls</li>
+              <li>&#9679; int128 feedback values with configurable decimals and tags</li>
+              <li>&#9679; Feedback revocation and response appending</li>
+              <li>&#9679; AgentProof custom validation with success rate tracking</li>
+              <li>&#9679; Composite scoring engine on top of official registries</li>
+              <li>&#9679; Bayesian-smoothed leaderboard rankings</li>
             </ul>
           </div>
         </div>

@@ -42,6 +42,38 @@ async function main() {
   const coreAddr = await agentProofCore.getAddress();
   console.log("AgentProofCore deployed to:", coreAddr);
 
+  // 5. Deploy InsurancePool (Phase 3)
+  console.log("\n--- Deploying InsurancePool ---");
+  const InsurancePool = await ethers.getContractFactory("InsurancePool");
+  const insurancePool = await InsurancePool.deploy(identityAddr, validationAddr);
+  await insurancePool.waitForDeployment();
+  const insuranceAddr = await insurancePool.getAddress();
+  console.log("InsurancePool deployed to:", insuranceAddr);
+
+  // 6. Deploy AgentPayments (Phase 3)
+  console.log("\n--- Deploying AgentPayments ---");
+  const AgentPayments = await ethers.getContractFactory("AgentPayments");
+  const agentPayments = await AgentPayments.deploy(identityAddr, validationAddr);
+  await agentPayments.waitForDeployment();
+  const paymentsAddr = await agentPayments.getAddress();
+  console.log("AgentPayments deployed to:", paymentsAddr);
+
+  // 7. Deploy ReputationGate (Phase 3)
+  console.log("\n--- Deploying ReputationGate ---");
+  const ReputationGate = await ethers.getContractFactory("ReputationGate");
+  const reputationGate = await ReputationGate.deploy(coreAddr);
+  await reputationGate.waitForDeployment();
+  const gateAddr = await reputationGate.getAddress();
+  console.log("ReputationGate deployed to:", gateAddr);
+
+  // 8. Deploy ReputationSource (Phase 3 — C-Chain side of ICM bridge)
+  console.log("\n--- Deploying ReputationSource ---");
+  const ReputationSource = await ethers.getContractFactory("ReputationSource");
+  const reputationSource = await ReputationSource.deploy(coreAddr, deployer.address);
+  await reputationSource.waitForDeployment();
+  const sourceAddr = await reputationSource.getAddress();
+  console.log("ReputationSource deployed to:", sourceAddr);
+
   // Output deployed addresses
   const addresses = {
     network: network.name,
@@ -53,6 +85,10 @@ async function main() {
       ReputationRegistry: reputationAddr,
       ValidationRegistry: validationAddr,
       AgentProofCore: coreAddr,
+      InsurancePool: insuranceAddr,
+      AgentPayments: paymentsAddr,
+      ReputationGate: gateAddr,
+      ReputationSource: sourceAddr,
     },
   };
 
@@ -93,6 +129,10 @@ async function main() {
     await verifyContract("ReputationRegistry", reputationAddr, [identityAddr]);
     await verifyContract("ValidationRegistry", validationAddr, [identityAddr]);
     await verifyContract("AgentProofCore", coreAddr, [identityAddr, reputationAddr, validationAddr]);
+    await verifyContract("InsurancePool", insuranceAddr, [identityAddr, validationAddr]);
+    await verifyContract("AgentPayments", paymentsAddr, [identityAddr, validationAddr]);
+    await verifyContract("ReputationGate", gateAddr, [coreAddr]);
+    await verifyContract("ReputationSource", sourceAddr, [coreAddr, deployer.address]);
   }
 }
 

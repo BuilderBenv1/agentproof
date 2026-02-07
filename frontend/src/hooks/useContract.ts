@@ -1,9 +1,11 @@
 "use client";
 
 import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther, keccak256, toHex } from "viem";
+import { keccak256, toHex } from "viem";
 import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI } from "@/lib/contracts";
-import { CONTRACT_ADDRESSES, REGISTRATION_BOND } from "@/lib/constants";
+import { CONTRACT_ADDRESSES } from "@/lib/constants";
+
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 
 export function useRegisterAgent() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();
@@ -17,12 +19,12 @@ export function useRegisterAgent() {
       throw new Error("Identity Registry address not configured");
     }
 
+    // Official ERC-8004: register(string agentURI) — no bond required
     writeContract({
       address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
       abi: IDENTITY_REGISTRY_ABI,
-      functionName: "registerAgent",
+      functionName: "register",
       args: [agentURI],
-      value: parseEther(REGISTRATION_BOND),
     });
   }
 
@@ -30,17 +32,21 @@ export function useRegisterAgent() {
 }
 
 export function useIsRegistered(address: string | undefined) {
+  // ERC-8004 uses balanceOf > 0 to check registration
   const { data, isLoading } = useReadContract({
     address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
     abi: IDENTITY_REGISTRY_ABI,
-    functionName: "isRegistered",
+    functionName: "balanceOf",
     args: address ? [address as `0x${string}`] : undefined,
     query: {
       enabled: !!address && !!CONTRACT_ADDRESSES.identityRegistry,
     },
   });
 
-  return { isRegistered: data as boolean | undefined, isLoading };
+  const balance = data as bigint | undefined;
+  const isRegistered = balance !== undefined ? balance > BigInt(0) : undefined;
+
+  return { isRegistered, isLoading };
 }
 
 export function useSubmitFeedback() {
@@ -55,19 +61,30 @@ export function useSubmitFeedback() {
       throw new Error("Reputation Registry address not configured");
     }
 
-    const taskHash = keccak256(toHex(taskDescription));
-
     const feedbackURI = `data:application/json;base64,${btoa(JSON.stringify({
       rating,
       task: taskDescription,
       timestamp: new Date().toISOString(),
     }))}`;
 
+    const feedbackHash = keccak256(toHex(taskDescription));
+
+    // Official ERC-8004: giveFeedback(agentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash)
+    // We use value=rating (1-100), valueDecimals=0, empty tags/endpoint
     writeContract({
       address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
       abi: REPUTATION_REGISTRY_ABI,
-      functionName: "submitFeedback",
-      args: [BigInt(agentId), rating, feedbackURI, taskHash],
+      functionName: "giveFeedback",
+      args: [
+        BigInt(agentId),
+        BigInt(rating),     // int128 value
+        0,                  // uint8 valueDecimals
+        ZERO_BYTES32,       // tag1
+        ZERO_BYTES32,       // tag2
+        "",                 // endpoint
+        feedbackURI,
+        feedbackHash,
+      ],
     });
   }
 
@@ -78,7 +95,7 @@ export function useTotalAgents() {
   const { data, isLoading } = useReadContract({
     address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
     abi: IDENTITY_REGISTRY_ABI,
-    functionName: "totalAgents",
+    functionName: "totalSupply",
     query: {
       enabled: !!CONTRACT_ADDRESSES.identityRegistry,
     },

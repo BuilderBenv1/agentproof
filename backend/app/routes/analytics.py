@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query
 from app.database import get_supabase
+from app.services.blockchain import get_blockchain_service
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -128,3 +129,23 @@ async def get_categories():
         })
 
     return {"categories": result}
+
+
+@router.get("/erc8004")
+async def get_erc8004_stats():
+    """Get stats about the official ERC-8004 registries."""
+    bc = get_blockchain_service()
+    stats = bc.get_erc8004_stats()
+
+    # Add indexed data stats from Supabase
+    db = get_supabase()
+
+    agents_result = db.table("agents").select("id", count="exact").execute()
+    feedback_result = db.table("reputation_events").select("id", count="exact").execute()
+    validations_result = db.table("validation_records").select("id", count="exact").execute()
+
+    stats["indexed_agents"] = agents_result.count or 0
+    stats["indexed_feedback"] = feedback_result.count or 0
+    stats["indexed_validations"] = validations_result.count or 0
+
+    return stats

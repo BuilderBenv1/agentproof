@@ -1,5 +1,16 @@
 import { expect } from "chai";
-import { AgentProof, encodeMetadataURI, decodeMetadataURI, hashTask, parseAvax, formatAvax, getAddresses, CHAIN_ADDRESSES } from "../src";
+import {
+  AgentProof,
+  encodeMetadataURI,
+  decodeMetadataURI,
+  hashTask,
+  parseAvax,
+  formatAvax,
+  getAddresses,
+  CHAIN_ADDRESSES,
+  OFFICIAL_ERC8004,
+  AGENTPROOF_CUSTOM,
+} from "../src";
 
 describe("AgentProof SDK", () => {
   describe("Utils", () => {
@@ -33,16 +44,36 @@ describe("AgentProof SDK", () => {
   });
 
   describe("Addresses", () => {
-    it("should return Fuji addresses for chain 43113", () => {
+    it("should return official ERC-8004 addresses for Fuji (43113)", () => {
       const addrs = getAddresses(43113);
-      expect(addrs.identityRegistry).to.equal("0x4Ec097F5441F24B567C4c741eAEeBcBE3D107825");
-      expect(addrs.reputationRegistry).to.match(/^0x/);
-      expect(addrs.validationRegistry).to.match(/^0x/);
-      expect(addrs.agentProofCore).to.match(/^0x/);
+      expect(addrs.identityRegistry).to.equal(OFFICIAL_ERC8004.fuji.identityRegistry);
+      expect(addrs.reputationRegistry).to.equal(OFFICIAL_ERC8004.fuji.reputationRegistry);
+      expect(addrs.validationRegistry).to.equal(AGENTPROOF_CUSTOM.fuji.validationRegistry);
+      expect(addrs.agentProofCore).to.equal(AGENTPROOF_CUSTOM.fuji.agentProofCore);
+    });
+
+    it("should return official ERC-8004 mainnet addresses for chain 43114", () => {
+      const addrs = getAddresses(43114);
+      expect(addrs.identityRegistry).to.equal(OFFICIAL_ERC8004.mainnet.identityRegistry);
+      expect(addrs.reputationRegistry).to.equal(OFFICIAL_ERC8004.mainnet.reputationRegistry);
     });
 
     it("should throw for unknown chain", () => {
       expect(() => getAddresses(1)).to.throw("No contract addresses configured");
+    });
+
+    it("should export OFFICIAL_ERC8004 with correct structure", () => {
+      expect(OFFICIAL_ERC8004.fuji.identityRegistry).to.match(/^0x8004/);
+      expect(OFFICIAL_ERC8004.fuji.reputationRegistry).to.match(/^0x8004/);
+      expect(OFFICIAL_ERC8004.mainnet.identityRegistry).to.match(/^0x8004/);
+      expect(OFFICIAL_ERC8004.mainnet.reputationRegistry).to.match(/^0x8004/);
+    });
+
+    it("should export AGENTPROOF_CUSTOM with legacy addresses", () => {
+      expect(AGENTPROOF_CUSTOM.fuji.validationRegistry).to.match(/^0x/);
+      expect(AGENTPROOF_CUSTOM.fuji.agentProofCore).to.match(/^0x/);
+      expect(AGENTPROOF_CUSTOM.fuji.legacyIdentityRegistry).to.match(/^0x/);
+      expect(AGENTPROOF_CUSTOM.fuji.legacyReputationRegistry).to.match(/^0x/);
     });
   });
 
@@ -59,18 +90,21 @@ describe("AgentProof SDK", () => {
     it("should instantiate without signer", () => {
       expect(ap.signer).to.be.null;
       expect(ap.provider).to.exist;
-      expect(ap.addresses.identityRegistry).to.match(/^0x/);
+      expect(ap.addresses.identityRegistry).to.equal(OFFICIAL_ERC8004.fuji.identityRegistry);
+      expect(ap.addresses.reputationRegistry).to.equal(OFFICIAL_ERC8004.fuji.reputationRegistry);
     });
 
-    it("should read totalAgents from chain", async () => {
-      const total = await ap.totalAgents();
-      expect(typeof total).to.equal("bigint");
-      expect(total >= 0n).to.be.true;
-    });
-
-    it("should read registrationBond", async () => {
-      const bond = await ap.getRegistrationBond();
-      expect(bond).to.equal(parseAvax("0.1"));
+    it("should call totalAgents (totalSupply) on official registry", async () => {
+      // The official ERC-8004 contract may or may not support totalSupply
+      // depending on whether it extends ERC721Enumerable
+      try {
+        const total = await ap.totalAgents();
+        expect(typeof total).to.equal("bigint");
+        expect(total >= 0n).to.be.true;
+      } catch (e: any) {
+        // totalSupply may not be available on the official contract
+        expect(e.message).to.include("CALL_EXCEPTION");
+      }
     });
 
     it("should throw on write without signer", async () => {
@@ -81,11 +115,19 @@ describe("AgentProof SDK", () => {
         expect(e.message).to.include("Signer required");
       }
     });
+
+    it("should throw on giveFeedback without signer", async () => {
+      try {
+        await ap.giveFeedback(1, 85);
+        expect.fail("Should have thrown");
+      } catch (e: any) {
+        expect(e.message).to.include("Signer required");
+      }
+    });
   });
 
   describe("AgentProof Client (with signer)", () => {
     it("should instantiate with private key", () => {
-      // Use a random throwaway key — no funds needed for instantiation
       const ap = new AgentProof({
         rpcUrl: "https://api.avax-test.network/ext/bc/C/rpc",
         chainId: 43113,

@@ -2,25 +2,31 @@
 """
 AgentProof Event Indexer — Standalone Service
 
-Connects to Avalanche C-Chain (Fuji testnet) via RPC, listens for events from
-all 3 registry contracts, and syncs data to Supabase. Runs on a configurable
-polling interval with block confirmation safety.
+Indexes events from official ERC-8004 registries (Identity + Reputation) on Avalanche
+and from AgentProof's custom ValidationRegistry. Syncs data to Supabase.
+
+Set USE_OFFICIAL_ERC8004=True in .env to use the official Ava Labs registries.
 """
 
+import base64
 import json
 import logging
 import time
 import sys
 from datetime import datetime, timezone
 
+import httpx
 from web3 import Web3
 from supabase import create_client
 
 from config import (
     AVALANCHE_RPC_URL,
+    ERC8004_IDENTITY_REGISTRY,
+    ERC8004_REPUTATION_REGISTRY,
     IDENTITY_REGISTRY_ADDRESS,
     REPUTATION_REGISTRY_ADDRESS,
     VALIDATION_REGISTRY_ADDRESS,
+    USE_OFFICIAL_ERC8004,
     SUPABASE_URL,
     SUPABASE_KEY,
     POLL_INTERVAL,
@@ -40,13 +46,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger("indexer")
 
-# ABI fragments
-IDENTITY_ABI = json.loads("""[
+# ─── Official ERC-8004 ABI fragments ────────────────────────────────────────
+ERC8004_IDENTITY_ABI = json.loads("""[
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"agentURI","type":"string"},{"indexed":true,"name":"owner","type":"address"}],"name":"Registered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"newURI","type":"string"},{"indexed":true,"name":"updatedBy","type":"address"}],"name":"URIUpdated","type":"event"}
+]""")
+
+ERC8004_REPUTATION_ABI = json.loads("""[
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"name":"feedbackIndex","type":"uint64"},{"name":"value","type":"int128"},{"name":"valueDecimals","type":"uint8"},{"indexed":true,"name":"indexedTag1","type":"string"},{"name":"tag1","type":"string"},{"name":"tag2","type":"string"},{"name":"endpoint","type":"string"},{"name":"feedbackURI","type":"string"},{"name":"feedbackHash","type":"bytes32"}],"name":"NewFeedback","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":true,"name":"feedbackIndex","type":"uint64"}],"name":"FeedbackRevoked","type":"event"}
+]""")
+
+# ─── Custom (legacy) ABI fragments ──────────────────────────────────────────
+CUSTOM_IDENTITY_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"name":"agentURI","type":"string"}],"name":"AgentRegistered","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"newURI","type":"string"}],"name":"AgentURIUpdated","type":"event"}
 ]""")
 
-REPUTATION_ABI = json.loads("""[
+CUSTOM_REPUTATION_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"name":"rating","type":"uint8"},{"name":"taskHash","type":"bytes32"}],"name":"FeedbackSubmitted","type":"event"}
 ]""")
 
@@ -54,6 +71,27 @@ VALIDATION_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
 ]""")
+
+
+def parse_agent_uri(uri: str) -> dict:
+    """Parse an agent metadata URI (base64 data URI, IPFS, or HTTPS) into a dict."""
+    metadata = {}
+    try:
+        if uri.startswith("data:application/json;base64,"):
+            raw = base64.b64decode(uri.split(",", 1)[1])
+            metadata = json.loads(raw)
+        elif uri.startswith("http://") or uri.startswith("https://"):
+            resp = httpx.get(uri, timeout=10, follow_redirects=True)
+            if resp.status_code == 200:
+                metadata = resp.json()
+        elif uri.startswith("ipfs://"):
+            gateway_url = f"https://ipfs.io/ipfs/{uri[7:]}"
+            resp = httpx.get(gateway_url, timeout=10, follow_redirects=True)
+            if resp.status_code == 200:
+                metadata = resp.json()
+    except Exception as e:
+        logger.warning(f"Failed to parse agent URI: {e}")
+    return metadata
 
 
 class AgentProofIndexer:
@@ -72,30 +110,57 @@ class AgentProofIndexer:
         self.db = create_client(SUPABASE_URL, SUPABASE_KEY)
         logger.info("Connected to Supabase")
 
-        self.identity_contract = None
-        self.reputation_contract = None
-        self.validation_contract = None
+        self.use_official = USE_OFFICIAL_ERC8004
+        logger.info(f"Registry mode: {'Official ERC-8004' if self.use_official else 'Custom AgentProof'}")
 
-        if IDENTITY_REGISTRY_ADDRESS:
+        # ─── Identity contract ───
+        if self.use_official and ERC8004_IDENTITY_REGISTRY:
+            self.identity_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            self.identity_mode = "erc8004"
+            logger.info(f"Identity Registry (ERC-8004): {ERC8004_IDENTITY_REGISTRY}")
+        elif IDENTITY_REGISTRY_ADDRESS:
             self.identity_contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(IDENTITY_REGISTRY_ADDRESS),
-                abi=IDENTITY_ABI,
+                abi=CUSTOM_IDENTITY_ABI,
             )
-            logger.info(f"Identity Registry: {IDENTITY_REGISTRY_ADDRESS}")
+            self.identity_mode = "custom"
+            logger.info(f"Identity Registry (custom): {IDENTITY_REGISTRY_ADDRESS}")
+        else:
+            self.identity_contract = None
+            self.identity_mode = None
 
-        if REPUTATION_REGISTRY_ADDRESS:
+        # ─── Reputation contract ───
+        if self.use_official and ERC8004_REPUTATION_REGISTRY:
+            self.reputation_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_REPUTATION_REGISTRY),
+                abi=ERC8004_REPUTATION_ABI,
+            )
+            self.reputation_mode = "erc8004"
+            logger.info(f"Reputation Registry (ERC-8004): {ERC8004_REPUTATION_REGISTRY}")
+        elif REPUTATION_REGISTRY_ADDRESS:
             self.reputation_contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(REPUTATION_REGISTRY_ADDRESS),
-                abi=REPUTATION_ABI,
+                abi=CUSTOM_REPUTATION_ABI,
             )
-            logger.info(f"Reputation Registry: {REPUTATION_REGISTRY_ADDRESS}")
+            self.reputation_mode = "custom"
+            logger.info(f"Reputation Registry (custom): {REPUTATION_REGISTRY_ADDRESS}")
+        else:
+            self.reputation_contract = None
+            self.reputation_mode = None
 
+        # ─── Validation contract (always custom) ───
+        self.validation_contract = None
         if VALIDATION_REGISTRY_ADDRESS:
             self.validation_contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
                 abi=VALIDATION_ABI,
             )
-            logger.info(f"Validation Registry: {VALIDATION_REGISTRY_ADDRESS}")
+            logger.info(f"Validation Registry (custom): {VALIDATION_REGISTRY_ADDRESS}")
+
+    # ─── State persistence ───────────────────────────────────────────────────
 
     def get_last_block(self, contract_name: str) -> int:
         try:
@@ -132,13 +197,86 @@ class AgentProofIndexer:
         block = self.w3.eth.get_block(block_number)
         return datetime.fromtimestamp(block.timestamp, tz=timezone.utc)
 
+    # ─── Identity events ─────────────────────────────────────────────────────
+
     def process_identity_events(self, from_block: int, to_block: int) -> int:
         if not self.identity_contract:
             return 0
 
+        if self.identity_mode == "erc8004":
+            return self._process_erc8004_identity(from_block, to_block)
+        else:
+            return self._process_custom_identity(from_block, to_block)
+
+    def _process_erc8004_identity(self, from_block: int, to_block: int) -> int:
         count = 0
 
-        # AgentRegistered events
+        # Registered events
+        try:
+            events = self.identity_contract.events.Registered().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                owner = event.args.owner
+                uri = event.args.agentURI
+                ts = self.get_block_timestamp(event.blockNumber)
+
+                # Parse the agent URI to extract metadata
+                metadata = parse_agent_uri(uri)
+
+                self.db.table("agents").upsert(
+                    {
+                        "agent_id": agent_id,
+                        "owner_address": owner,
+                        "agent_uri": uri,
+                        "name": metadata.get("name"),
+                        "description": metadata.get("description"),
+                        "category": metadata.get("category", "general"),
+                        "image_url": metadata.get("image"),
+                        "registered_at": ts.isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "registry_source": "erc8004",
+                    },
+                    on_conflict="agent_id",
+                ).execute()
+                logger.info(f"[ERC8004-ID] Agent #{agent_id} registered by {owner}")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing ERC-8004 Registered events: {e}")
+
+        # URIUpdated events
+        try:
+            events = self.identity_contract.events.URIUpdated().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                new_uri = event.args.newURI
+                metadata = parse_agent_uri(new_uri)
+
+                update = {
+                    "agent_uri": new_uri,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                if metadata.get("name"):
+                    update["name"] = metadata["name"]
+                if metadata.get("description"):
+                    update["description"] = metadata["description"]
+                if metadata.get("image"):
+                    update["image_url"] = metadata["image"]
+
+                self.db.table("agents").update(update).eq("agent_id", agent_id).execute()
+                logger.info(f"[ERC8004-ID] Agent #{agent_id} URI updated")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing ERC-8004 URIUpdated events: {e}")
+
+        return count
+
+    def _process_custom_identity(self, from_block: int, to_block: int) -> int:
+        count = 0
+
         try:
             events = self.identity_contract.events.AgentRegistered().get_logs(
                 fromBlock=from_block, toBlock=to_block
@@ -156,15 +294,15 @@ class AgentProofIndexer:
                         "agent_uri": uri,
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "registry_source": "custom",
                     },
                     on_conflict="agent_id",
                 ).execute()
-                logger.info(f"[IDENTITY] Agent #{agent_id} registered by {owner}")
+                logger.info(f"[CUSTOM-ID] Agent #{agent_id} registered by {owner}")
                 count += 1
         except Exception as e:
-            logger.error(f"Error processing AgentRegistered events: {e}")
+            logger.error(f"Error processing custom AgentRegistered events: {e}")
 
-        # AgentURIUpdated events
         try:
             events = self.identity_contract.events.AgentURIUpdated().get_logs(
                 fromBlock=from_block, toBlock=to_block
@@ -172,24 +310,87 @@ class AgentProofIndexer:
             for event in events:
                 agent_id = event.args.agentId
                 new_uri = event.args.newURI
-
                 self.db.table("agents").update(
-                    {
-                        "agent_uri": new_uri,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }
+                    {"agent_uri": new_uri, "updated_at": datetime.now(timezone.utc).isoformat()}
                 ).eq("agent_id", agent_id).execute()
-                logger.info(f"[IDENTITY] Agent #{agent_id} URI updated")
+                logger.info(f"[CUSTOM-ID] Agent #{agent_id} URI updated")
                 count += 1
         except Exception as e:
-            logger.error(f"Error processing AgentURIUpdated events: {e}")
+            logger.error(f"Error processing custom AgentURIUpdated events: {e}")
 
         return count
+
+    # ─── Reputation events ───────────────────────────────────────────────────
 
     def process_reputation_events(self, from_block: int, to_block: int) -> int:
         if not self.reputation_contract:
             return 0
 
+        if self.reputation_mode == "erc8004":
+            return self._process_erc8004_reputation(from_block, to_block)
+        else:
+            return self._process_custom_reputation(from_block, to_block)
+
+    def _process_erc8004_reputation(self, from_block: int, to_block: int) -> int:
+        """Process NewFeedback events from the official ERC-8004 Reputation Registry.
+
+        The official contract uses int128 value with uint8 valueDecimals.
+        We normalise this to a 1-100 scale for our scoring engine.
+        """
+        count = 0
+        try:
+            events = self.reputation_contract.events.NewFeedback().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                client = event.args.clientAddress
+                feedback_index = event.args.feedbackIndex
+                raw_value = event.args.value  # int128
+                decimals = event.args.valueDecimals  # uint8
+                tag1 = event.args.tag1
+                tag2 = event.args.tag2
+                feedback_hash = event.args.feedbackHash.hex()
+                tx_hash = event.transactionHash.hex()
+                block = event.blockNumber
+                ts = self.get_block_timestamp(block)
+
+                # Normalise the value to a 0-100 scale
+                # ERC-8004 uses signed int128 with decimals. Typical range: 0-100.
+                if decimals > 0:
+                    normalised = float(raw_value) / (10 ** decimals)
+                else:
+                    normalised = float(raw_value)
+                # Clamp to 1-100 for our scoring engine
+                rating = max(1, min(100, int(round(normalised))))
+
+                self.db.table("reputation_events").upsert(
+                    {
+                        "agent_id": agent_id,
+                        "reviewer_address": client,
+                        "rating": rating,
+                        "feedback_uri": getattr(event.args, "feedbackURI", ""),
+                        "task_hash": feedback_hash,
+                        "tx_hash": tx_hash,
+                        "block_number": block,
+                        "created_at": ts.isoformat(),
+                        "tag1": tag1,
+                        "tag2": tag2,
+                        "registry_source": "erc8004",
+                    },
+                    on_conflict="tx_hash",
+                ).execute()
+                logger.info(
+                    f"[ERC8004-REP] Agent #{agent_id} rated {rating} "
+                    f"(raw={raw_value}, dec={decimals}) by {client[:10]}..."
+                )
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing ERC-8004 NewFeedback events: {e}")
+
+        return count
+
+    def _process_custom_reputation(self, from_block: int, to_block: int) -> int:
         count = 0
         try:
             events = self.reputation_contract.events.FeedbackSubmitted().get_logs(
@@ -213,15 +414,18 @@ class AgentProofIndexer:
                         "tx_hash": tx_hash,
                         "block_number": block,
                         "created_at": ts.isoformat(),
+                        "registry_source": "custom",
                     },
                     on_conflict="tx_hash",
                 ).execute()
-                logger.info(f"[REPUTATION] Agent #{agent_id} rated {rating} by {reviewer[:10]}...")
+                logger.info(f"[CUSTOM-REP] Agent #{agent_id} rated {rating} by {reviewer[:10]}...")
                 count += 1
         except Exception as e:
-            logger.error(f"Error processing FeedbackSubmitted events: {e}")
+            logger.error(f"Error processing custom FeedbackSubmitted events: {e}")
 
         return count
+
+    # ─── Validation events (always custom) ───────────────────────────────────
 
     def process_validation_events(self, from_block: int, to_block: int) -> int:
         if not self.validation_contract:
@@ -229,7 +433,6 @@ class AgentProofIndexer:
 
         count = 0
 
-        # ValidationRequested
         try:
             events = self.validation_contract.events.ValidationRequested().get_logs(
                 fromBlock=from_block, toBlock=to_block
@@ -259,7 +462,6 @@ class AgentProofIndexer:
         except Exception as e:
             logger.error(f"Error processing ValidationRequested events: {e}")
 
-        # ValidationSubmitted
         try:
             events = self.validation_contract.events.ValidationSubmitted().get_logs(
                 fromBlock=from_block, toBlock=to_block
@@ -284,8 +486,9 @@ class AgentProofIndexer:
 
         return count
 
+    # ─── Scoring / Leaderboard ───────────────────────────────────────────────
+
     def recalculate_scores(self):
-        """Recalculate composite scores and tiers for all agents."""
         try:
             agents = self.db.table("agents").select("*").execute()
         except Exception as e:
@@ -353,7 +556,6 @@ class AgentProofIndexer:
                 logger.error(f"Error updating scores for agent #{agent_id}: {e}")
 
     def update_leaderboard(self):
-        """Refresh leaderboard cache and agent ranks."""
         try:
             agents = (
                 self.db.table("agents")
@@ -365,7 +567,6 @@ class AgentProofIndexer:
             logger.error(f"Error fetching agents for leaderboard: {e}")
             return
 
-        # Clear old cache
         try:
             self.db.table("leaderboard_cache").delete().neq("id", 0).execute()
         except Exception:
@@ -375,7 +576,6 @@ class AgentProofIndexer:
         categories: dict[str, list] = {}
 
         for rank, agent in enumerate(agents.data, 1):
-            # Update global rank
             try:
                 self.db.table("agents").update({"rank": rank}).eq(
                     "agent_id", agent["agent_id"]
@@ -405,7 +605,6 @@ class AgentProofIndexer:
                     pass
 
     def take_daily_snapshot(self):
-        """Take a daily score snapshot for historical tracking."""
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         try:
@@ -432,8 +631,9 @@ class AgentProofIndexer:
             except Exception:
                 pass
 
+    # ─── Main loop ───────────────────────────────────────────────────────────
+
     def run_cycle(self):
-        """Execute one full indexer cycle."""
         try:
             current_block = self.w3.eth.block_number
         except Exception as e:
@@ -460,7 +660,7 @@ class AgentProofIndexer:
             total_events += count
             self.set_last_block("reputation", safe_block)
 
-        # Validation events
+        # Validation events (always custom)
         last = self.get_last_block("validation")
         if last < safe_block:
             count = self.process_validation_events(last + 1, safe_block)
@@ -474,8 +674,8 @@ class AgentProofIndexer:
             self.take_daily_snapshot()
 
     def run(self):
-        """Main loop — polls every POLL_INTERVAL seconds."""
-        logger.info(f"Starting indexer (poll interval: {POLL_INTERVAL}s, confirmations: {CONFIRMATION_BLOCKS})")
+        mode = "Official ERC-8004" if self.use_official else "Custom"
+        logger.info(f"Starting indexer [{mode}] (poll: {POLL_INTERVAL}s, confirmations: {CONFIRMATION_BLOCKS})")
 
         while True:
             try:
@@ -490,16 +690,10 @@ class AgentProofIndexer:
 
 
 if __name__ == "__main__":
-    if not IDENTITY_REGISTRY_ADDRESS:
-        logger.error("No contract addresses configured. Set IDENTITY_REGISTRY_ADDRESS in .env")
-        logger.info("Indexer will run in standby mode, checking every 30s for configuration...")
-
-        while not IDENTITY_REGISTRY_ADDRESS:
-            time.sleep(30)
-            # Re-read config in case env vars were updated
-            from importlib import reload
-            import config as cfg
-            reload(cfg)
+    identity_addr = ERC8004_IDENTITY_REGISTRY if USE_OFFICIAL_ERC8004 else IDENTITY_REGISTRY_ADDRESS
+    if not identity_addr:
+        logger.error("No identity registry configured. Set ERC8004_IDENTITY_REGISTRY or IDENTITY_REGISTRY_ADDRESS in .env")
+        sys.exit(1)
 
     indexer = AgentProofIndexer()
     indexer.run()

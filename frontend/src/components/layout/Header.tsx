@@ -8,8 +8,10 @@ import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/agents", label: "Explore" },
+  { href: "/discover", label: "Discover" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/insurance", label: "Insurance" },
+  { href: "/payments", label: "Payments" },
   { href: "/register", label: "Register" },
   { href: "/docs", label: "Docs" },
 ];
@@ -27,6 +29,9 @@ export default function Header() {
             <Shield className="w-6 h-6 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
             <span className="text-lg font-bold text-white">
               Agent<span className="text-emerald-400">Proof</span>
+            </span>
+            <span className="hidden lg:inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400/70 border border-emerald-500/20 rounded">
+              ERC-8004
             </span>
           </Link>
 

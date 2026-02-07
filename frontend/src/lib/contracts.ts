@@ -1,67 +1,67 @@
+// ─── Official ERC-8004 Identity Registry ABI ───────────────────────
+// Deployed by Ava Labs on Avalanche C-Chain
 export const IDENTITY_REGISTRY_ABI = [
   {
     inputs: [{ name: "agentURI", type: "string" }],
-    name: "registerAgent",
+    name: "register",
     outputs: [{ type: "uint256" }],
-    stateMutability: "payable",
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
     inputs: [
       { name: "agentId", type: "uint256" },
-      { name: "newURI", type: "string" },
+      { name: "agentURI", type: "string" },
     ],
-    name: "updateAgentURI",
+    name: "setAgentURI",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
-    inputs: [{ name: "agentId", type: "uint256" }],
-    name: "getAgentURI",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    name: "tokenURI",
     outputs: [{ type: "string" }],
     stateMutability: "view",
     type: "function",
   },
   {
-    inputs: [{ name: "agentId", type: "uint256" }],
-    name: "getAgentOwner",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    name: "ownerOf",
     outputs: [{ type: "address" }],
     stateMutability: "view",
     type: "function",
   },
   {
     inputs: [{ name: "owner", type: "address" }],
-    name: "isRegistered",
-    outputs: [{ type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "totalAgents",
+    name: "balanceOf",
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
   {
     inputs: [],
-    name: "registrationBond",
+    name: "totalSupply",
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
 ] as const;
 
+// ─── Official ERC-8004 Reputation Registry ABI ─────────────────────
 export const REPUTATION_REGISTRY_ABI = [
   {
     inputs: [
       { name: "agentId", type: "uint256" },
-      { name: "rating", type: "uint8" },
+      { name: "value", type: "int128" },
+      { name: "valueDecimals", type: "uint8" },
+      { name: "tag1", type: "bytes32" },
+      { name: "tag2", type: "bytes32" },
+      { name: "endpoint", type: "string" },
       { name: "feedbackURI", type: "string" },
-      { name: "taskHash", type: "bytes32" },
+      { name: "feedbackHash", type: "bytes32" },
     ],
-    name: "submitFeedback",
+    name: "giveFeedback",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -75,13 +75,23 @@ export const REPUTATION_REGISTRY_ABI = [
   },
   {
     inputs: [{ name: "agentId", type: "uint256" }],
-    name: "getAverageRating",
-    outputs: [{ type: "uint256" }],
+    name: "getSummary",
+    outputs: [
+      {
+        components: [
+          { name: "totalFeedback", type: "uint256" },
+          { name: "averageValue", type: "int128" },
+          { name: "averageValueDecimals", type: "uint8" },
+        ],
+        type: "tuple",
+      },
+    ],
     stateMutability: "view",
     type: "function",
   },
 ] as const;
 
+// ─── AgentProof Validation Registry ABI (custom) ───────────────────
 export const VALIDATION_REGISTRY_ABI = [
   {
     inputs: [

@@ -2,9 +2,16 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000
 
 export const AVALANCHE_FUJI_CHAIN_ID = 43113;
 
+// Official ERC-8004 registries (Ava Labs)
+export const ERC8004_ADDRESSES = {
+  identityRegistry: process.env.NEXT_PUBLIC_ERC8004_IDENTITY_REGISTRY || "",
+  reputationRegistry: process.env.NEXT_PUBLIC_ERC8004_REPUTATION_REGISTRY || "",
+};
+
+// AgentProof custom contracts
 export const CONTRACT_ADDRESSES = {
-  identityRegistry: process.env.NEXT_PUBLIC_IDENTITY_REGISTRY || "",
-  reputationRegistry: process.env.NEXT_PUBLIC_REPUTATION_REGISTRY || "",
+  identityRegistry: ERC8004_ADDRESSES.identityRegistry,
+  reputationRegistry: ERC8004_ADDRESSES.reputationRegistry,
   validationRegistry: process.env.NEXT_PUBLIC_VALIDATION_REGISTRY || "",
 };
 
@@ -25,5 +32,3 @@ export const CATEGORIES = [
   { slug: "data", name: "Data Agents", icon: "bar-chart-3" },
   { slug: "general", name: "General Agents", icon: "bot" },
 ] as const;
-
-export const REGISTRATION_BOND = "0.1"; // AVAX

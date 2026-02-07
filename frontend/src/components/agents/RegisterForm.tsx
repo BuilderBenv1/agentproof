@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { useRegisterAgent, useIsRegistered } from "@/hooks/useContract";
-import { CATEGORIES, REGISTRATION_BOND } from "@/lib/constants";
+import { CATEGORIES } from "@/lib/constants";
 import WalletButton from "@/components/ui/WalletButton";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { CheckCircle, AlertCircle } from "lucide-react";
@@ -185,7 +185,7 @@ export default function RegisterForm() {
               {isPending ? "Confirm in wallet..." : "Confirming..."}
             </>
           ) : (
-            `Register Agent (${REGISTRATION_BOND} AVAX)`
+            "Register Agent"
           )}
         </button>
       </div>

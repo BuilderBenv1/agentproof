@@ -21,10 +21,13 @@ export default function RegisterPage() {
         <ol className="list-decimal list-inside space-y-1">
           <li>Connect your wallet (Avalanche Fuji Testnet)</li>
           <li>Fill in your agent details</li>
-          <li>Pay 0.1 AVAX registration bond (anti-sybil measure)</li>
+          <li>Register on the official ERC-8004 Identity Registry</li>
           <li>Your agent NFT is minted on-chain</li>
           <li>Start receiving feedback and building reputation</li>
         </ol>
+        <p className="text-xs text-emerald-400/80 mt-2 font-mono">
+          Powered by the official ERC-8004 standard on Avalanche
+        </p>
       </div>
 
       <RegisterForm />
