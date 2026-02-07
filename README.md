@@ -77,16 +77,14 @@ AgentProof = Analytics + Scoring + Validation layer **on top of** the official E
 | ValidationRegistry | [`0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a`](https://testnet.snowtrace.io/address/0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a) | Task validation with success rate tracking |
 | AgentProofCore | [`0x833cAd4dfBBEa832C56526bc82a85BaC85015594`](https://testnet.snowtrace.io/address/0x833cAd4dfBBEa832C56526bc82a85BaC85015594) | Orchestrator, categories, top agents |
 
-### Phase 3 Contracts (deploy pending)
+### Phase 3 Contracts (Fuji)
 
-| Contract | Description |
-|----------|-------------|
-| InsurancePool | Tier-based staking, claims against failed validations, dispute resolution |
-| AgentPayments | Escrow-based agent-to-agent payments, 0.5% protocol fee, ERC-20 + AVAX |
-| ReputationGate | DeFi middleware: tier gating, collateral multipliers, interest discounts |
-| ReputationBridge | ICM receiver on L1s — caches C-Chain reputation for cross-chain use |
-| ReputationSource | ICM responder on C-Chain — sends reputation data to requesting L1s |
-| ReputationGatedVault | Example vault showing deposit/borrow with reputation-based gating |
+| Contract | Address | Description |
+|----------|---------|-------------|
+| InsurancePool | [`0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d`](https://testnet.snowtrace.io/address/0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d) | Tier-based staking, claims, dispute resolution |
+| AgentPayments | [`0xD2d150a2891E19f0546571912BB0B2A754eC70B0`](https://testnet.snowtrace.io/address/0xD2d150a2891E19f0546571912BB0B2A754eC70B0) | Escrow payments, 0.5% fee, ERC-20 + AVAX |
+| ReputationGate | [`0x655DAfDe77290Fec2fFA2C77da9508859C0602c4`](https://testnet.snowtrace.io/address/0x655DAfDe77290Fec2fFA2C77da9508859C0602c4) | DeFi middleware: collateral, interest, trust gating |
+| ReputationSource | [`0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1`](https://testnet.snowtrace.io/address/0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1) | ICM C-Chain responder for L1 reputation requests |
 
 ## TypeScript SDK
 
@@ -313,7 +311,7 @@ agentproof/
 - [x] Agent Discovery API (search, skills, endpoints, compare, trending)
 - [x] Reputation-Gated DeFi example (ReputationGatedVault)
 - [x] 88 Hardhat tests passing
-- [ ] Phase 3 contract deployment to Fuji testnet
+- [x] Phase 3 contract deployment to Fuji testnet (all verified on Snowtrace)
 - [ ] Mainnet deployment
 - [ ] IPFS metadata storage
 - [ ] DAO governance for claim resolution

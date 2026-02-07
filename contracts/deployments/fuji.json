@@ -1,0 +1,16 @@
+{
+  "network": "fuji",
+  "chainId": 43113,
+  "deployer": "0x16f057E27189735B424dBA8559e9670103677F35",
+  "deployedAt": "2026-02-07T22:40:47.248Z",
+  "contracts": {
+    "IdentityRegistry": "0xeF879B8D0964F4C26b77b8F7C4762bA8984E1F27",
+    "ReputationRegistry": "0x210D613F181f4C273626AB6fF9Fd4a1eF784b6F7",
+    "ValidationRegistry": "0x44BB9E8d6971f6eA23Fbe23AEe483088994CEbe9",
+    "AgentProofCore": "0x7BeC305fD519321b6CD4Fa190272c7cbC6ba3284",
+    "InsurancePool": "0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d",
+    "AgentPayments": "0xD2d150a2891E19f0546571912BB0B2A754eC70B0",
+    "ReputationGate": "0x655DAfDe77290Fec2fFA2C77da9508859C0602c4",
+    "ReputationSource": "0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1"
+  }
+}
