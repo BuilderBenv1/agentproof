@@ -4,6 +4,7 @@ import ScoreGauge from "@/components/reputation/ScoreGauge";
 import CategoryBadge from "@/components/reputation/CategoryBadge";
 import ReputationChart from "@/components/reputation/ReputationChart";
 import ReputationHistory from "@/components/reputation/ReputationHistory";
+import FeedbackForm from "@/components/reputation/FeedbackForm";
 import { truncateAddress, formatDate, getTierColor } from "@/lib/utils";
 import { useFeedback, useScoreHistory } from "@/hooks/useReputation";
 import { ExternalLink, Copy, Calendar, Shield } from "lucide-react";
@@ -104,6 +105,13 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
           <p className="text-xl font-bold font-mono text-white">#{agent.rank || "—"}</p>
         </div>
       </div>
+
+      {/* Rate This Agent */}
+      <FeedbackForm
+        agentId={agent.agent_id}
+        agentName={agent.name || `Agent #${agent.agent_id}`}
+        ownerAddress={agent.owner_address}
+      />
 
       {/* Score History Chart */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">

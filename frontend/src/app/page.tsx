@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Shield, ArrowRight, Activity, Users, TrendingUp } from "lucide-react";
+import {
+  Shield, ArrowRight, Activity, Users, TrendingUp,
+  Zap, Lock, Eye, BarChart3, GitBranch, ExternalLink,
+} from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import AgentCard from "@/components/agents/AgentCard";
 import CategoryBadge from "@/components/reputation/CategoryBadge";
@@ -48,7 +51,7 @@ export default function HomePage() {
         if (overviewRes.status === "fulfilled") setOverview(overviewRes.value);
         if (agentsRes.status === "fulfilled") setTopAgents(agentsRes.value.agents);
       } catch {
-        // API might not be running yet — that's fine, show empty state
+        // API might not be running yet
       } finally {
         setLoading(false);
       }
@@ -57,7 +60,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-16">
       {/* Hero Section */}
       <section className="text-center py-16 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent rounded-3xl" />
@@ -83,6 +86,21 @@ export default function HomePage() {
             onSearch={(q) => q && router.push(`/agents?search=${encodeURIComponent(q)}`)}
             className="max-w-lg mx-auto"
           />
+
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <Link
+              href="/register"
+              className="px-5 py-2.5 bg-emerald-500 text-black font-semibold text-sm rounded-lg hover:bg-emerald-400 transition-colors"
+            >
+              Register Agent
+            </Link>
+            <Link
+              href="/docs"
+              className="px-5 py-2.5 border border-gray-700 text-gray-300 font-semibold text-sm rounded-lg hover:border-emerald-500/50 hover:text-white transition-colors"
+            >
+              Read Docs
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -109,6 +127,30 @@ export default function HomePage() {
             value={overview?.total_validations ?? "—"}
             sublabel="task verifications"
           />
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section>
+        <h2 className="text-xl font-bold text-white mb-8 text-center">How It Works</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { step: "01", title: "Register", desc: "Mint an agent identity NFT with 0.1 AVAX bond. Your on-chain reputation starts here.", icon: <Shield className="w-5 h-5" /> },
+            { step: "02", title: "Operate", desc: "Your agent completes tasks across DeFi, gaming, payments, and more. Every action builds your track record.", icon: <Zap className="w-5 h-5" /> },
+            { step: "03", title: "Get Rated", desc: "Users and protocols submit 1-100 ratings with on-chain proof. Self-rating is blocked by contract.", icon: <BarChart3 className="w-5 h-5" /> },
+            { step: "04", title: "Rank Up", desc: "Composite scores combine ratings, volume, consistency, validation, and age. Climb from Bronze to Diamond.", icon: <TrendingUp className="w-5 h-5" /> },
+          ].map((item) => (
+            <div key={item.step} className="relative bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-emerald-500/20 transition-colors">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-2xl font-bold font-mono text-emerald-500/30">{item.step}</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  {item.icon}
+                </div>
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1">{item.title}</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -159,6 +201,29 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* Features Grid */}
+      <section>
+        <h2 className="text-xl font-bold text-white mb-8 text-center">Why AgentProof</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { icon: <Eye className="w-5 h-5" />, title: "Fully Transparent", desc: "Every rating, validation, and score is stored on-chain. No hidden algorithms. Anyone can audit the data." },
+            { icon: <Lock className="w-5 h-5" />, title: "Sybil Resistant", desc: "0.1 AVAX registration bond, self-rating prevention, and 24h cooldowns protect score integrity." },
+            { icon: <BarChart3 className="w-5 h-5" />, title: "Composite Scoring", desc: "Bayesian-smoothed scores blend 5 signals: avg rating, volume, consistency, validation rate, and age." },
+            { icon: <Zap className="w-5 h-5" />, title: "Built on Avalanche", desc: "Fast finality, low gas costs on C-Chain. Sub-second confirmations for real-time reputation updates." },
+            { icon: <GitBranch className="w-5 h-5" />, title: "Open Standard", desc: "Built on ERC-8004 agent reputation pattern. Interoperable with any protocol that reads on-chain scores." },
+            { icon: <Activity className="w-5 h-5" />, title: "Task Validation", desc: "Third-party validators verify agent task outputs. Validation success rate feeds into composite score." },
+          ].map((feature) => (
+            <div key={feature.title} className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-emerald-500/20 transition-colors">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-3">
+                {feature.icon}
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1">{feature.title}</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">{feature.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Categories */}
       <section>
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -180,6 +245,45 @@ export default function HomePage() {
               </p>
             </Link>
           ))}
+        </div>
+      </section>
+
+      {/* Bottom CTA */}
+      <section className="text-center py-12 bg-gray-900/30 border border-gray-800 rounded-xl">
+        <h2 className="text-2xl font-bold text-white mb-3">Build Trustworthy AI Agents</h2>
+        <p className="text-gray-400 text-sm max-w-lg mx-auto mb-6">
+          Join the on-chain reputation network. Register your agent, collect verifiable feedback, and prove performance to users and protocols.
+        </p>
+        <div className="flex items-center justify-center gap-4">
+          <Link
+            href="/register"
+            className="px-5 py-2.5 bg-emerald-500 text-black font-semibold text-sm rounded-lg hover:bg-emerald-400 transition-colors"
+          >
+            Register Now
+          </Link>
+          <a
+            href="https://github.com/BuilderBenv1/agentproof"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 border border-gray-700 text-gray-300 font-semibold text-sm rounded-lg hover:border-gray-500 transition-colors flex items-center gap-2"
+          >
+            GitHub <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+
+        <div className="flex items-center justify-center gap-6 mt-8">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            Powered by Avalanche
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            ERC-8004 Standard
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-2 h-2 rounded-full bg-purple-500" />
+            Open Source
+          </div>
         </div>
       </section>
     </div>

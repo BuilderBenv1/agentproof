@@ -52,13 +52,13 @@ export default function ReputationHistory({ feedback, loading }: ReputationHisto
                   item.rating >= 80
                     ? "rgba(0, 229, 160, 0.1)"
                     : item.rating >= 50
-                    ? "rgba(0, 200, 255, 0.1)"
+                    ? "rgba(232, 65, 66, 0.1)"
                     : "rgba(239, 68, 68, 0.1)",
                 color:
                   item.rating >= 80
                     ? "#00E5A0"
                     : item.rating >= 50
-                    ? "#00C8FF"
+                    ? "#E84142"
                     : "#ef4444",
               }}
             >

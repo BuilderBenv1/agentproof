@@ -74,7 +74,7 @@ export default function ReputationChart({ data }: ReputationChartProps) {
         <Line
           type="monotone"
           dataKey="average_rating"
-          stroke="#00C8FF"
+          stroke="#E84142"
           strokeWidth={1.5}
           strokeDasharray="4 4"
           dot={false}

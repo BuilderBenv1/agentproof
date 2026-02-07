@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "installCommand": "pnpm install",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@agentproof-api-url",
+    "NEXT_PUBLIC_AVALANCHE_RPC": "https://api.avax-test.network/ext/bc/C/rpc",
+    "NEXT_PUBLIC_IDENTITY_REGISTRY": "0x4Ec097F5441F24B567C4c741eAEeBcBE3D107825",
+    "NEXT_PUBLIC_REPUTATION_REGISTRY": "0xC5ED5Bd84680e503072C4F13Aa0585cc38D2B846",
+    "NEXT_PUBLIC_VALIDATION_REGISTRY": "0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a",
+    "NEXT_PUBLIC_CHAIN_ID": "43113",
+    "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID": "@agentproof-walletconnect-id"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" }
+      ]
+    }
+  ]
+}

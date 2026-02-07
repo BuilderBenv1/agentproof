@@ -1,8 +1,8 @@
 "use client";
 
 import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseEther } from "viem";
-import { IDENTITY_REGISTRY_ABI } from "@/lib/contracts";
+import { parseEther, keccak256, toHex } from "viem";
+import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES, REGISTRATION_BOND } from "@/lib/constants";
 
 export function useRegisterAgent() {
@@ -41,6 +41,37 @@ export function useIsRegistered(address: string | undefined) {
   });
 
   return { isRegistered: data as boolean | undefined, isLoading };
+}
+
+export function useSubmitFeedback() {
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
+
+  function submitFeedback(agentId: number, rating: number, taskDescription: string) {
+    if (!CONTRACT_ADDRESSES.reputationRegistry) {
+      throw new Error("Reputation Registry address not configured");
+    }
+
+    const taskHash = keccak256(toHex(taskDescription));
+
+    const feedbackURI = `data:application/json;base64,${btoa(JSON.stringify({
+      rating,
+      task: taskDescription,
+      timestamp: new Date().toISOString(),
+    }))}`;
+
+    writeContract({
+      address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
+      abi: REPUTATION_REGISTRY_ABI,
+      functionName: "submitFeedback",
+      args: [BigInt(agentId), rating, feedbackURI, taskHash],
+    });
+  }
+
+  return { submitFeedback, hash, isPending, isConfirming, isSuccess, error, reset };
 }
 
 export function useTotalAgents() {
