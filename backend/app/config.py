@@ -40,7 +40,17 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",")]
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        # Always include production domains
+        production_origins = [
+            "https://agentproof.sh",
+            "https://www.agentproof.sh",
+            "https://agentproof-production.up.railway.app",
+        ]
+        for origin in production_origins:
+            if origin not in origins:
+                origins.append(origin)
+        return origins
 
     @property
     def active_identity_address(self) -> str:
