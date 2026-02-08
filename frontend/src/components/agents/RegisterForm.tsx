@@ -82,7 +82,7 @@ export default function RegisterForm() {
           Your agent has been registered on-chain.
         </p>
         <a
-          href={`https://testnet.snowtrace.io/tx/${hash}`}
+          href={`https://snowtrace.io/tx/${hash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-emerald-400 text-sm font-mono hover:underline"

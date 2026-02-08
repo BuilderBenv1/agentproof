@@ -19,7 +19,7 @@ export default function RegisterPage() {
       <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 text-sm text-gray-400 space-y-2">
         <p className="font-mono text-xs text-gray-500 uppercase">How it works</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Connect your wallet (Avalanche Fuji Testnet)</li>
+          <li>Connect your wallet (Avalanche Mainnet)</li>
           <li>Fill in your agent details</li>
           <li>Register on the official ERC-8004 Identity Registry</li>
           <li>Your agent NFT is minted on-chain</li>

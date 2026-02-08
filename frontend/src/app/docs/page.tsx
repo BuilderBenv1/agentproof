@@ -121,8 +121,8 @@ const SDK_SNIPPETS = [
     code: `import { AgentProof } from '@agentproof/sdk'
 
 const ap = new AgentProof({
-  rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
-  chainId: 43113,
+  rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
+  chainId: 43114,
 })
 
 // Reads from official ERC-8004 registries
@@ -136,8 +136,8 @@ const summary = await ap.getReputationSummary(1)`,
     code: `import { AgentProof, encodeMetadataURI } from '@agentproof/sdk'
 
 const ap = new AgentProof({
-  rpcUrl: 'https://api.avax-test.network/ext/bc/C/rpc',
-  chainId: 43113,
+  rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
+  chainId: 43114,
   privateKey: '0x...',
 })
 
@@ -178,25 +178,25 @@ ap.onNewFeedback((event) => {
 const CONTRACTS = [
   {
     name: "ERC-8004 Identity Registry",
-    address: "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    address: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
     description: "Official Ava Labs ERC-8004 Identity Registry. ERC-721 agent identity NFTs with metadata URI.",
     official: true,
   },
   {
     name: "ERC-8004 Reputation Registry",
-    address: "0x8004B663056A597Dffe9eCcC1965A193B7388713",
+    address: "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63",
     description: "Official Ava Labs ERC-8004 Reputation Registry. Feedback with int128 values, tags, and revocation.",
     official: true,
   },
   {
     name: "ValidationRegistry",
-    address: "0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a",
+    address: "0xa3df69a7576EceC1056Cb731DAE69a8086F460Fc",
     description: "AgentProof custom validation registry. Task validation requests and responses with success rate tracking.",
     official: false,
   },
   {
     name: "AgentProofCore",
-    address: "0x833cAd4dfBBEa832C56526bc82a85BaC85015594",
+    address: "0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554",
     description: "AgentProof orchestrator. Aggregated profiles, top agents, category management.",
     official: false,
   },
@@ -389,11 +389,11 @@ export default function DocsPage() {
           <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-mono text-gray-500 uppercase">Network</span>
-              <span className="text-xs font-mono text-emerald-400">Avalanche Fuji (C-Chain)</span>
+              <span className="text-xs font-mono text-emerald-400">Avalanche Mainnet (C-Chain)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono text-gray-500 uppercase">Chain ID</span>
-              <span className="text-xs font-mono text-white">43113</span>
+              <span className="text-xs font-mono text-white">43114</span>
             </div>
           </div>
 
@@ -410,7 +410,7 @@ export default function DocsPage() {
                     )}
                   </div>
                   <a
-                    href={`https://testnet.snowtrace.io/address/${contract.address}`}
+                    href={`https://snowtrace.io/address/${contract.address}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-emerald-400 hover:underline font-mono"

@@ -60,7 +60,7 @@ export default function FeedbackForm({ agentId, agentName, ownerAddress }: Feedb
         </p>
         <div className="flex items-center gap-3">
           <a
-            href={`https://testnet.snowtrace.io/tx/${hash}`}
+            href={`https://snowtrace.io/tx/${hash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-emerald-400 text-xs font-mono hover:underline"

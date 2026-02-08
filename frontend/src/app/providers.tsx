@@ -1,7 +1,7 @@
 "use client";
 
 import { WagmiProvider, http } from "wagmi";
-import { avalancheFuji } from "wagmi/chains";
+import { avalanche } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
@@ -12,10 +12,10 @@ import Footer from "@/components/layout/Footer";
 const config = getDefaultConfig({
   appName: "AgentProof",
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "agentproof-dev",
-  chains: [avalancheFuji],
+  chains: [avalanche],
   transports: {
-    [avalancheFuji.id]: http(
-      process.env.NEXT_PUBLIC_AVALANCHE_RPC || "https://api.avax-test.network/ext/bc/C/rpc"
+    [avalanche.id]: http(
+      process.env.NEXT_PUBLIC_AVALANCHE_RPC || "https://api.avax.network/ext/bc/C/rpc"
     ),
   },
 });

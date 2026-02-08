@@ -72,7 +72,7 @@ export default function ReputationHistory({ feedback, loading }: ReputationHisto
             </div>
           </div>
           <a
-            href={`https://testnet.snowtrace.io/tx/${item.tx_hash}`}
+            href={`https://snowtrace.io/tx/${item.tx_hash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-mono text-gray-600 hover:text-emerald-400 transition-colors"

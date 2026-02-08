@@ -16,7 +16,7 @@ export default function Footer() {
             <span className="text-gray-800">|</span>
             <span>ERC-8004</span>
             <span className="text-gray-800">|</span>
-            <span>Fuji Testnet</span>
+            <span>Avalanche Mainnet</span>
           </div>
         </div>
       </div>

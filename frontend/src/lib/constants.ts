@@ -1,6 +1,6 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.agentproof.sh/api";
 
-export const AVALANCHE_FUJI_CHAIN_ID = 43113;
+export const AVALANCHE_CHAIN_ID = 43114;
 
 // Official ERC-8004 registries (Ava Labs)
 export const ERC8004_ADDRESSES = {
