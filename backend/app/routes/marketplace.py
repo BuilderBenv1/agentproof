@@ -15,6 +15,34 @@ from app.services.audit import log_audit_event
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 
 
+# ─── Stats (defined first to avoid any path-parameter shadowing) ─────
+
+@router.get("/stats")
+async def get_marketplace_stats():
+    """Get marketplace overview statistics."""
+    db = get_supabase()
+
+    try:
+        listings = db.table("marketplace_listings").select("is_active", count="exact").execute()
+        active = db.table("marketplace_listings").select("id", count="exact").eq("is_active", True).execute()
+        tasks = db.table("marketplace_tasks").select("status,price_avax", count="exact").execute()
+
+        completed = [t for t in tasks.data if t["status"] == "completed"]
+        total_volume = sum(float(t.get("price_avax") or 0) for t in completed)
+        avg_price = round(total_volume / len(completed), 8) if completed else 0
+
+        return MarketplaceStatsResponse(
+            total_listings=listings.count or 0,
+            active_listings=active.count or 0,
+            total_tasks=tasks.count or 0,
+            completed_tasks=len(completed),
+            total_volume_avax=round(total_volume, 8),
+            average_task_price=avg_price,
+        )
+    except Exception:
+        return MarketplaceStatsResponse()
+
+
 # ─── Listings ────────────────────────────────────────────
 
 @router.get("/listings")
@@ -330,26 +358,3 @@ async def submit_review(task_id: str, review: ReviewCreate):
     return ReviewResponse(**result.data[0])
 
 
-# ─── Stats ───────────────────────────────────────────────
-
-@router.get("/stats", response_model=MarketplaceStatsResponse)
-async def get_marketplace_stats():
-    """Get marketplace overview statistics."""
-    db = get_supabase()
-
-    listings = db.table("marketplace_listings").select("is_active", count="exact").execute()
-    active = db.table("marketplace_listings").select("id", count="exact").eq("is_active", True).execute()
-    tasks = db.table("marketplace_tasks").select("status,price_avax", count="exact").execute()
-
-    completed = [t for t in tasks.data if t["status"] == "completed"]
-    total_volume = sum(float(t["price_avax"]) for t in completed)
-    avg_price = round(total_volume / len(completed), 8) if completed else 0
-
-    return MarketplaceStatsResponse(
-        total_listings=listings.count or 0,
-        active_listings=active.count or 0,
-        total_tasks=tasks.count or 0,
-        completed_tasks=len(completed),
-        total_volume_avax=round(total_volume, 8),
-        average_task_price=avg_price,
-    )
