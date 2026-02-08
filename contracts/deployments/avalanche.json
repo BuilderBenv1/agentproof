@@ -1,0 +1,16 @@
+{
+  "network": "avalanche",
+  "chainId": 43114,
+  "deployer": "0x16f057E27189735B424dBA8559e9670103677F35",
+  "deployedAt": "2026-02-07T23:56:17.179Z",
+  "contracts": {
+    "IdentityRegistry": "0xE74e9C994b8F65db01725DdAE603EAE397aBa432",
+    "ReputationRegistry": "0x6fC97c662367BBca28ca65474435a61cF5049D36",
+    "ValidationRegistry": "0xa3df69a7576EceC1056Cb731DAE69a8086F460Fc",
+    "AgentProofCore": "0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554",
+    "InsurancePool": "0x154DFef33222D090808f3A0F50cbef864990939A",
+    "AgentPayments": "0x4E3092E46233c32F3A0E4b782230cA67E359f35f",
+    "ReputationGate": "0xD66C677Cf394D68fD847d760151304697D3A1a0B",
+    "ReputationSource": "0x3D61349a610CB6651A5A077eeda7D723eE3F2545"
+  }
+}

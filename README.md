@@ -54,37 +54,32 @@ AgentProof = Analytics + Scoring + Validation layer **on top of** the official E
 | Chain | Avalanche C-Chain (Fuji testnet) |
 | Wallet | RainbowKit + wagmi + viem |
 
-## Contract Addresses (Fuji Testnet)
+## Contract Addresses
 
 ### Official ERC-8004 Registries (Ava Labs)
 
-| Contract | Address | Description |
+| Contract | Mainnet | Fuji Testnet |
 |----------|---------|-------------|
-| ERC-8004 Identity Registry | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://testnet.snowtrace.io/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) | Official agent identity NFTs |
-| ERC-8004 Reputation Registry | [`0x8004B663056A597Dffe9eCcC1965A193B7388713`](https://testnet.snowtrace.io/address/0x8004B663056A597Dffe9eCcC1965A193B7388713) | Official feedback and reputation |
+| ERC-8004 Identity Registry | [`0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`](https://snowtrace.io/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432) | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://testnet.snowtrace.io/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) |
+| ERC-8004 Reputation Registry | [`0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`](https://snowtrace.io/address/0x8004BAa17C55a88189AE136b182e5fdA19dE9b63) | [`0x8004B663056A597Dffe9eCcC1965A193B7388713`](https://testnet.snowtrace.io/address/0x8004B663056A597Dffe9eCcC1965A193B7388713) |
 
-### Official ERC-8004 Registries (Mainnet)
+### AgentProof Core Contracts
 
-| Contract | Address |
-|----------|---------|
-| Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
-| Reputation Registry | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
+| Contract | Mainnet | Fuji Testnet | Description |
+|----------|---------|-------------|-------------|
+| IdentityRegistry | [`0xE74e9C994b8F65db01725DdAE603EAE397aBa432`](https://snowtrace.io/address/0xE74e9C994b8F65db01725DdAE603EAE397aBa432) | [`0x4Ec097F5441F24B567C4c741eAEeBcBE3D107825`](https://testnet.snowtrace.io/address/0x4Ec097F5441F24B567C4c741eAEeBcBE3D107825) | Agent identity NFTs |
+| ReputationRegistry | [`0x6fC97c662367BBca28ca65474435a61cF5049D36`](https://snowtrace.io/address/0x6fC97c662367BBca28ca65474435a61cF5049D36) | [`0xC5ED5Bd84680e503072C4F13Aa0585cc38D2B846`](https://testnet.snowtrace.io/address/0xC5ED5Bd84680e503072C4F13Aa0585cc38D2B846) | Feedback and reputation |
+| ValidationRegistry | [`0xa3df69a7576EceC1056Cb731DAE69a8086F460Fc`](https://snowtrace.io/address/0xa3df69a7576EceC1056Cb731DAE69a8086F460Fc) | [`0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a`](https://testnet.snowtrace.io/address/0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a) | Task validation with success rate tracking |
+| AgentProofCore | [`0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554`](https://snowtrace.io/address/0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554) | [`0x833cAd4dfBBEa832C56526bc82a85BaC85015594`](https://testnet.snowtrace.io/address/0x833cAd4dfBBEa832C56526bc82a85BaC85015594) | Orchestrator, categories, top agents |
 
-### AgentProof Custom Contracts (Fuji)
+### Phase 3 Ecosystem Contracts
 
-| Contract | Address | Description |
-|----------|---------|-------------|
-| ValidationRegistry | [`0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a`](https://testnet.snowtrace.io/address/0x0282C97083f86Abb82D74C1e51097aa9Eb01f98a) | Task validation with success rate tracking |
-| AgentProofCore | [`0x833cAd4dfBBEa832C56526bc82a85BaC85015594`](https://testnet.snowtrace.io/address/0x833cAd4dfBBEa832C56526bc82a85BaC85015594) | Orchestrator, categories, top agents |
-
-### Phase 3 Contracts (Fuji)
-
-| Contract | Address | Description |
-|----------|---------|-------------|
-| InsurancePool | [`0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d`](https://testnet.snowtrace.io/address/0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d) | Tier-based staking, claims, dispute resolution |
-| AgentPayments | [`0xD2d150a2891E19f0546571912BB0B2A754eC70B0`](https://testnet.snowtrace.io/address/0xD2d150a2891E19f0546571912BB0B2A754eC70B0) | Escrow payments, 0.5% fee, ERC-20 + AVAX |
-| ReputationGate | [`0x655DAfDe77290Fec2fFA2C77da9508859C0602c4`](https://testnet.snowtrace.io/address/0x655DAfDe77290Fec2fFA2C77da9508859C0602c4) | DeFi middleware: collateral, interest, trust gating |
-| ReputationSource | [`0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1`](https://testnet.snowtrace.io/address/0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1) | ICM C-Chain responder for L1 reputation requests |
+| Contract | Mainnet | Fuji Testnet | Description |
+|----------|---------|-------------|-------------|
+| InsurancePool | [`0x154DFef33222D090808f3A0F50cbef864990939A`](https://snowtrace.io/address/0x154DFef33222D090808f3A0F50cbef864990939A) | [`0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d`](https://testnet.snowtrace.io/address/0xefa0D8cB8a7B0498242aC340B1247D6efd7b212d) | Tier-based staking, claims, dispute resolution |
+| AgentPayments | [`0x4E3092E46233c32F3A0E4b782230cA67E359f35f`](https://snowtrace.io/address/0x4E3092E46233c32F3A0E4b782230cA67E359f35f) | [`0xD2d150a2891E19f0546571912BB0B2A754eC70B0`](https://testnet.snowtrace.io/address/0xD2d150a2891E19f0546571912BB0B2A754eC70B0) | Escrow payments, 0.5% fee, ERC-20 + AVAX |
+| ReputationGate | [`0xD66C677Cf394D68fD847d760151304697D3A1a0B`](https://snowtrace.io/address/0xD66C677Cf394D68fD847d760151304697D3A1a0B) | [`0x655DAfDe77290Fec2fFA2C77da9508859C0602c4`](https://testnet.snowtrace.io/address/0x655DAfDe77290Fec2fFA2C77da9508859C0602c4) | DeFi middleware: collateral, interest, trust gating |
+| ReputationSource | [`0x3D61349a610CB6651A5A077eeda7D723eE3F2545`](https://snowtrace.io/address/0x3D61349a610CB6651A5A077eeda7D723eE3F2545) | [`0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1`](https://testnet.snowtrace.io/address/0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1) | ICM C-Chain responder for L1 reputation requests |
 
 ## TypeScript SDK
 
@@ -312,7 +307,7 @@ agentproof/
 - [x] Reputation-Gated DeFi example (ReputationGatedVault)
 - [x] 88 Hardhat tests passing
 - [x] Phase 3 contract deployment to Fuji testnet (all verified on Snowtrace)
-- [ ] Mainnet deployment
+- [x] Mainnet deployment (8 contracts deployed + verified on Snowtrace)
 - [ ] IPFS metadata storage
 - [ ] DAO governance for claim resolution
 - [ ] Decentralized validator selection

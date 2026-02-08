@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Book, Code, Terminal, Globe, ChevronDown, ChevronRight, Copy, CheckCircle } from "lucide-react";
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.agentproof.sh/api";
+
 type TabId = "api" | "sdk" | "contracts";
 
 const ENDPOINTS = [
@@ -313,8 +315,8 @@ export default function DocsPage() {
           <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
             <p className="text-xs font-mono text-gray-500 uppercase mb-2">Base URL</p>
             <div className="flex items-center gap-2">
-              <code className="text-sm font-mono text-emerald-400">http://localhost:8000/api</code>
-              <CopyButton text="http://localhost:8000/api" />
+              <code className="text-sm font-mono text-emerald-400">{BASE_URL}</code>
+              <CopyButton text={BASE_URL} />
             </div>
             <p className="text-xs text-gray-500 mt-2">All endpoints return JSON. No authentication required for read operations.</p>
           </div>
