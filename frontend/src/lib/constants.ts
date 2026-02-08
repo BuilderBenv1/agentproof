@@ -13,7 +13,14 @@ export const CONTRACT_ADDRESSES = {
   identityRegistry: ERC8004_ADDRESSES.identityRegistry,
   reputationRegistry: ERC8004_ADDRESSES.reputationRegistry,
   validationRegistry: process.env.NEXT_PUBLIC_VALIDATION_REGISTRY || "",
+  agentProofCore: process.env.NEXT_PUBLIC_AGENTPROOF_CORE || "",
 };
+
+// Protocol fee for agent registration (0.05 AVAX)
+export const PROTOCOL_FEE = BigInt("50000000000000000"); // 0.05 ether in wei
+
+// Protocol treasury — AgentProofCore deployer/owner receives protocol fees
+export const TREASURY_ADDRESS = "0x16f057E27189735B424dBA8559e9670103677F35" as const;
 
 export const TIERS = {
   diamond: { label: "Diamond", color: "#B9F2FF", minScore: 90, minFeedback: 50 },

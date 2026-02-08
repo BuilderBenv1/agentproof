@@ -1,34 +1,165 @@
 "use client";
 
-import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { keccak256, toHex } from "viem";
+import { useState, useEffect, useCallback } from "react";
+import {
+  useWriteContract,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useSendTransaction,
+} from "wagmi";
+import { keccak256, toHex, decodeEventLog } from "viem";
 import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI } from "@/lib/contracts";
-import { CONTRACT_ADDRESSES } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, PROTOCOL_FEE, TREASURY_ADDRESS } from "@/lib/constants";
 
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 
+type RegistrationStep = "idle" | "fee" | "fee_confirming" | "register" | "register_confirming" | "done";
+
 export function useRegisterAgent() {
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const [step, setStep] = useState<RegistrationStep>("idle");
+  const [agentId, setAgentId] = useState<number | null>(null);
+  const [pendingURI, setPendingURI] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  // Step 1: Send protocol fee
+  const {
+    sendTransaction,
+    data: feeHash,
+    isPending: feePending,
+    error: feeError,
+    reset: resetFee,
+  } = useSendTransaction();
 
-  function register(agentURI: string) {
+  const {
+    isLoading: feeConfirming,
+    isSuccess: feeSuccess,
+  } = useWaitForTransactionReceipt({ hash: feeHash });
+
+  // Step 2: Register on ERC-8004
+  const {
+    writeContract,
+    data: registerHash,
+    isPending: registerPending,
+    error: registerError,
+    reset: resetRegister,
+  } = useWriteContract();
+
+  const {
+    data: registerReceipt,
+    isLoading: registerConfirming,
+    isSuccess: registerSuccess,
+  } = useWaitForTransactionReceipt({ hash: registerHash });
+
+  // Start the registration flow
+  const register = useCallback((agentURI: string) => {
     if (!CONTRACT_ADDRESSES.identityRegistry) {
-      throw new Error("Identity Registry address not configured");
+      setErrorMsg("Identity Registry address not configured");
+      return;
     }
 
-    // Official ERC-8004: register(string agentURI) — no bond required
-    writeContract({
-      address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
-      abi: IDENTITY_REGISTRY_ABI,
-      functionName: "register",
-      args: [agentURI],
+    setErrorMsg(null);
+    setPendingURI(agentURI);
+    setStep("fee");
+
+    // Send 0.05 AVAX protocol fee to treasury
+    sendTransaction({
+      to: TREASURY_ADDRESS,
+      value: PROTOCOL_FEE,
     });
+  }, [sendTransaction]);
+
+  // When fee is confirmed, proceed to register
+  useEffect(() => {
+    if (feeSuccess && pendingURI && step === "fee") {
+      setStep("register");
+      writeContract({
+        address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
+        abi: IDENTITY_REGISTRY_ABI,
+        functionName: "register",
+        args: [pendingURI],
+      });
+    }
+  }, [feeSuccess, pendingURI, step, writeContract]);
+
+  // When register is confirmed, extract agent ID from receipt
+  useEffect(() => {
+    if (registerSuccess && registerReceipt && step === "register") {
+      setStep("done");
+
+      // Decode the ERC-721 Transfer event to get the minted tokenId
+      for (const log of registerReceipt.logs) {
+        try {
+          const event = decodeEventLog({
+            abi: IDENTITY_REGISTRY_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (event.eventName === "Transfer") {
+            const tokenId = Number((event.args as { tokenId: bigint }).tokenId);
+            setAgentId(tokenId);
+            break;
+          }
+        } catch {
+          // Not a Transfer event from this ABI, skip
+        }
+      }
+    }
+  }, [registerSuccess, registerReceipt, step]);
+
+  // Track errors
+  useEffect(() => {
+    if (feeError) {
+      setErrorMsg(feeError.message?.includes("User rejected")
+        ? "Transaction rejected in wallet"
+        : feeError.message || "Fee payment failed");
+      setStep("idle");
+    }
+  }, [feeError]);
+
+  useEffect(() => {
+    if (registerError) {
+      setErrorMsg(registerError.message?.includes("User rejected")
+        ? "Transaction rejected in wallet"
+        : registerError.message || "Registration failed");
+      setStep("idle");
+    }
+  }, [registerError]);
+
+  const isPending = step === "fee" && feePending;
+  const isConfirming =
+    (step === "fee" && feeConfirming) ||
+    (step === "register" && (registerPending || registerConfirming));
+  const isSuccess = step === "done" && registerSuccess;
+
+  const statusText = (() => {
+    if (step === "fee" && feePending) return "Confirm fee payment in wallet...";
+    if (step === "fee" && feeConfirming) return "Processing protocol fee...";
+    if (step === "register" && registerPending) return "Confirm registration in wallet...";
+    if (step === "register" && registerConfirming) return "Minting agent identity...";
+    return null;
+  })();
+
+  function reset() {
+    setStep("idle");
+    setAgentId(null);
+    setPendingURI(null);
+    setErrorMsg(null);
+    resetFee();
+    resetRegister();
   }
 
-  return { register, hash, isPending, isConfirming, isSuccess, error };
+  return {
+    register,
+    registerHash,
+    feeHash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    agentId,
+    statusText,
+    error: errorMsg ? { message: errorMsg } : null,
+    reset,
+  };
 }
 
 export function useIsRegistered(address: string | undefined) {
@@ -70,7 +201,6 @@ export function useSubmitFeedback() {
     const feedbackHash = keccak256(toHex(taskDescription));
 
     // Official ERC-8004: giveFeedback(agentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash)
-    // We use value=rating (1-100), valueDecimals=0, empty tags/endpoint
     writeContract({
       address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
       abi: REPUTATION_REGISTRY_ABI,
