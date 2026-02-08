@@ -8,15 +8,15 @@ ERC8004_IDENTITY_ABI = json.loads("""[
     {"inputs":[{"name":"tokenId","type":"uint256"}],"name":"tokenURI","outputs":[{"type":"string"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"tokenId","type":"uint256"}],"name":"ownerOf","outputs":[{"type":"address"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"name":"agentURI","type":"string"}],"name":"Registered","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"agentURI","type":"string"}],"name":"URIUpdated","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"indexed":false,"name":"agentURI","type":"string"}],"name":"Registered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"agentURI","type":"string"}],"name":"URIUpdated","type":"event"}
 ]""")
 
 # ─── Official ERC-8004 Reputation Registry ABI (Ava Labs) ───────────
 ERC8004_REPUTATION_ABI = json.loads("""[
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getFeedbackCount","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getSummary","outputs":[{"components":[{"name":"totalFeedback","type":"uint256"},{"name":"averageValue","type":"int128"},{"name":"averageValueDecimals","type":"uint8"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"feedbackId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"name":"value","type":"int128"},{"name":"valueDecimals","type":"uint8"},{"name":"tag1","type":"bytes32"},{"name":"tag2","type":"bytes32"}],"name":"NewFeedback","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"feedbackId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"indexed":false,"name":"value","type":"int128"},{"indexed":false,"name":"valueDecimals","type":"uint8"},{"indexed":false,"name":"tag1","type":"bytes32"},{"indexed":false,"name":"tag2","type":"bytes32"}],"name":"NewFeedback","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"feedbackId","type":"uint256"}],"name":"FeedbackRevoked","type":"event"}
 ]""")
 
@@ -26,8 +26,8 @@ LEGACY_IDENTITY_ABI = json.loads("""[
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getAgentURI","outputs":[{"type":"string"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getAgentOwner","outputs":[{"type":"address"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"owner","type":"address"}],"name":"isRegistered","outputs":[{"type":"bool"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"name":"agentURI","type":"string"}],"name":"AgentRegistered","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"newURI","type":"string"}],"name":"AgentURIUpdated","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"indexed":false,"name":"agentURI","type":"string"}],"name":"AgentRegistered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"newURI","type":"string"}],"name":"AgentURIUpdated","type":"event"}
 ]""")
 
 # ─── Legacy Custom Reputation Registry ABI ───────────────────────────
@@ -35,7 +35,7 @@ LEGACY_REPUTATION_ABI = json.loads("""[
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getFeedbackCount","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getAverageRating","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"agentId","type":"uint256"},{"name":"index","type":"uint256"}],"name":"getFeedback","outputs":[{"components":[{"name":"reviewer","type":"address"},{"name":"rating","type":"uint8"},{"name":"feedbackURI","type":"string"},{"name":"taskHash","type":"bytes32"},{"name":"timestamp","type":"uint256"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"name":"rating","type":"uint8"},{"name":"taskHash","type":"bytes32"}],"name":"FeedbackSubmitted","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"indexed":false,"name":"rating","type":"uint8"},{"indexed":false,"name":"taskHash","type":"bytes32"}],"name":"FeedbackSubmitted","type":"event"}
 ]""")
 
 # ─── Validation Registry ABI (always custom) ────────────────────────
@@ -43,8 +43,8 @@ VALIDATION_REGISTRY_ABI = json.loads("""[
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getSuccessRate","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getValidationCounts","outputs":[{"name":"total","type":"uint256"},{"name":"completed","type":"uint256"},{"name":"successful","type":"uint256"}],"stateMutability":"view","type":"function"},
     {"inputs":[{"name":"validationId","type":"uint256"}],"name":"getValidation","outputs":[{"components":[{"name":"agentId","type":"uint256"},{"name":"taskHash","type":"bytes32"},{"name":"taskURI","type":"string"},{"name":"requester","type":"address"},{"name":"timestamp","type":"uint256"},{"name":"isCompleted","type":"bool"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"indexed":false,"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
 ]""")
 
 

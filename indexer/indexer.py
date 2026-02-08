@@ -50,42 +50,42 @@ logger = logging.getLogger("indexer")
 
 # ─── Official ERC-8004 ABI fragments ────────────────────────────────────────
 ERC8004_IDENTITY_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"agentURI","type":"string"},{"indexed":true,"name":"owner","type":"address"}],"name":"Registered","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"newURI","type":"string"},{"indexed":true,"name":"updatedBy","type":"address"}],"name":"URIUpdated","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"agentURI","type":"string"},{"indexed":true,"name":"owner","type":"address"}],"name":"Registered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"newURI","type":"string"},{"indexed":true,"name":"updatedBy","type":"address"}],"name":"URIUpdated","type":"event"}
 ]""")
 
 ERC8004_REPUTATION_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"name":"feedbackIndex","type":"uint64"},{"name":"value","type":"int128"},{"name":"valueDecimals","type":"uint8"},{"indexed":true,"name":"indexedTag1","type":"string"},{"name":"tag1","type":"string"},{"name":"tag2","type":"string"},{"name":"endpoint","type":"string"},{"name":"feedbackURI","type":"string"},{"name":"feedbackHash","type":"bytes32"}],"name":"NewFeedback","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":false,"name":"feedbackIndex","type":"uint64"},{"indexed":false,"name":"value","type":"int128"},{"indexed":false,"name":"valueDecimals","type":"uint8"},{"indexed":true,"name":"indexedTag1","type":"string"},{"indexed":false,"name":"tag1","type":"string"},{"indexed":false,"name":"tag2","type":"string"},{"indexed":false,"name":"endpoint","type":"string"},{"indexed":false,"name":"feedbackURI","type":"string"},{"indexed":false,"name":"feedbackHash","type":"bytes32"}],"name":"NewFeedback","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":true,"name":"feedbackIndex","type":"uint64"}],"name":"FeedbackRevoked","type":"event"}
 ]""")
 
 # ─── Custom (legacy) ABI fragments ──────────────────────────────────────────
 CUSTOM_IDENTITY_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"name":"agentURI","type":"string"}],"name":"AgentRegistered","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"newURI","type":"string"}],"name":"AgentURIUpdated","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"owner","type":"address"},{"indexed":false,"name":"agentURI","type":"string"}],"name":"AgentRegistered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"newURI","type":"string"}],"name":"AgentURIUpdated","type":"event"}
 ]""")
 
 CUSTOM_REPUTATION_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"name":"rating","type":"uint8"},{"name":"taskHash","type":"bytes32"}],"name":"FeedbackSubmitted","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"indexed":false,"name":"rating","type":"uint8"},{"indexed":false,"name":"taskHash","type":"bytes32"}],"name":"FeedbackSubmitted","type":"event"}
 ]""")
 
 VALIDATION_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"indexed":false,"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
 ]""")
 
 # ─── Phase 4 ABI fragments ────────────────────────────────────────────
 AGENT_MONITOR_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"},{"name":"url","type":"string"},{"name":"endpointType","type":"string"}],"name":"EndpointRegistered","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"}],"name":"EndpointRemoved","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"},{"name":"isUp","type":"bool"},{"name":"latencyMs","type":"uint256"}],"name":"UptimeCheckLogged","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"endpointIndex","type":"uint256"},{"indexed":false,"name":"url","type":"string"},{"indexed":false,"name":"endpointType","type":"string"}],"name":"EndpointRegistered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"endpointIndex","type":"uint256"}],"name":"EndpointRemoved","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"endpointIndex","type":"uint256"},{"indexed":false,"name":"isUp","type":"bool"},{"indexed":false,"name":"latencyMs","type":"uint256"}],"name":"UptimeCheckLogged","type":"event"}
 ]""")
 
 AGENT_SPLITS_ABI = json.loads("""[
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitId","type":"uint256"},{"indexed":true,"name":"creatorAgentId","type":"uint256"},{"name":"agentIds","type":"uint256[]"},{"name":"sharesBps","type":"uint256[]"}],"name":"SplitCreated","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitId","type":"uint256"},{"indexed":true,"name":"creatorAgentId","type":"uint256"},{"indexed":false,"name":"agentIds","type":"uint256[]"},{"indexed":false,"name":"sharesBps","type":"uint256[]"}],"name":"SplitCreated","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"splitId","type":"uint256"}],"name":"SplitDeactivated","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"name":"amount","type":"uint256"},{"name":"token","type":"address"},{"name":"payer","type":"address"}],"name":"SplitPaymentReceived","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"name":"amounts","type":"uint256[]"}],"name":"SplitDistributed","type":"event"}
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"token","type":"address"},{"indexed":false,"name":"payer","type":"address"}],"name":"SplitPaymentReceived","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"indexed":false,"name":"amounts","type":"uint256[]"}],"name":"SplitDistributed","type":"event"}
 ]""")
 
 
