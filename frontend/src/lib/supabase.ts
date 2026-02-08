@@ -9,7 +9,10 @@ interface FetchOptions {
 export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { method = "GET", body, params } = options;
 
-  let url = `${API_URL}${endpoint}`;
+  // Normalize: strip /api from base URL, then ensure endpoint starts with /api
+  const base = API_URL.replace(/\/api\/?$/, "");
+  const path = endpoint.startsWith("/api") ? endpoint : `/api${endpoint}`;
+  let url = `${base}${path}`;
 
   if (params) {
     const searchParams = new URLSearchParams();
