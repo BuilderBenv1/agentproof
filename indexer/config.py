@@ -26,3 +26,10 @@ AGENT_SPLITS_ADDRESS = os.getenv("AGENT_SPLITS_ADDRESS", "")
 
 POLL_INTERVAL = int(os.getenv("INDEXER_POLL_INTERVAL", "10"))
 CONFIRMATION_BLOCKS = int(os.getenv("INDEXER_CONFIRMATION_BLOCKS", "3"))
+
+# Avalanche RPC limits get_logs to 2048 blocks per request; use 2000 for safety
+MAX_BLOCK_RANGE = int(os.getenv("INDEXER_MAX_BLOCK_RANGE", "2000"))
+
+# Default starting block — ERC-8004 registries were deployed around block 77,000,000
+# Avoids scanning from block 0 on first run
+DEFAULT_START_BLOCK = int(os.getenv("INDEXER_DEFAULT_START_BLOCK", "77000000"))

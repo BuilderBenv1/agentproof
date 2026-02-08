@@ -33,6 +33,8 @@ from config import (
     SUPABASE_KEY,
     POLL_INTERVAL,
     CONFIRMATION_BLOCKS,
+    MAX_BLOCK_RANGE,
+    DEFAULT_START_BLOCK,
 )
 from scoring import (
     calculate_composite_score,
@@ -205,14 +207,21 @@ class AgentProofIndexer:
                 .execute()
             )
             if result.data:
-                return result.data[0]["last_block"]
+                stored = result.data[0]["last_block"]
+                # If stored block is below the default start, fast-forward
+                if stored < DEFAULT_START_BLOCK:
+                    logger.info(f"Fast-forwarding {contract_name} from block {stored} to {DEFAULT_START_BLOCK}")
+                    self.set_last_block(contract_name, DEFAULT_START_BLOCK)
+                    return DEFAULT_START_BLOCK
+                return stored
             self.db.table("indexer_state").insert(
-                {"contract_name": contract_name, "last_block": 0}
+                {"contract_name": contract_name, "last_block": DEFAULT_START_BLOCK}
             ).execute()
-            return 0
+            logger.info(f"Initialized {contract_name} indexer state at block {DEFAULT_START_BLOCK}")
+            return DEFAULT_START_BLOCK
         except Exception as e:
             logger.error(f"Error getting last block for {contract_name}: {e}")
-            return 0
+            return DEFAULT_START_BLOCK
 
     def set_last_block(self, contract_name: str, block: int):
         try:
@@ -882,6 +891,26 @@ class AgentProofIndexer:
 
     # ─── Main loop ───────────────────────────────────────────────────────────
 
+    def _process_contract_chunked(
+        self, contract_name: str, process_fn, from_block: int, to_block: int
+    ) -> int:
+        """Process events in chunks of MAX_BLOCK_RANGE to stay within RPC limits."""
+        total = 0
+        chunk_start = from_block
+
+        while chunk_start <= to_block:
+            chunk_end = min(chunk_start + MAX_BLOCK_RANGE - 1, to_block)
+            try:
+                count = process_fn(chunk_start, chunk_end)
+                total += count
+            except Exception as e:
+                logger.error(f"Error processing {contract_name} blocks {chunk_start}-{chunk_end}: {e}")
+            # Persist progress after each chunk so we don't re-scan on crash
+            self.set_last_block(contract_name, chunk_end)
+            chunk_start = chunk_end + 1
+
+        return total
+
     def run_cycle(self):
         try:
             current_block = self.w3.eth.block_number
@@ -895,40 +924,24 @@ class AgentProofIndexer:
 
         total_events = 0
 
-        # Identity events
-        last = self.get_last_block("identity")
-        if last < safe_block:
-            count = self.process_identity_events(last + 1, safe_block)
-            total_events += count
-            self.set_last_block("identity", safe_block)
+        # Process each contract with chunking
+        contracts = [
+            ("identity", self.process_identity_events),
+            ("reputation", self.process_reputation_events),
+            ("validation", self.process_validation_events),
+            ("agent_monitor", self.process_monitor_events),
+            ("agent_splits", self.process_splits_events),
+        ]
 
-        # Reputation events
-        last = self.get_last_block("reputation")
-        if last < safe_block:
-            count = self.process_reputation_events(last + 1, safe_block)
-            total_events += count
-            self.set_last_block("reputation", safe_block)
-
-        # Validation events (always custom)
-        last = self.get_last_block("validation")
-        if last < safe_block:
-            count = self.process_validation_events(last + 1, safe_block)
-            total_events += count
-            self.set_last_block("validation", safe_block)
-
-        # AgentMonitor events (Phase 4)
-        last = self.get_last_block("agent_monitor")
-        if last < safe_block:
-            count = self.process_monitor_events(last + 1, safe_block)
-            total_events += count
-            self.set_last_block("agent_monitor", safe_block)
-
-        # AgentSplits events (Phase 4)
-        last = self.get_last_block("agent_splits")
-        if last < safe_block:
-            count = self.process_splits_events(last + 1, safe_block)
-            total_events += count
-            self.set_last_block("agent_splits", safe_block)
+        for contract_name, process_fn in contracts:
+            last = self.get_last_block(contract_name)
+            if last < safe_block:
+                start = last + 1
+                gap = safe_block - start + 1
+                if gap > MAX_BLOCK_RANGE:
+                    logger.info(f"[{contract_name}] Catching up {gap} blocks in chunks of {MAX_BLOCK_RANGE}")
+                count = self._process_contract_chunked(contract_name, process_fn, start, safe_block)
+                total_events += count
 
         if total_events > 0:
             logger.info(f"Processed {total_events} events up to block {safe_block}")
