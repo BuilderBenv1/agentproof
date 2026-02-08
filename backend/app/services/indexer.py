@@ -18,6 +18,8 @@ from app.services.scoring import (
 logger = logging.getLogger(__name__)
 
 CONFIRMATION_BLOCKS = 3
+DEFAULT_START_BLOCK = 77_000_000
+MAX_BLOCK_RANGE = 2000
 
 
 def get_last_processed_block(contract_name: str) -> int:
@@ -31,15 +33,20 @@ def get_last_processed_block(contract_name: str) -> int:
             .execute()
         )
         if result.data:
-            return result.data[0]["last_block"]
+            stored = result.data[0]["last_block"]
+            if stored < DEFAULT_START_BLOCK:
+                logger.info(f"Fast-forwarding {contract_name} from block {stored} to {DEFAULT_START_BLOCK}")
+                update_last_processed_block(contract_name, DEFAULT_START_BLOCK)
+                return DEFAULT_START_BLOCK
+            return stored
         # Initialize state
         db.table("indexer_state").insert(
-            {"contract_name": contract_name, "last_block": 0}
+            {"contract_name": contract_name, "last_block": DEFAULT_START_BLOCK}
         ).execute()
-        return 0
+        return DEFAULT_START_BLOCK
     except Exception as e:
         logger.error(f"Error getting last block for {contract_name}: {e}")
-        return 0
+        return DEFAULT_START_BLOCK
 
 
 def update_last_processed_block(contract_name: str, block_number: int):
@@ -327,6 +334,29 @@ def update_leaderboard():
                 logger.error(f"Error inserting leaderboard entry: {e}")
 
 
+def _process_chunked(contract_name: str, processor, safe_block: int):
+    """Process events for a contract in MAX_BLOCK_RANGE chunks."""
+    last_block = get_last_processed_block(contract_name)
+    if last_block >= safe_block:
+        return 0
+
+    total_count = 0
+    from_block = last_block + 1
+
+    while from_block <= safe_block:
+        to_block = min(from_block + MAX_BLOCK_RANGE - 1, safe_block)
+        try:
+            count = processor(from_block, to_block)
+            total_count += count
+        except Exception as e:
+            logger.error(f"Error processing {contract_name} blocks {from_block}-{to_block}: {e}")
+            break
+        update_last_processed_block(contract_name, to_block)
+        from_block = to_block + 1
+
+    return total_count
+
+
 def run_indexer_cycle():
     """Run one full indexer cycle: fetch events, update scores, update leaderboard."""
     blockchain = get_blockchain_service()
@@ -345,32 +375,20 @@ def run_indexer_cycle():
     if safe_block < 0:
         return
 
-    # Process identity events
-    last_identity = get_last_processed_block("identity")
-    if last_identity < safe_block:
-        from_block = last_identity + 1
-        count = process_agent_registered_events(from_block, safe_block)
-        if count > 0:
-            logger.info(f"Processed {count} agent registration events")
-        update_last_processed_block("identity", safe_block)
+    # Process identity events (chunked)
+    count = _process_chunked("identity", process_agent_registered_events, safe_block)
+    if count > 0:
+        logger.info(f"Processed {count} agent registration events")
 
-    # Process reputation events
-    last_reputation = get_last_processed_block("reputation")
-    if last_reputation < safe_block:
-        from_block = last_reputation + 1
-        count = process_feedback_events(from_block, safe_block)
-        if count > 0:
-            logger.info(f"Processed {count} feedback events")
-        update_last_processed_block("reputation", safe_block)
+    # Process reputation events (chunked)
+    count = _process_chunked("reputation", process_feedback_events, safe_block)
+    if count > 0:
+        logger.info(f"Processed {count} feedback events")
 
-    # Process validation events
-    last_validation = get_last_processed_block("validation")
-    if last_validation < safe_block:
-        from_block = last_validation + 1
-        count = process_validation_events(from_block, safe_block)
-        if count > 0:
-            logger.info(f"Processed {count} validation events")
-        update_last_processed_block("validation", safe_block)
+    # Process validation events (chunked)
+    count = _process_chunked("validation", process_validation_events, safe_block)
+    if count > 0:
+        logger.info(f"Processed {count} validation events")
 
     # Recalculate scores and leaderboard
     recalculate_agent_scores()
