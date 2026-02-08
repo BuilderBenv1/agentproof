@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
-ERC8004_ETH_IDENTITY_START_BLOCK = 21_700_000  # Ethereum contract start block
+ERC8004_ETH_IDENTITY_START_BLOCK = 24_200_000  # Ethereum contract deployed ~Jan 29 2026
 MAX_BLOCK_RANGE = 2000
 
 
