@@ -26,6 +26,8 @@ from config import (
     IDENTITY_REGISTRY_ADDRESS,
     REPUTATION_REGISTRY_ADDRESS,
     VALIDATION_REGISTRY_ADDRESS,
+    AGENT_MONITOR_ADDRESS,
+    AGENT_SPLITS_ADDRESS,
     USE_OFFICIAL_ERC8004,
     SUPABASE_URL,
     SUPABASE_KEY,
@@ -70,6 +72,20 @@ CUSTOM_REPUTATION_ABI = json.loads("""[
 VALIDATION_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"name":"taskHash","type":"bytes32"}],"name":"ValidationRequested","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"validationId","type":"uint256"},{"indexed":true,"name":"validator","type":"address"},{"name":"isValid","type":"bool"}],"name":"ValidationSubmitted","type":"event"}
+]""")
+
+# ─── Phase 4 ABI fragments ────────────────────────────────────────────
+AGENT_MONITOR_ABI = json.loads("""[
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"},{"name":"url","type":"string"},{"name":"endpointType","type":"string"}],"name":"EndpointRegistered","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"}],"name":"EndpointRemoved","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"name":"endpointIndex","type":"uint256"},{"name":"isUp","type":"bool"},{"name":"latencyMs","type":"uint256"}],"name":"UptimeCheckLogged","type":"event"}
+]""")
+
+AGENT_SPLITS_ABI = json.loads("""[
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitId","type":"uint256"},{"indexed":true,"name":"creatorAgentId","type":"uint256"},{"name":"agentIds","type":"uint256[]"},{"name":"sharesBps","type":"uint256[]"}],"name":"SplitCreated","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitId","type":"uint256"}],"name":"SplitDeactivated","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"name":"amount","type":"uint256"},{"name":"token","type":"address"},{"name":"payer","type":"address"}],"name":"SplitPaymentReceived","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"splitPaymentId","type":"uint256"},{"indexed":true,"name":"splitId","type":"uint256"},{"name":"amounts","type":"uint256[]"}],"name":"SplitDistributed","type":"event"}
 ]""")
 
 
@@ -159,6 +175,24 @@ class AgentProofIndexer:
                 abi=VALIDATION_ABI,
             )
             logger.info(f"Validation Registry (custom): {VALIDATION_REGISTRY_ADDRESS}")
+
+        # ─── Phase 4: AgentMonitor ───
+        self.monitor_contract = None
+        if AGENT_MONITOR_ADDRESS:
+            self.monitor_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(AGENT_MONITOR_ADDRESS),
+                abi=AGENT_MONITOR_ABI,
+            )
+            logger.info(f"AgentMonitor: {AGENT_MONITOR_ADDRESS}")
+
+        # ─── Phase 4: AgentSplits ───
+        self.splits_contract = None
+        if AGENT_SPLITS_ADDRESS:
+            self.splits_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(AGENT_SPLITS_ADDRESS),
+                abi=AGENT_SPLITS_ABI,
+            )
+            logger.info(f"AgentSplits: {AGENT_SPLITS_ADDRESS}")
 
     # ─── State persistence ───────────────────────────────────────────────────
 
@@ -486,6 +520,199 @@ class AgentProofIndexer:
 
         return count
 
+    # ─── Phase 4: AgentMonitor events ────────────────────────────────────────
+
+    def process_monitor_events(self, from_block: int, to_block: int) -> int:
+        if not self.monitor_contract:
+            return 0
+
+        count = 0
+
+        # EndpointRegistered
+        try:
+            events = self.monitor_contract.events.EndpointRegistered().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                ts = self.get_block_timestamp(event.blockNumber)
+
+                self.db.table("agent_monitoring_endpoints").upsert(
+                    {
+                        "agent_id": agent_id,
+                        "endpoint_index": event.args.endpointIndex,
+                        "url": event.args.url,
+                        "endpoint_type": event.args.endpointType,
+                        "is_active": True,
+                        "registered_at": ts.isoformat(),
+                        "tx_hash": event.transactionHash.hex(),
+                        "block_number": event.blockNumber,
+                    },
+                    on_conflict="agent_id,endpoint_index",
+                ).execute()
+                self._log_audit(agent_id, "endpoint_registered", event)
+                logger.info(f"[MONITOR] Endpoint registered for agent #{agent_id}")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing EndpointRegistered events: {e}")
+
+        # EndpointRemoved
+        try:
+            events = self.monitor_contract.events.EndpointRemoved().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                self.db.table("agent_monitoring_endpoints").update(
+                    {"is_active": False}
+                ).eq("agent_id", agent_id).eq("endpoint_index", event.args.endpointIndex).execute()
+                logger.info(f"[MONITOR] Endpoint removed for agent #{agent_id}")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing EndpointRemoved events: {e}")
+
+        # UptimeCheckLogged
+        try:
+            events = self.monitor_contract.events.UptimeCheckLogged().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                agent_id = event.args.agentId
+                ts = self.get_block_timestamp(event.blockNumber)
+
+                self.db.table("uptime_checks").insert({
+                    "agent_id": agent_id,
+                    "endpoint_index": event.args.endpointIndex,
+                    "is_up": event.args.isUp,
+                    "latency_ms": event.args.latencyMs,
+                    "checked_at": ts.isoformat(),
+                    "source": "onchain",
+                    "tx_hash": event.transactionHash.hex(),
+                    "block_number": event.blockNumber,
+                }).execute()
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing UptimeCheckLogged events: {e}")
+
+        return count
+
+    # ─── Phase 4: AgentSplits events ──────────────────────────────────────
+
+    def process_splits_events(self, from_block: int, to_block: int) -> int:
+        if not self.splits_contract:
+            return 0
+
+        count = 0
+
+        # SplitCreated
+        try:
+            events = self.splits_contract.events.SplitCreated().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                ts = self.get_block_timestamp(event.blockNumber)
+                agent_ids = list(event.args.agentIds)
+                shares = list(event.args.sharesBps)
+
+                self.db.table("revenue_splits").upsert(
+                    {
+                        "split_id": event.args.splitId,
+                        "creator_agent_id": event.args.creatorAgentId,
+                        "agent_ids": agent_ids,
+                        "shares_bps": shares,
+                        "is_active": True,
+                        "created_at": ts.isoformat(),
+                        "tx_hash": event.transactionHash.hex(),
+                        "block_number": event.blockNumber,
+                    },
+                    on_conflict="split_id",
+                ).execute()
+                self._log_audit(event.args.creatorAgentId, "split_created", event)
+                logger.info(f"[SPLITS] Split #{event.args.splitId} created")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing SplitCreated events: {e}")
+
+        # SplitDeactivated
+        try:
+            events = self.splits_contract.events.SplitDeactivated().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                self.db.table("revenue_splits").update(
+                    {"is_active": False}
+                ).eq("split_id", event.args.splitId).execute()
+                logger.info(f"[SPLITS] Split #{event.args.splitId} deactivated")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing SplitDeactivated events: {e}")
+
+        # SplitPaymentReceived
+        try:
+            events = self.splits_contract.events.SplitPaymentReceived().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                ts = self.get_block_timestamp(event.blockNumber)
+
+                self.db.table("split_payments").upsert(
+                    {
+                        "split_payment_id": event.args.splitPaymentId,
+                        "split_id": event.args.splitId,
+                        "amount": str(event.args.amount),
+                        "token_address": event.args.token,
+                        "payer_address": event.args.payer,
+                        "distributed": False,
+                        "created_at": ts.isoformat(),
+                        "tx_hash": event.transactionHash.hex(),
+                        "block_number": event.blockNumber,
+                    },
+                    on_conflict="split_payment_id",
+                ).execute()
+                logger.info(f"[SPLITS] Payment #{event.args.splitPaymentId} received for split #{event.args.splitId}")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing SplitPaymentReceived events: {e}")
+
+        # SplitDistributed
+        try:
+            events = self.splits_contract.events.SplitDistributed().get_logs(
+                fromBlock=from_block, toBlock=to_block
+            )
+            for event in events:
+                ts = self.get_block_timestamp(event.blockNumber)
+                amounts = [str(a) for a in event.args.amounts]
+
+                self.db.table("split_payments").update(
+                    {
+                        "distributed": True,
+                        "distributed_at": ts.isoformat(),
+                        "distribution_amounts": amounts,
+                    }
+                ).eq("split_payment_id", event.args.splitPaymentId).execute()
+                logger.info(f"[SPLITS] Payment #{event.args.splitPaymentId} distributed")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing SplitDistributed events: {e}")
+
+        return count
+
+    # ─── Audit logging helper ─────────────────────────────────────────────
+
+    def _log_audit(self, agent_id, action, event):
+        try:
+            self.db.table("audit_logs").insert({
+                "agent_id": agent_id,
+                "action": action,
+                "actor_address": event.address if hasattr(event, "address") else "",
+                "details": {},
+                "tx_hash": event.transactionHash.hex(),
+                "block_number": event.blockNumber,
+                "source": "indexer",
+            }).execute()
+        except Exception:
+            pass
+
     # ─── Scoring / Leaderboard ───────────────────────────────────────────────
 
     def recalculate_scores(self):
@@ -532,26 +759,48 @@ class AgentProofIndexer:
             )
             age_days = calculate_account_age_days(registered_at)
 
+            # Uptime percentage from daily summaries (last 30 days)
+            uptime_pct = -1.0  # negative = no data
+            try:
+                uptime_result = (
+                    self.db.table("uptime_daily_summary")
+                    .select("total_checks,successful_checks")
+                    .eq("agent_id", agent_id)
+                    .order("summary_date", desc=True)
+                    .limit(30)
+                    .execute()
+                )
+                if uptime_result.data:
+                    total_checks = sum(s["total_checks"] for s in uptime_result.data)
+                    successful_checks = sum(s["successful_checks"] for s in uptime_result.data)
+                    if total_checks > 0:
+                        uptime_pct = (successful_checks / total_checks) * 100
+            except Exception:
+                pass
+
             composite = calculate_composite_score(
                 average_rating=avg_rating,
                 feedback_count=feedback_count,
                 rating_std_dev=std_dev,
                 validation_success_rate=success_rate,
                 account_age_days=age_days,
+                uptime_pct=uptime_pct,
             )
             tier = determine_tier(composite, feedback_count)
 
             try:
-                self.db.table("agents").update(
-                    {
-                        "total_feedback": feedback_count,
-                        "average_rating": round(avg_rating, 2),
-                        "composite_score": composite,
-                        "validation_success_rate": round(success_rate, 2),
-                        "tier": tier,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                ).eq("agent_id", agent_id).execute()
+                update_data = {
+                    "total_feedback": feedback_count,
+                    "average_rating": round(avg_rating, 2),
+                    "composite_score": composite,
+                    "validation_success_rate": round(success_rate, 2),
+                    "tier": tier,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                if uptime_pct >= 0:
+                    update_data["uptime_score"] = round(uptime_pct, 2)
+
+                self.db.table("agents").update(update_data).eq("agent_id", agent_id).execute()
             except Exception as e:
                 logger.error(f"Error updating scores for agent #{agent_id}: {e}")
 
@@ -666,6 +915,20 @@ class AgentProofIndexer:
             count = self.process_validation_events(last + 1, safe_block)
             total_events += count
             self.set_last_block("validation", safe_block)
+
+        # AgentMonitor events (Phase 4)
+        last = self.get_last_block("agent_monitor")
+        if last < safe_block:
+            count = self.process_monitor_events(last + 1, safe_block)
+            total_events += count
+            self.set_last_block("agent_monitor", safe_block)
+
+        # AgentSplits events (Phase 4)
+        last = self.get_last_block("agent_splits")
+        if last < safe_block:
+            count = self.process_splits_events(last + 1, safe_block)
+            total_events += count
+            self.set_last_block("agent_splits", safe_block)
 
         if total_events > 0:
             logger.info(f"Processed {total_events} events up to block {safe_block}")

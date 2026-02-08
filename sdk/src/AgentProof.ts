@@ -7,6 +7,8 @@ import {
   INSURANCE_POOL_ABI,
   AGENT_PAYMENTS_ABI,
   REPUTATION_GATE_ABI,
+  AGENT_MONITOR_ABI,
+  AGENT_SPLITS_ABI,
 } from "./contracts/abis";
 import { getAddresses, ContractAddresses } from "./contracts/addresses";
 import type {
@@ -28,6 +30,16 @@ import type {
   Payment,
   AgentEarnings,
   ReputationGateInfo,
+  MonitorEndpoint,
+  UptimeCheck,
+  UptimeCounts,
+  RevenueSplit,
+  SplitPayment,
+  SplitParticipants,
+  EndpointRegisteredEvent,
+  UptimeCheckLoggedEvent,
+  SplitCreatedEvent,
+  SplitDistributedEvent,
 } from "./types";
 
 export class AgentProof {
@@ -47,6 +59,10 @@ export class AgentProof {
   public readonly insurancePool: ethers.Contract | null;
   public readonly agentPayments: ethers.Contract | null;
   public readonly reputationGate: ethers.Contract | null;
+
+  // Phase 4 contracts (optional — available after deployment)
+  public readonly agentMonitor: ethers.Contract | null;
+  public readonly agentSplits: ethers.Contract | null;
 
   constructor(config: AgentProofConfig) {
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
@@ -89,6 +105,14 @@ export class AgentProof {
       : null;
     this.reputationGate = this.addresses.reputationGate
       ? new ethers.Contract(this.addresses.reputationGate, REPUTATION_GATE_ABI, signerOrProvider)
+      : null;
+
+    // Phase 4 contracts (only initialized if addresses are provided)
+    this.agentMonitor = this.addresses.agentMonitor
+      ? new ethers.Contract(this.addresses.agentMonitor, AGENT_MONITOR_ABI, signerOrProvider)
+      : null;
+    this.agentSplits = this.addresses.agentSplits
+      ? new ethers.Contract(this.addresses.agentSplits, AGENT_SPLITS_ABI, signerOrProvider)
       : null;
   }
 
@@ -456,6 +480,168 @@ export class AgentProof {
     return this.requireReputationGate().batchCheckTier(agentIds, requiredTier);
   }
 
+  // ─── Agent Monitor (Phase 4) ─────────────────────────────
+
+  private requireAgentMonitor(): ethers.Contract {
+    if (!this.agentMonitor) throw new Error("AgentMonitor address not configured");
+    return this.agentMonitor;
+  }
+
+  /** Register a monitoring endpoint for an agent. */
+  async registerEndpoint(
+    agentId: number | bigint,
+    url: string,
+    endpointType: string
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentMonitor().registerEndpoint(agentId, url, endpointType);
+    return tx.wait();
+  }
+
+  /** Remove a monitoring endpoint. */
+  async removeEndpoint(
+    agentId: number | bigint,
+    endpointIndex: number | bigint
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentMonitor().removeEndpoint(agentId, endpointIndex);
+    return tx.wait();
+  }
+
+  /** Log an uptime check (authorized monitors only). */
+  async logUptimeCheck(
+    agentId: number | bigint,
+    endpointIndex: number | bigint,
+    isUp: boolean,
+    latencyMs: number | bigint
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentMonitor().logUptimeCheck(agentId, endpointIndex, isUp, latencyMs);
+    return tx.wait();
+  }
+
+  /** Batch log uptime checks (authorized monitors only). */
+  async batchLogUptimeChecks(
+    agentIds: (number | bigint)[],
+    endpointIndexes: (number | bigint)[],
+    isUpResults: boolean[],
+    latencies: (number | bigint)[]
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentMonitor().batchLogUptimeChecks(agentIds, endpointIndexes, isUpResults, latencies);
+    return tx.wait();
+  }
+
+  /** Get all endpoints for an agent. */
+  async getEndpoints(agentId: number | bigint): Promise<MonitorEndpoint[]> {
+    const results = await this.requireAgentMonitor().getEndpoints(agentId);
+    return results.map((r: Record<string, unknown>) => ({
+      agentId: r[0] as bigint,
+      endpointIndex: r[1] as bigint,
+      url: r[2] as string,
+      endpointType: r[3] as string,
+      isActive: r[4] as boolean,
+      registeredAt: r[5] as bigint,
+    }));
+  }
+
+  /** Get uptime rate for an agent (returns basis points, e.g., 9950 = 99.50%). */
+  async getUptimeRate(agentId: number | bigint): Promise<bigint> {
+    return this.requireAgentMonitor().getUptimeRate(agentId);
+  }
+
+  /** Get uptime check counts for an agent. */
+  async getUptimeCounts(agentId: number | bigint): Promise<UptimeCounts> {
+    const [total, successful] = await this.requireAgentMonitor().getUptimeCounts(agentId);
+    return { total, successful };
+  }
+
+  /** Get latest uptime checks for an agent. */
+  async getLatestChecks(agentId: number | bigint): Promise<UptimeCheck[]> {
+    const results = await this.requireAgentMonitor().getLatestChecks(agentId);
+    return results.map((r: Record<string, unknown>) => ({
+      agentId: r[0] as bigint,
+      endpointIndex: r[1] as bigint,
+      isUp: r[2] as boolean,
+      latencyMs: r[3] as bigint,
+      timestamp: r[4] as bigint,
+    }));
+  }
+
+  // ─── Agent Splits (Phase 4) ─────────────────────────────
+
+  private requireAgentSplits(): ethers.Contract {
+    if (!this.agentSplits) throw new Error("AgentSplits address not configured");
+    return this.agentSplits;
+  }
+
+  /** Create a revenue split between multiple agents. Shares in BPS (sum must equal 10000). */
+  async createSplit(
+    creatorAgentId: number | bigint,
+    agentIds: (number | bigint)[],
+    sharesBps: (number | bigint)[]
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentSplits().createSplit(creatorAgentId, agentIds, sharesBps);
+    return tx.wait();
+  }
+
+  /** Deactivate a split (creator only). */
+  async deactivateSplit(splitId: number | bigint): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentSplits().deactivateSplit(splitId);
+    return tx.wait();
+  }
+
+  /** Pay into a split. For AVAX, set token to ZeroAddress and pass value. */
+  async payToSplit(
+    splitId: number | bigint,
+    amount: bigint,
+    token: string,
+    taskHash: string
+  ): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const isNative = token === ethers.ZeroAddress;
+    const tx = await this.requireAgentSplits().payToSplit(
+      splitId, amount, token, taskHash,
+      isNative ? { value: amount } : {}
+    );
+    return tx.wait();
+  }
+
+  /** Distribute a split payment to participants. */
+  async distributeSplit(splitPaymentId: number | bigint): Promise<ethers.ContractTransactionReceipt> {
+    this.requireSigner();
+    const tx = await this.requireAgentSplits().distributeSplit(splitPaymentId);
+    return tx.wait();
+  }
+
+  /** Get split details. */
+  async getSplit(splitId: number | bigint): Promise<RevenueSplit> {
+    const [id, creator, agentIds, sharesBps, isActive, createdAt] = await this.requireAgentSplits().getSplit(splitId);
+    return { splitId: id, creatorAgentId: creator, agentIds, sharesBps, isActive, createdAt };
+  }
+
+  /** Get split payment details. */
+  async getSplitPayment(splitPaymentId: number | bigint): Promise<SplitPayment> {
+    const p = await this.requireAgentSplits().getSplitPayment(splitPaymentId);
+    return {
+      splitPaymentId: p[0], splitId: p[1], amount: p[2], token: p[3],
+      taskHash: p[4], payer: p[5], distributed: p[6], createdAt: p[7], distributedAt: p[8],
+    };
+  }
+
+  /** Get all split IDs an agent participates in. */
+  async getAgentSplits(agentId: number | bigint): Promise<bigint[]> {
+    return this.requireAgentSplits().getAgentSplits(agentId);
+  }
+
+  /** Get participants and their shares for a split. */
+  async getSplitParticipants(splitId: number | bigint): Promise<SplitParticipants> {
+    const [agentIds, sharesBps] = await this.requireAgentSplits().getSplitParticipants(splitId);
+    return { agentIds, sharesBps };
+  }
+
   // ─── Events ─────────────────────────────────────────────────
 
   /** Listen for agent registrations on the official ERC-8004 registry. */
@@ -478,9 +664,43 @@ export class AgentProof {
     });
   }
 
+  /** Listen for endpoint registrations on AgentMonitor. */
+  onEndpointRegistered(callback: (event: EndpointRegisteredEvent) => void): void {
+    if (!this.agentMonitor) return;
+    this.agentMonitor.on("EndpointRegistered", (agentId: bigint, endpointIndex: bigint, url: string, endpointType: string) => {
+      callback({ agentId, endpointIndex, url, endpointType });
+    });
+  }
+
+  /** Listen for uptime checks logged on AgentMonitor. */
+  onUptimeCheckLogged(callback: (event: UptimeCheckLoggedEvent) => void): void {
+    if (!this.agentMonitor) return;
+    this.agentMonitor.on("UptimeCheckLogged", (agentId: bigint, endpointIndex: bigint, isUp: boolean, latencyMs: bigint) => {
+      callback({ agentId, endpointIndex, isUp, latencyMs });
+    });
+  }
+
+  /** Listen for split creations on AgentSplits. */
+  onSplitCreated(callback: (event: SplitCreatedEvent) => void): void {
+    if (!this.agentSplits) return;
+    this.agentSplits.on("SplitCreated", (splitId: bigint, creatorAgentId: bigint, agentIds: bigint[], sharesBps: bigint[]) => {
+      callback({ splitId, creatorAgentId, agentIds, sharesBps });
+    });
+  }
+
+  /** Listen for split distributions on AgentSplits. */
+  onSplitDistributed(callback: (event: SplitDistributedEvent) => void): void {
+    if (!this.agentSplits) return;
+    this.agentSplits.on("SplitDistributed", (splitPaymentId: bigint, splitId: bigint, amounts: bigint[]) => {
+      callback({ splitPaymentId, splitId, amounts });
+    });
+  }
+
   removeAllListeners(): void {
     this.identityRegistry.removeAllListeners();
     this.reputationRegistry.removeAllListeners();
     this.validationRegistry.removeAllListeners();
+    this.agentMonitor?.removeAllListeners();
+    this.agentSplits?.removeAllListeners();
   }
 }

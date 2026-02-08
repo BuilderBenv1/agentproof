@@ -7,6 +7,9 @@ export interface ContractAddresses {
   insurancePool?: string;
   agentPayments?: string;
   reputationGate?: string;
+  // Phase 4 contracts (optional — populated after deployment)
+  agentMonitor?: string;
+  agentSplits?: string;
 }
 
 // Official ERC-8004 registries deployed by Ava Labs
@@ -45,8 +48,13 @@ export const CHAIN_ADDRESSES: Record<number, ContractAddresses> = {
   43114: {
     identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
     reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
-    validationRegistry: "",
-    agentProofCore: "",
+    validationRegistry: "0xa3df69a7576EceC1056Cb731DAE69a8086F460Fc",
+    agentProofCore: "0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554",
+    insurancePool: "0x154DFef33222D090808f3A0F50cbef864990939A",
+    agentPayments: "0x4E3092E46233c32F3A0E4b782230cA67E359f35f",
+    reputationGate: "0xD66C677Cf394D68fD847d760151304697D3A1a0B",
+    agentMonitor: "0xaF28359675d2365EF3a5235CEda02aAbd0e670DC",
+    agentSplits: "0xE243046e2C378F49AF0f94Ea7d72c95E4F88AcFc",
   },
 };
 

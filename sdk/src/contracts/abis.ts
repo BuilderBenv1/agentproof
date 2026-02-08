@@ -111,6 +111,39 @@ export const REPUTATION_GATE_ABI = [
   "function getMaxTrustedValue(uint256 agentId) external view returns (uint256)",
 ] as const;
 
+// ─── AgentMonitor ABI (Phase 4) ──────────────────────────────────────
+export const AGENT_MONITOR_ABI = [
+  "function registerEndpoint(uint256 agentId, string url, string endpointType) external",
+  "function removeEndpoint(uint256 agentId, uint256 endpointIndex) external",
+  "function logUptimeCheck(uint256 agentId, uint256 endpointIndex, bool isUp, uint256 latencyMs) external",
+  "function batchLogUptimeChecks(uint256[] agentIds, uint256[] endpointIndexes, bool[] isUpResults, uint256[] latencies) external",
+  "function getEndpoints(uint256 agentId) external view returns (tuple(uint256 agentId, uint256 endpointIndex, string url, string endpointType, bool isActive, uint256 registeredAt)[])",
+  "function getUptimeRate(uint256 agentId) external view returns (uint256)",
+  "function getUptimeCounts(uint256 agentId) external view returns (uint256 total, uint256 successful)",
+  "function getLatestChecks(uint256 agentId) external view returns (tuple(uint256 agentId, uint256 endpointIndex, bool isUp, uint256 latencyMs, uint256 timestamp)[])",
+  "function authorizedMonitors(address) external view returns (bool)",
+  "event EndpointRegistered(uint256 indexed agentId, uint256 endpointIndex, string url, string endpointType)",
+  "event EndpointRemoved(uint256 indexed agentId, uint256 endpointIndex)",
+  "event UptimeCheckLogged(uint256 indexed agentId, uint256 endpointIndex, bool isUp, uint256 latencyMs)",
+] as const;
+
+// ─── AgentSplits ABI (Phase 4) ──────────────────────────────────────
+export const AGENT_SPLITS_ABI = [
+  "function createSplit(uint256 creatorAgentId, uint256[] agentIds, uint256[] sharesBps) external returns (uint256)",
+  "function deactivateSplit(uint256 splitId) external",
+  "function payToSplit(uint256 splitId, uint256 amount, address token, bytes32 taskHash) external payable returns (uint256)",
+  "function distributeSplit(uint256 splitPaymentId) external",
+  "function getSplit(uint256 splitId) external view returns (uint256, uint256, uint256[], uint256[], bool, uint256)",
+  "function getSplitPayment(uint256 splitPaymentId) external view returns (tuple(uint256 splitPaymentId, uint256 splitId, uint256 amount, address token, bytes32 taskHash, address payer, bool distributed, uint256 createdAt, uint256 distributedAt))",
+  "function getAgentSplits(uint256 agentId) external view returns (uint256[])",
+  "function getSplitParticipants(uint256 splitId) external view returns (uint256[] agentIds, uint256[] sharesBps)",
+  "function protocolFeeBps() external view returns (uint256)",
+  "event SplitCreated(uint256 indexed splitId, uint256 indexed creatorAgentId, uint256[] agentIds, uint256[] sharesBps)",
+  "event SplitDeactivated(uint256 indexed splitId)",
+  "event SplitPaymentReceived(uint256 indexed splitPaymentId, uint256 indexed splitId, uint256 amount, address token, address payer)",
+  "event SplitDistributed(uint256 indexed splitPaymentId, uint256 indexed splitId, uint256[] amounts)",
+] as const;
+
 // ─── AgentProof Core ABI (custom aggregation contract) ─────────────
 export const AGENTPROOF_CORE_ABI = [
   "function getAgentProfile(uint256 agentId) external view returns (tuple(uint256 agentId, address owner, string agentURI, uint256 feedbackCount, uint256 averageRating, uint256 validationSuccessRate, uint256 totalValidations, uint256 completedValidations, uint256 successfulValidations))",

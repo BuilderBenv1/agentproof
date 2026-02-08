@@ -8,58 +8,59 @@ def calculate_composite_score(
     rating_std_dev: float,
     validation_success_rate: float,
     account_age_days: int,
+    uptime_pct: float = -1.0,
 ) -> float:
     """
-    Composite score (0-100) based on:
-    - Average rating: 40% weight
-    - Feedback volume: 15% weight (logarithmic scale)
-    - Feedback consistency: 15% weight (lower std dev = more consistent)
-    - Validation success rate: 20% weight
-    - Account age: 10% weight (logarithmic decay)
+    Composite score (0-100) with 6 signals:
+    - Average rating: 35% (Bayesian smoothed)
+    - Feedback volume: 12% (log scale)
+    - Feedback consistency: 13% (inverse std dev)
+    - Validation success rate: 18%
+    - Account age: 7% (log scale)
+    - Uptime score: 15% (agents without uptime data get neutral 50.0)
 
     Applies Bayesian smoothing to prevent new agents with 1x 100-rating
     from topping the leaderboard (prior of 50 with k=10 pseudo-observations).
     """
-    # Bayesian smoothed average rating
     prior_rating = 50.0
-    k = 10  # pseudo-observations
+    k = 10
     smoothed_rating = (
         (average_rating * feedback_count + prior_rating * k) / (feedback_count + k)
     )
 
-    # 1. Rating component (40%) - smoothed rating normalized to 0-100
     rating_score = smoothed_rating
 
-    # 2. Volume component (15%) - logarithmic scale, caps at ~100 feedback
     if feedback_count == 0:
         volume_score = 0.0
     else:
         volume_score = min(100.0, (math.log10(feedback_count + 1) / math.log10(101)) * 100)
 
-    # 3. Consistency component (15%) - lower std dev = higher score
-    # Max std dev on 1-100 scale is ~50. Normalize inversely.
     if feedback_count < 2:
-        consistency_score = 50.0  # Neutral for insufficient data
+        consistency_score = 50.0
     else:
         max_std = 50.0
         consistency_score = max(0.0, 100.0 * (1 - rating_std_dev / max_std))
 
-    # 4. Validation success rate (20%) - direct percentage
     validation_score = validation_success_rate
 
-    # 5. Account age (10%) - logarithmic, caps at ~365 days
     if account_age_days <= 0:
         age_score = 0.0
     else:
         age_score = min(100.0, (math.log10(account_age_days + 1) / math.log10(366)) * 100)
 
-    # Weighted composite
+    # Uptime score: if no uptime data (uptime_pct < 0), use neutral 50.0
+    if uptime_pct < 0:
+        uptime_score = 50.0
+    else:
+        uptime_score = uptime_pct
+
     composite = (
-        rating_score * 0.40
-        + volume_score * 0.15
-        + consistency_score * 0.15
-        + validation_score * 0.20
-        + age_score * 0.10
+        rating_score * 0.35
+        + volume_score * 0.12
+        + consistency_score * 0.13
+        + validation_score * 0.18
+        + age_score * 0.07
+        + uptime_score * 0.15
     )
 
     return round(max(0.0, min(100.0, composite)), 2)

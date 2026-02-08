@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     reputation_bridge_address: str = ""
     reputation_source_address: str = ""
 
+    # Phase 4 contract addresses
+    agent_monitor_address: str = ""
+    agent_splits_address: str = ""
+
     # Supabase
     supabase_url: str = ""
     supabase_key: str = ""

@@ -20,5 +20,9 @@ USE_OFFICIAL_ERC8004 = os.getenv("USE_OFFICIAL_ERC8004", "True").lower() in ("tr
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
 
+# Phase 4 contracts
+AGENT_MONITOR_ADDRESS = os.getenv("AGENT_MONITOR_ADDRESS", "")
+AGENT_SPLITS_ADDRESS = os.getenv("AGENT_SPLITS_ADDRESS", "")
+
 POLL_INTERVAL = int(os.getenv("INDEXER_POLL_INTERVAL", "10"))
 CONFIRMATION_BLOCKS = int(os.getenv("INDEXER_CONFIRMATION_BLOCKS", "3"))

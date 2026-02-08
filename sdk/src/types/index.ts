@@ -10,6 +10,11 @@ export interface AgentProofConfig {
     reputationRegistry?: string;
     validationRegistry?: string;
     agentProofCore?: string;
+    insurancePool?: string;
+    agentPayments?: string;
+    reputationGate?: string;
+    agentMonitor?: string;
+    agentSplits?: string;
   };
 }
 
@@ -162,4 +167,83 @@ export interface ReputationGateInfo {
   interestRateDiscount: bigint;
   priorityScore: bigint;
   maxTrustedValue: bigint;
+}
+
+// ─── Phase 4 Types ──────────────────────────────────────────────────
+
+export interface MonitorEndpoint {
+  agentId: bigint;
+  endpointIndex: bigint;
+  url: string;
+  endpointType: string;
+  isActive: boolean;
+  registeredAt: bigint;
+}
+
+export interface UptimeCheck {
+  agentId: bigint;
+  endpointIndex: bigint;
+  isUp: boolean;
+  latencyMs: bigint;
+  timestamp: bigint;
+}
+
+export interface UptimeCounts {
+  total: bigint;
+  successful: bigint;
+}
+
+export interface RevenueSplit {
+  splitId: bigint;
+  creatorAgentId: bigint;
+  agentIds: bigint[];
+  sharesBps: bigint[];
+  isActive: boolean;
+  createdAt: bigint;
+}
+
+export interface SplitPayment {
+  splitPaymentId: bigint;
+  splitId: bigint;
+  amount: bigint;
+  token: string;
+  taskHash: string;
+  payer: string;
+  distributed: boolean;
+  createdAt: bigint;
+  distributedAt: bigint;
+}
+
+export interface SplitParticipants {
+  agentIds: bigint[];
+  sharesBps: bigint[];
+}
+
+// Phase 4 event types
+
+export interface EndpointRegisteredEvent {
+  agentId: bigint;
+  endpointIndex: bigint;
+  url: string;
+  endpointType: string;
+}
+
+export interface UptimeCheckLoggedEvent {
+  agentId: bigint;
+  endpointIndex: bigint;
+  isUp: boolean;
+  latencyMs: bigint;
+}
+
+export interface SplitCreatedEvent {
+  splitId: bigint;
+  creatorAgentId: bigint;
+  agentIds: bigint[];
+  sharesBps: bigint[];
+}
+
+export interface SplitDistributedEvent {
+  splitPaymentId: bigint;
+  splitId: bigint;
+  amounts: bigint[];
 }

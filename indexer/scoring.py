@@ -10,14 +10,16 @@ def calculate_composite_score(
     rating_std_dev: float,
     validation_success_rate: float,
     account_age_days: int,
+    uptime_pct: float = -1.0,
 ) -> float:
     """
-    Composite score (0-100):
-    - Average rating: 40% (Bayesian smoothed)
-    - Feedback volume: 15% (log scale)
-    - Feedback consistency: 15% (inverse std dev)
-    - Validation success rate: 20%
-    - Account age: 10% (log scale)
+    Composite score (0-100) with 6 signals:
+    - Average rating: 35% (Bayesian smoothed)
+    - Feedback volume: 12% (log scale)
+    - Feedback consistency: 13% (inverse std dev)
+    - Validation success rate: 18%
+    - Account age: 7% (log scale)
+    - Uptime score: 15% (agents without uptime data get neutral 50.0)
     """
     prior_rating = 50.0
     k = 10
@@ -42,12 +44,19 @@ def calculate_composite_score(
     else:
         age_score = min(100.0, (math.log10(account_age_days + 1) / math.log10(366)) * 100)
 
+    # Uptime score: if no uptime data (uptime_pct < 0), use neutral 50.0
+    if uptime_pct < 0:
+        uptime_score = 50.0
+    else:
+        uptime_score = uptime_pct  # Already 0-100
+
     composite = (
-        rating_score * 0.40
-        + volume_score * 0.15
-        + consistency_score * 0.15
-        + validation_score * 0.20
-        + age_score * 0.10
+        rating_score * 0.35
+        + volume_score * 0.12
+        + consistency_score * 0.13
+        + validation_score * 0.18
+        + age_score * 0.07
+        + uptime_score * 0.15
     )
 
     return round(max(0.0, min(100.0, composite)), 2)

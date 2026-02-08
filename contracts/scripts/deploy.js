@@ -74,6 +74,22 @@ async function main() {
   const sourceAddr = await reputationSource.getAddress();
   console.log("ReputationSource deployed to:", sourceAddr);
 
+  // 9. Deploy AgentMonitor (Phase 4)
+  console.log("\n--- Deploying AgentMonitor ---");
+  const AgentMonitor = await ethers.getContractFactory("AgentMonitor");
+  const agentMonitor = await AgentMonitor.deploy(identityAddr);
+  await agentMonitor.waitForDeployment();
+  const monitorAddr = await agentMonitor.getAddress();
+  console.log("AgentMonitor deployed to:", monitorAddr);
+
+  // 10. Deploy AgentSplits (Phase 4)
+  console.log("\n--- Deploying AgentSplits ---");
+  const AgentSplits = await ethers.getContractFactory("AgentSplits");
+  const agentSplits = await AgentSplits.deploy(identityAddr);
+  await agentSplits.waitForDeployment();
+  const splitsAddr = await agentSplits.getAddress();
+  console.log("AgentSplits deployed to:", splitsAddr);
+
   // Output deployed addresses
   const addresses = {
     network: network.name,
@@ -89,6 +105,8 @@ async function main() {
       AgentPayments: paymentsAddr,
       ReputationGate: gateAddr,
       ReputationSource: sourceAddr,
+      AgentMonitor: monitorAddr,
+      AgentSplits: splitsAddr,
     },
   };
 
@@ -133,6 +151,8 @@ async function main() {
     await verifyContract("AgentPayments", paymentsAddr, [identityAddr, validationAddr]);
     await verifyContract("ReputationGate", gateAddr, [coreAddr]);
     await verifyContract("ReputationSource", sourceAddr, [coreAddr, deployer.address]);
+    await verifyContract("AgentMonitor", monitorAddr, [identityAddr]);
+    await verifyContract("AgentSplits", splitsAddr, [identityAddr]);
   }
 }
 

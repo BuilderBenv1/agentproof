@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.routes import agents, reputation, validation, leaderboard, analytics, insurance, payments, discover
+from app.routes import monitoring, marketplace, splits, profiles, audit
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +79,11 @@ app.include_router(analytics.router)
 app.include_router(insurance.router)
 app.include_router(payments.router)
 app.include_router(discover.router)
+app.include_router(monitoring.router)
+app.include_router(marketplace.router)
+app.include_router(splits.router)
+app.include_router(profiles.router)
+app.include_router(audit.router)
 
 
 @app.get("/api/health")
