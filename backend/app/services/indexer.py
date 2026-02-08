@@ -104,7 +104,13 @@ def process_agent_registered_events(from_block: int, to_block: int):
 def process_erc8004_identity_events(from_block: int, to_block: int):
     """Process Registered events from the official ERC-8004 Identity Registry."""
     blockchain = get_blockchain_service()
-    events = blockchain.get_erc8004_registered_events(from_block, to_block)
+    logger.info(f"[ERC-8004] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
+    try:
+        events = blockchain.get_erc8004_registered_events(from_block, to_block)
+    except Exception as e:
+        logger.error(f"[ERC-8004] get_logs failed for {from_block}-{to_block}: {e}")
+        return 0
+    logger.info(f"[ERC-8004] Found {len(events)} Registered events in {from_block}-{to_block}")
 
     db = get_supabase()
     for event in events:

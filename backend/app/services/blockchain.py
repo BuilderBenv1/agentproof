@@ -1,6 +1,9 @@
 import json
+import logging
 from web3 import Web3
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 # ─── Official ERC-8004 Identity Registry ABI (Ava Labs) ─────────────
 # Event param order verified from Snowtrace: Registered(uint256,string,address)
@@ -113,10 +116,78 @@ class BlockchainService:
     def get_erc8004_registered_events(self, from_block: int, to_block: int):
         """Get Registered events from the official ERC-8004 Identity Registry."""
         if not self.erc8004_identity:
+            logger.warning("ERC-8004 identity contract not initialized")
             return []
-        return self.erc8004_identity.events.Registered().get_logs(
-            from_block=from_block, to_block=to_block
-        )
+        try:
+            events = self.erc8004_identity.events.Registered().get_logs(
+                from_block=from_block, to_block=to_block
+            )
+            logger.info(f"ERC-8004 get_logs({from_block}-{to_block}): {len(events)} events")
+            return events
+        except Exception as e:
+            logger.error(f"ERC-8004 get_logs({from_block}-{to_block}) FAILED: {e}")
+            raise
+
+    def diagnose_erc8004_identity(self):
+        """One-time diagnostic: check contract, compute topic, try raw logs."""
+        settings = get_settings()
+        addr = settings.erc8004_identity_registry
+        logger.info(f"=== ERC-8004 IDENTITY DIAGNOSTIC ===")
+        logger.info(f"erc8004_identity_registry address from settings: '{addr}'")
+        logger.info(f"erc8004_identity contract initialized: {self.erc8004_identity is not None}")
+        if self.erc8004_identity:
+            logger.info(f"erc8004_identity contract address: {self.erc8004_identity.address}")
+
+        # Compute expected topic0 for Registered(uint256,string,address)
+        sig = "Registered(uint256,string,address)"
+        topic0 = Web3.keccak(text=sig).hex()
+        logger.info(f"Expected topic0 for '{sig}': {topic0}")
+
+        # Also check what topic0 web3 derives from ABI
+        if self.erc8004_identity:
+            try:
+                abi_topic = self.erc8004_identity.events.Registered().event_abi
+                logger.info(f"ABI event definition: {json.dumps(abi_topic)}")
+            except Exception as e:
+                logger.error(f"Error reading ABI event: {e}")
+
+        # Try raw eth.get_logs with explicit topic
+        if addr:
+            try:
+                raw_logs = self.w3.eth.get_logs({
+                    "address": Web3.to_checksum_address(addr),
+                    "fromBlock": 77_389_000,
+                    "toBlock": 77_391_000,
+                })
+                logger.info(f"Raw get_logs (no topic filter, 77389000-77391000): {len(raw_logs)} logs")
+                for i, log in enumerate(raw_logs[:5]):
+                    logger.info(f"  Log {i}: topics={[t.hex() for t in log['topics']]}, block={log['blockNumber']}")
+            except Exception as e:
+                logger.error(f"Raw get_logs failed: {e}")
+
+            # Also try with topic0 filter
+            try:
+                filtered_logs = self.w3.eth.get_logs({
+                    "address": Web3.to_checksum_address(addr),
+                    "fromBlock": 77_389_000,
+                    "toBlock": 77_391_000,
+                    "topics": [topic0],
+                })
+                logger.info(f"Filtered get_logs (topic0={topic0[:18]}..., 77389000-77391000): {len(filtered_logs)} logs")
+            except Exception as e:
+                logger.error(f"Filtered get_logs failed: {e}")
+
+            # Try contract.events approach
+            if self.erc8004_identity:
+                try:
+                    events = self.erc8004_identity.events.Registered().get_logs(
+                        from_block=77_389_000, to_block=77_391_000
+                    )
+                    logger.info(f"contract.events.Registered().get_logs(77389000-77391000): {len(events)} events")
+                except Exception as e:
+                    logger.error(f"contract.events.Registered().get_logs failed: {e}")
+
+        logger.info(f"=== END ERC-8004 DIAGNOSTIC ===")
 
     def get_uri_update_events(self, from_block: int, to_block: int):
         if not self.identity_registry:
