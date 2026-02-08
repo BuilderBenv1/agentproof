@@ -97,7 +97,7 @@ class BlockchainService:
             return []
         event_name = "Registered" if self.use_official else "AgentRegistered"
         return getattr(self.identity_registry.events, event_name)().get_logs(
-            fromBlock=from_block, toBlock=to_block
+            from_block=from_block, to_block=to_block
         )
 
     def get_uri_update_events(self, from_block: int, to_block: int):
@@ -105,7 +105,7 @@ class BlockchainService:
             return []
         event_name = "URIUpdated" if self.use_official else "AgentURIUpdated"
         return getattr(self.identity_registry.events, event_name)().get_logs(
-            fromBlock=from_block, toBlock=to_block
+            from_block=from_block, to_block=to_block
         )
 
     def get_feedback_events(self, from_block: int, to_block: int):
@@ -113,21 +113,21 @@ class BlockchainService:
             return []
         event_name = "NewFeedback" if self.use_official else "FeedbackSubmitted"
         return getattr(self.reputation_registry.events, event_name)().get_logs(
-            fromBlock=from_block, toBlock=to_block
+            from_block=from_block, to_block=to_block
         )
 
     def get_validation_requested_events(self, from_block: int, to_block: int):
         if not self.validation_registry:
             return []
         return self.validation_registry.events.ValidationRequested().get_logs(
-            fromBlock=from_block, toBlock=to_block
+            from_block=from_block, to_block=to_block
         )
 
     def get_validation_submitted_events(self, from_block: int, to_block: int):
         if not self.validation_registry:
             return []
         return self.validation_registry.events.ValidationSubmitted().get_logs(
-            fromBlock=from_block, toBlock=to_block
+            from_block=from_block, to_block=to_block
         )
 
     def get_agent_uri(self, agent_id: int) -> str:

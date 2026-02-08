@@ -248,7 +248,7 @@ class AgentProofIndexer:
         # Registered events
         try:
             events = self.identity_contract.events.Registered().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -282,7 +282,7 @@ class AgentProofIndexer:
         # URIUpdated events
         try:
             events = self.identity_contract.events.URIUpdated().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -313,7 +313,7 @@ class AgentProofIndexer:
 
         try:
             events = self.identity_contract.events.AgentRegistered().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -339,7 +339,7 @@ class AgentProofIndexer:
 
         try:
             events = self.identity_contract.events.AgentURIUpdated().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -374,7 +374,7 @@ class AgentProofIndexer:
         count = 0
         try:
             events = self.reputation_contract.events.NewFeedback().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -428,7 +428,7 @@ class AgentProofIndexer:
         count = 0
         try:
             events = self.reputation_contract.events.FeedbackSubmitted().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -469,7 +469,7 @@ class AgentProofIndexer:
 
         try:
             events = self.validation_contract.events.ValidationRequested().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 vid = event.args.validationId
@@ -498,7 +498,7 @@ class AgentProofIndexer:
 
         try:
             events = self.validation_contract.events.ValidationSubmitted().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 vid = event.args.validationId
@@ -531,7 +531,7 @@ class AgentProofIndexer:
         # EndpointRegistered
         try:
             events = self.monitor_contract.events.EndpointRegistered().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -559,7 +559,7 @@ class AgentProofIndexer:
         # EndpointRemoved
         try:
             events = self.monitor_contract.events.EndpointRemoved().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -574,7 +574,7 @@ class AgentProofIndexer:
         # UptimeCheckLogged
         try:
             events = self.monitor_contract.events.UptimeCheckLogged().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 agent_id = event.args.agentId
@@ -607,7 +607,7 @@ class AgentProofIndexer:
         # SplitCreated
         try:
             events = self.splits_contract.events.SplitCreated().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 ts = self.get_block_timestamp(event.blockNumber)
@@ -636,7 +636,7 @@ class AgentProofIndexer:
         # SplitDeactivated
         try:
             events = self.splits_contract.events.SplitDeactivated().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 self.db.table("revenue_splits").update(
@@ -650,7 +650,7 @@ class AgentProofIndexer:
         # SplitPaymentReceived
         try:
             events = self.splits_contract.events.SplitPaymentReceived().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 ts = self.get_block_timestamp(event.blockNumber)
@@ -677,7 +677,7 @@ class AgentProofIndexer:
         # SplitDistributed
         try:
             events = self.splits_contract.events.SplitDistributed().get_logs(
-                fromBlock=from_block, toBlock=to_block
+                from_block=from_block, to_block=to_block
             )
             for event in events:
                 ts = self.get_block_timestamp(event.blockNumber)
