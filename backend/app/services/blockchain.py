@@ -76,6 +76,15 @@ class BlockchainService:
                 abi=abi,
             )
 
+        # Dedicated ERC-8004 Identity Registry (always at official address)
+        self.erc8004_identity = None
+        erc8004_addr = settings.erc8004_identity_registry
+        if erc8004_addr:
+            self.erc8004_identity = self.w3.eth.contract(
+                address=Web3.to_checksum_address(erc8004_addr),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+
         # Validation: always custom
         if settings.validation_registry_address:
             self.validation_registry = self.w3.eth.contract(
@@ -97,6 +106,14 @@ class BlockchainService:
             return []
         event_name = "Registered" if self.use_official else "AgentRegistered"
         return getattr(self.identity_registry.events, event_name)().get_logs(
+            from_block=from_block, to_block=to_block
+        )
+
+    def get_erc8004_registered_events(self, from_block: int, to_block: int):
+        """Get Registered events from the official ERC-8004 Identity Registry."""
+        if not self.erc8004_identity:
+            return []
+        return self.erc8004_identity.events.Registered().get_logs(
             from_block=from_block, to_block=to_block
         )
 

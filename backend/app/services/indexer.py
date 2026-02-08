@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
+ERC8004_IDENTITY_START_BLOCK = 72_000_000
 MAX_BLOCK_RANGE = 2000
 
 
-def get_last_processed_block(contract_name: str) -> int:
+def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
     """Get the last processed block for a contract from the indexer_state table."""
     try:
         db = get_supabase()
@@ -34,19 +35,19 @@ def get_last_processed_block(contract_name: str) -> int:
         )
         if result.data:
             stored = result.data[0]["last_block"]
-            if stored < DEFAULT_START_BLOCK:
-                logger.info(f"Fast-forwarding {contract_name} from block {stored} to {DEFAULT_START_BLOCK}")
-                update_last_processed_block(contract_name, DEFAULT_START_BLOCK)
-                return DEFAULT_START_BLOCK
+            if stored < default_start:
+                logger.info(f"Fast-forwarding {contract_name} from block {stored} to {default_start}")
+                update_last_processed_block(contract_name, default_start)
+                return default_start
             return stored
         # Initialize state
         db.table("indexer_state").insert(
-            {"contract_name": contract_name, "last_block": DEFAULT_START_BLOCK}
+            {"contract_name": contract_name, "last_block": default_start}
         ).execute()
-        return DEFAULT_START_BLOCK
+        return default_start
     except Exception as e:
         logger.error(f"Error getting last block for {contract_name}: {e}")
-        return DEFAULT_START_BLOCK
+        return default_start
 
 
 def update_last_processed_block(contract_name: str, block_number: int):
@@ -96,6 +97,41 @@ def process_agent_registered_events(from_block: int, to_block: int):
             logger.info(f"Indexed agent #{agent_id} from block {block}")
         except Exception as e:
             logger.error(f"Error indexing agent #{agent_id}: {e}")
+
+    return len(events)
+
+
+def process_erc8004_identity_events(from_block: int, to_block: int):
+    """Process Registered events from the official ERC-8004 Identity Registry."""
+    blockchain = get_blockchain_service()
+    events = blockchain.get_erc8004_registered_events(from_block, to_block)
+
+    db = get_supabase()
+    for event in events:
+        agent_id = event.args.agentId
+        owner = event.args.owner
+        agent_uri = event.args.agentURI
+        block = event.blockNumber
+        tx_hash = event.transactionHash.hex()
+
+        # Get block timestamp
+        block_data = blockchain.w3.eth.get_block(block)
+        timestamp = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+
+        try:
+            db.table("agents").upsert(
+                {
+                    "agent_id": agent_id,
+                    "owner_address": owner,
+                    "agent_uri": agent_uri,
+                    "registered_at": timestamp.isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                on_conflict="agent_id",
+            ).execute()
+            logger.info(f"Indexed ERC-8004 agent #{agent_id} from block {block}")
+        except Exception as e:
+            logger.error(f"Error indexing ERC-8004 agent #{agent_id}: {e}")
 
     return len(events)
 
@@ -334,9 +370,9 @@ def update_leaderboard():
                 logger.error(f"Error inserting leaderboard entry: {e}")
 
 
-def _process_chunked(contract_name: str, processor, safe_block: int):
+def _process_chunked(contract_name: str, processor, safe_block: int, start_block: int = DEFAULT_START_BLOCK):
     """Process events for a contract in MAX_BLOCK_RANGE chunks."""
-    last_block = get_last_processed_block(contract_name)
+    last_block = get_last_processed_block(contract_name, default_start=start_block)
     if last_block >= safe_block:
         return 0
 
@@ -375,10 +411,15 @@ def run_indexer_cycle():
     if safe_block < 0:
         return
 
-    # Process identity events (chunked)
+    # Process official ERC-8004 Identity Registry events (deployed ~block 72M)
+    count = _process_chunked("erc8004_identity", process_erc8004_identity_events, safe_block, start_block=ERC8004_IDENTITY_START_BLOCK)
+    if count > 0:
+        logger.info(f"Processed {count} ERC-8004 agent registration events")
+
+    # Process custom identity events (chunked)
     count = _process_chunked("identity", process_agent_registered_events, safe_block)
     if count > 0:
-        logger.info(f"Processed {count} agent registration events")
+        logger.info(f"Processed {count} custom agent registration events")
 
     # Process reputation events (chunked)
     count = _process_chunked("reputation", process_feedback_events, safe_block)
