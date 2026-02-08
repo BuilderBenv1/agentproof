@@ -58,6 +58,12 @@ class BlockchainService:
         self.w3 = Web3(Web3.HTTPProvider(settings.avalanche_rpc_url))
         self.use_official = settings.use_official_erc8004
 
+        # Ethereum web3 instance (for cross-chain ERC-8004 indexing)
+        self.w3_eth = None
+        if settings.ethereum_rpc_url:
+            self.w3_eth = Web3(Web3.HTTPProvider(settings.ethereum_rpc_url))
+            logger.info(f"Ethereum RPC initialized: {settings.ethereum_rpc_url[:40]}...")
+
         self.identity_registry = None
         self.reputation_registry = None
         self.validation_registry = None
@@ -88,6 +94,16 @@ class BlockchainService:
                 address=Web3.to_checksum_address(erc8004_addr),
                 abi=ERC8004_IDENTITY_ABI,
             )
+
+        # ERC-8004 Identity Registry on Ethereum mainnet
+        self.erc8004_eth_identity = None
+        eth_identity_addr = settings.erc8004_eth_identity_registry
+        if eth_identity_addr and self.w3_eth:
+            self.erc8004_eth_identity = self.w3_eth.eth.contract(
+                address=Web3.to_checksum_address(eth_identity_addr),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            logger.info(f"ERC-8004 Ethereum Identity Registry: {eth_identity_addr}")
 
         # Validation: always custom
         if settings.validation_registry_address:
@@ -126,6 +142,27 @@ class BlockchainService:
             return events
         except Exception as e:
             logger.error(f"ERC-8004 get_logs({from_block}-{to_block}) FAILED: {e}")
+            raise
+
+    def get_eth_current_block(self) -> int:
+        """Get current block number on Ethereum mainnet."""
+        if not self.w3_eth:
+            return 0
+        return self.w3_eth.eth.block_number
+
+    def get_erc8004_eth_registered_events(self, from_block: int, to_block: int):
+        """Get Registered events from the ERC-8004 Identity Registry on Ethereum."""
+        if not self.erc8004_eth_identity:
+            logger.warning("ERC-8004 Ethereum identity contract not initialized")
+            return []
+        try:
+            events = self.erc8004_eth_identity.events.Registered().get_logs(
+                from_block=from_block, to_block=to_block
+            )
+            logger.info(f"ERC-8004 ETH get_logs({from_block}-{to_block}): {len(events)} events")
+            return events
+        except Exception as e:
+            logger.error(f"ERC-8004 ETH get_logs({from_block}-{to_block}) FAILED: {e}")
             raise
 
     def diagnose_erc8004_identity(self):

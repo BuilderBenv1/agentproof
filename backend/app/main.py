@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"ERC-8004 diagnostic failed: {e}")
 
     # Try to start the indexer scheduler if blockchain is configured
-    if settings.identity_registry_address or settings.erc8004_identity_registry:
+    if settings.identity_registry_address or settings.erc8004_identity_registry or settings.erc8004_eth_identity_registry:
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             from app.services.indexer import run_indexer_cycle

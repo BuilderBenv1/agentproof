@@ -6,7 +6,11 @@ class Settings(BaseSettings):
     # Avalanche
     avalanche_rpc_url: str = "https://api.avax-test.network/ext/bc/C/rpc"
 
-    # Official ERC-8004 Registries
+    # Ethereum
+    ethereum_rpc_url: str = ""
+    erc8004_eth_identity_registry: str = ""
+
+    # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""
     erc8004_reputation_registry: str = ""
     use_official_erc8004: bool = True
