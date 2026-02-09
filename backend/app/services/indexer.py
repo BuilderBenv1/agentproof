@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
-ERC8004_ETH_IDENTITY_START_BLOCK = 24_200_000  # Ethereum contract deployed ~Jan 10 2026
+ERC8004_ETH_IDENTITY_START_BLOCK = 24_339_900  # First Registered event at block 24,339,925
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
 
@@ -165,39 +165,53 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
     logger.info(f"[ERC-8004-ETH] Found {len(events)} Registered events in {from_block}-{to_block}")
 
     db = get_supabase()
-    block_ts_cache: dict[int, datetime] = {}
     now = datetime.now(timezone.utc).isoformat()
+
+    # Collect unique block numbers and fetch timestamps in one pass
+    unique_blocks = set(e.blockNumber for e in events)
+    block_ts_cache: dict[int, datetime] = {}
+    for blk in sorted(unique_blocks):
+        try:
+            block_data = blockchain.w3_eth.eth.get_block(blk)
+            block_ts_cache[blk] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        except Exception as e:
+            logger.warning(f"[ERC-8004-ETH] Failed to get block {blk} timestamp: {e}")
+            block_ts_cache[blk] = datetime.now(timezone.utc)
+    logger.info(f"[ERC-8004-ETH] Fetched timestamps for {len(unique_blocks)} unique blocks")
+
     rows = []
-
     for event in events:
-        block = event.blockNumber
-        if block not in block_ts_cache:
-            block_data = blockchain.w3_eth.eth.get_block(block)
-            block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
-
         rows.append({
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
             "source_chain": "ethereum",
-            "registered_at": block_ts_cache[block].isoformat(),
+            "registered_at": block_ts_cache[event.blockNumber].isoformat(),
             "updated_at": now,
         })
 
-    # Batch upsert — one HTTP call for all events in this chunk
-    try:
-        db.table("agents").upsert(rows, on_conflict="agent_id").execute()
-        logger.info(f"[ERC-8004-ETH] Batch upserted {len(rows)} agents")
-    except Exception as e:
-        logger.error(f"[ERC-8004-ETH] Batch upsert failed ({len(rows)} rows): {e}")
-        # Fallback: try smaller batches of 50
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
-            try:
-                db.table("agents").upsert(batch, on_conflict="agent_id").execute()
-            except Exception as e2:
-                logger.error(f"[ERC-8004-ETH] Sub-batch upsert failed: {e2}")
+    # Batch upsert in chunks of 500 (Supabase has payload size limits)
+    saved = 0
+    batch_size = 500
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            saved += len(batch)
+        except Exception as e:
+            logger.error(f"[ERC-8004-ETH] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
+            # Fallback: try smaller sub-batches of 50
+            for j in range(0, len(batch), 50):
+                sub = batch[j:j + 50]
+                try:
+                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    saved += len(sub)
+                except Exception as e2:
+                    logger.error(f"[ERC-8004-ETH] Sub-batch upsert also failed: {e2}")
 
+    logger.info(f"[ERC-8004-ETH] Saved {saved}/{len(rows)} agents")
+    if saved == 0 and len(rows) > 0:
+        raise Exception(f"All upserts failed for {len(rows)} agents — not advancing block pointer")
     return len(events)
 
 
