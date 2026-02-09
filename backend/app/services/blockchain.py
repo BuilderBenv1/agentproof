@@ -59,10 +59,22 @@ class BlockchainService:
         self.use_official = settings.use_official_erc8004
 
         # Ethereum web3 instance (for cross-chain ERC-8004 indexing)
+        # Try primary + fallback RPCs until one connects
         self.w3_eth = None
-        if settings.ethereum_rpc_url:
-            self.w3_eth = Web3(Web3.HTTPProvider(settings.ethereum_rpc_url))
-            logger.info(f"Ethereum RPC initialized: {settings.ethereum_rpc_url[:40]}...")
+        self._eth_rpc_urls = settings.ethereum_rpc_urls
+        self._eth_rpc_index = 0
+        for i, rpc_url in enumerate(self._eth_rpc_urls):
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_eth = candidate
+                    self._eth_rpc_index = i
+                    logger.info(f"Ethereum RPC connected: {rpc_url[:50]}...")
+                    break
+                else:
+                    logger.warning(f"Ethereum RPC not reachable: {rpc_url[:50]}...")
+            except Exception as e:
+                logger.warning(f"Ethereum RPC failed: {rpc_url[:50]}... — {e}")
 
         self.identity_registry = None
         self.reputation_registry = None
@@ -111,6 +123,34 @@ class BlockchainService:
                 address=Web3.to_checksum_address(settings.validation_registry_address),
                 abi=VALIDATION_REGISTRY_ABI,
             )
+
+    def reconnect_eth(self) -> bool:
+        """Cycle to the next Ethereum RPC fallback. Returns True if reconnected."""
+        if not self._eth_rpc_urls:
+            return False
+        start = self._eth_rpc_index
+        for offset in range(1, len(self._eth_rpc_urls) + 1):
+            idx = (start + offset) % len(self._eth_rpc_urls)
+            rpc_url = self._eth_rpc_urls[idx]
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_eth = candidate
+                    self._eth_rpc_index = idx
+                    # Re-bind the Ethereum identity contract
+                    settings = get_settings()
+                    eth_addr = settings.erc8004_eth_identity_registry
+                    if eth_addr:
+                        self.erc8004_eth_identity = self.w3_eth.eth.contract(
+                            address=Web3.to_checksum_address(eth_addr),
+                            abi=ERC8004_IDENTITY_ABI,
+                        )
+                    logger.info(f"Ethereum RPC reconnected via fallback: {rpc_url[:50]}...")
+                    return True
+            except Exception:
+                continue
+        logger.error("All Ethereum RPC fallbacks exhausted")
+        return False
 
     def is_connected(self) -> bool:
         try:
@@ -163,6 +203,14 @@ class BlockchainService:
             return events
         except Exception as e:
             logger.error(f"ERC-8004 ETH get_logs({from_block}-{to_block}) FAILED: {e}")
+            # Try reconnecting to a fallback RPC before re-raising
+            if self.reconnect_eth():
+                logger.info("Retrying with fallback Ethereum RPC...")
+                events = self.erc8004_eth_identity.events.Registered().get_logs(
+                    from_block=from_block, to_block=to_block
+                )
+                logger.info(f"ERC-8004 ETH get_logs({from_block}-{to_block}) via fallback: {len(events)} events")
+                return events
             raise
 
     def diagnose_erc8004_identity(self):

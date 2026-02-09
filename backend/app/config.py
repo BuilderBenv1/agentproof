@@ -8,7 +8,21 @@ class Settings(BaseSettings):
 
     # Ethereum
     ethereum_rpc_url: str = ""
+    ethereum_rpc_fallback_urls: str = ""  # Comma-separated fallback RPCs
     erc8004_eth_identity_registry: str = ""
+
+    @property
+    def ethereum_rpc_urls(self) -> list[str]:
+        """Return all Ethereum RPC URLs (primary + fallbacks) for failover."""
+        urls = []
+        if self.ethereum_rpc_url:
+            urls.append(self.ethereum_rpc_url)
+        if self.ethereum_rpc_fallback_urls:
+            for url in self.ethereum_rpc_fallback_urls.split(","):
+                url = url.strip()
+                if url and url not in urls:
+                    urls.append(url)
+        return urls
 
     # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""

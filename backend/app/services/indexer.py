@@ -4,6 +4,7 @@ Periodically polls for new blockchain events and syncs them to Supabase.
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from app.database import get_supabase
@@ -20,8 +21,9 @@ logger = logging.getLogger(__name__)
 CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
-ERC8004_ETH_IDENTITY_START_BLOCK = 24_200_000  # Ethereum contract deployed ~Jan 29 2026
-MAX_BLOCK_RANGE = 2000
+ERC8004_ETH_IDENTITY_START_BLOCK = 24_200_000  # Ethereum contract deployed ~Jan 10 2026
+MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
+ETH_MAX_BLOCK_RANGE = 800    # Ethereum RPCs (llamarpc, publicnode) limit to 1000; use 800 for safety
 
 
 def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
@@ -106,11 +108,8 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
     """Process Registered events from the official ERC-8004 Identity Registry."""
     blockchain = get_blockchain_service()
     logger.info(f"[ERC-8004] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
-    try:
-        events = blockchain.get_erc8004_registered_events(from_block, to_block)
-    except Exception as e:
-        logger.error(f"[ERC-8004] get_logs failed for {from_block}-{to_block}: {e}")
-        return 0
+    # Let get_logs exceptions propagate so _process_chunked can break and retry
+    events = blockchain.get_erc8004_registered_events(from_block, to_block)
     logger.info(f"[ERC-8004] Found {len(events)} Registered events in {from_block}-{to_block}")
 
     db = get_supabase()
@@ -147,14 +146,13 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
     """Process Registered events from the ERC-8004 Identity Registry on Ethereum."""
     blockchain = get_blockchain_service()
     logger.info(f"[ERC-8004-ETH] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
-    try:
-        events = blockchain.get_erc8004_eth_registered_events(from_block, to_block)
-    except Exception as e:
-        logger.error(f"[ERC-8004-ETH] get_logs failed for {from_block}-{to_block}: {e}")
-        return 0
+    # Let get_logs exceptions propagate so _process_chunked can break and retry
+    events = blockchain.get_erc8004_eth_registered_events(from_block, to_block)
     logger.info(f"[ERC-8004-ETH] Found {len(events)} Registered events in {from_block}-{to_block}")
 
     db = get_supabase()
+    # Cache block timestamps to avoid repeated RPC calls for same block
+    block_ts_cache: dict[int, datetime] = {}
     for event in events:
         agent_id = event.args.agentId
         owner = event.args.owner
@@ -162,9 +160,11 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
         block = event.blockNumber
         tx_hash = event.transactionHash.hex()
 
-        # Get block timestamp from Ethereum
-        block_data = blockchain.w3_eth.eth.get_block(block)
-        timestamp = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        # Get block timestamp from Ethereum (cached)
+        if block not in block_ts_cache:
+            block_data = blockchain.w3_eth.eth.get_block(block)
+            block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        timestamp = block_ts_cache[block]
 
         try:
             db.table("agents").upsert(
@@ -419,23 +419,41 @@ def update_leaderboard():
                 logger.error(f"Error inserting leaderboard entry: {e}")
 
 
-def _process_chunked(contract_name: str, processor, safe_block: int, start_block: int = DEFAULT_START_BLOCK):
-    """Process events for a contract in MAX_BLOCK_RANGE chunks."""
+def _process_chunked(
+    contract_name: str,
+    processor,
+    safe_block: int,
+    start_block: int = DEFAULT_START_BLOCK,
+    chunk_size: int = MAX_BLOCK_RANGE,
+):
+    """Process events for a contract in chunk_size chunks with retry on failure."""
     last_block = get_last_processed_block(contract_name, default_start=start_block)
     if last_block >= safe_block:
         return 0
 
     total_count = 0
     from_block = last_block + 1
+    retries = 0
+    max_retries = 3
 
     while from_block <= safe_block:
-        to_block = min(from_block + MAX_BLOCK_RANGE - 1, safe_block)
+        to_block = min(from_block + chunk_size - 1, safe_block)
         try:
             count = processor(from_block, to_block)
             total_count += count
+            retries = 0  # Reset on success
         except Exception as e:
-            logger.error(f"Error processing {contract_name} blocks {from_block}-{to_block}: {e}")
-            break
+            retries += 1
+            logger.error(
+                f"Error processing {contract_name} blocks {from_block}-{to_block} "
+                f"(attempt {retries}/{max_retries}): {e}"
+            )
+            if retries >= max_retries:
+                logger.error(f"Max retries reached for {contract_name}, stopping at block {from_block}")
+                break
+            # Backoff before retry
+            time.sleep(2 ** retries)
+            continue  # Retry same chunk, don't advance
         update_last_processed_block(contract_name, to_block)
         from_block = to_block + 1
 
@@ -465,13 +483,19 @@ def run_indexer_cycle():
     if count > 0:
         logger.info(f"Processed {count} ERC-8004 Avalanche agent registration events")
 
-    # Process ERC-8004 Identity Registry events on Ethereum
+    # Process ERC-8004 Identity Registry events on Ethereum (smaller chunks for RPC limits)
     if blockchain.w3_eth:
         try:
             eth_current = blockchain.get_eth_current_block()
             eth_safe = eth_current - CONFIRMATION_BLOCKS
             if eth_safe > 0:
-                count = _process_chunked("erc8004_eth_identity", process_erc8004_eth_identity_events, eth_safe, start_block=ERC8004_ETH_IDENTITY_START_BLOCK)
+                count = _process_chunked(
+                    "erc8004_eth_identity",
+                    process_erc8004_eth_identity_events,
+                    eth_safe,
+                    start_block=ERC8004_ETH_IDENTITY_START_BLOCK,
+                    chunk_size=ETH_MAX_BLOCK_RANGE,
+                )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Ethereum agent registration events")
         except Exception as e:
