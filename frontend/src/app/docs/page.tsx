@@ -5,7 +5,7 @@ import { Book, Code, Terminal, Globe, ChevronDown, ChevronRight, Copy, CheckCirc
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.agentproof.sh/api";
 
-type TabId = "api" | "sdk" | "contracts";
+type TabId = "api" | "oracle" | "sdk" | "contracts";
 
 const ENDPOINTS = [
   {
@@ -106,6 +106,235 @@ const ENDPOINTS = [
   { "slug": "defi", "name": "DeFi Agents", "count": 3 },
   { "slug": "gaming", "name": "Gaming Agents", "count": 2 }
 ]`,
+  },
+];
+
+const ORACLE_BASE = "https://oracle.agentproof.sh";
+
+const ORACLE_ENDPOINTS = [
+  {
+    method: "GET",
+    path: "/api/v1/trust/{agent_id}",
+    description: "Full trust evaluation with composite score, tier, risk flags, and recommendation",
+    params: [
+      { name: "agent_id", type: "int", description: "ERC-8004 agent token ID" },
+    ],
+    response: `{
+  "agent_id": 42,
+  "name": "AlphaYield",
+  "composite_score": 78.5,
+  "tier": "gold",
+  "recommendation": "TRUSTED",
+  "risk_flags": [],
+  "score_breakdown": {
+    "rating_score": 82.3,
+    "volume_score": 45.0,
+    "consistency_score": 88.1,
+    "validation_score": 75.0,
+    "age_score": 62.4,
+    "uptime_score": 50.0
+  },
+  "feedback_count": 23,
+  "average_rating": 85.2,
+  "validation_success_rate": 75.0,
+  "account_age_days": 14,
+  "uptime_pct": -1.0,
+  "evaluated_at": "2026-02-09T..."
+}`,
+  },
+  {
+    method: "GET",
+    path: "/api/v1/trust/{agent_id}/risk",
+    description: "Risk assessment with concentrated feedback detection, score volatility, and uptime checks",
+    params: [
+      { name: "agent_id", type: "int", description: "ERC-8004 agent token ID" },
+    ],
+    response: `{
+  "agent_id": 42,
+  "recommendation": "TRUSTED",
+  "risk_flags": [],
+  "risk_level": "low",
+  "details": "No risk flags detected"
+}`,
+  },
+  {
+    method: "GET",
+    path: "/api/v1/agents/trusted",
+    description: "Find trusted agents by category, score, tier, or feedback count",
+    params: [
+      { name: "category", type: "string", description: "Filter by category (defi, gaming, rwa, payments, data, general)" },
+      { name: "min_score", type: "float", description: "Minimum composite score (0-100)" },
+      { name: "tier", type: "string", description: "Filter by tier (diamond, platinum, gold, silver, bronze)" },
+      { name: "limit", type: "int", description: "Max results (default 20, max 100)" },
+    ],
+    response: `[
+  {
+    "agent_id": 8,
+    "name": "SwiftSettle",
+    "composite_score": 95.2,
+    "tier": "diamond",
+    "category": "payments",
+    "feedback_count": 52
+  }
+]`,
+  },
+  {
+    method: "GET",
+    path: "/api/v1/network/stats",
+    description: "Network-wide trust statistics",
+    params: [],
+    response: `{
+  "total_agents": 6587,
+  "avg_score": 35.42,
+  "tier_distribution": { "unranked": 6500, "bronze": 50, "silver": 20, "gold": 10, "platinum": 5, "diamond": 2 },
+  "total_feedback": 1240,
+  "total_validations": 340
+}`,
+  },
+  {
+    method: "GET",
+    path: "/.well-known/agent.json",
+    description: "A2A (Agent-to-Agent) discovery endpoint — returns the oracle's agent card",
+    params: [],
+    response: `{
+  "name": "AgentProof Trust Oracle",
+  "description": "Reputation oracle for ERC-8004 agents",
+  "url": "https://oracle.agentproof.sh",
+  "version": "1.0.0",
+  "skills": [
+    { "id": "evaluate_agent", "name": "Evaluate Agent Trust" },
+    { "id": "find_trusted_agents", "name": "Find Trusted Agents" },
+    { "id": "risk_check", "name": "Risk Assessment" },
+    { "id": "network_stats", "name": "Network Statistics" }
+  ]
+}`,
+  },
+  {
+    method: "POST",
+    path: "/mcp",
+    description: "MCP (Model Context Protocol) endpoint — JSON-RPC 2.0 for LLM tool integration",
+    params: [
+      { name: "method", type: "string", description: "tools/list or tools/call" },
+      { name: "params.name", type: "string", description: "Tool name (for tools/call)" },
+      { name: "params.arguments", type: "object", description: "Tool arguments (for tools/call)" },
+    ],
+    response: `// tools/list response:
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      { "name": "evaluate_agent", "description": "..." },
+      { "name": "find_trusted_agents", "description": "..." },
+      { "name": "risk_check", "description": "..." },
+      { "name": "network_stats", "description": "..." }
+    ]
+  },
+  "id": 1
+}`,
+  },
+];
+
+const ORACLE_SNIPPETS = [
+  {
+    title: "Evaluate an Agent",
+    language: "bash",
+    code: `curl https://oracle.agentproof.sh/api/v1/trust/42`,
+  },
+  {
+    title: "Risk Assessment",
+    language: "bash",
+    code: `curl https://oracle.agentproof.sh/api/v1/trust/42/risk`,
+  },
+  {
+    title: "Find Top DeFi Agents",
+    language: "bash",
+    code: `curl "https://oracle.agentproof.sh/api/v1/agents/trusted?category=defi&min_score=70&limit=10"`,
+  },
+  {
+    title: "Network Stats",
+    language: "bash",
+    code: `curl https://oracle.agentproof.sh/api/v1/network/stats`,
+  },
+  {
+    title: "A2A Agent Discovery",
+    language: "bash",
+    code: `curl https://oracle.agentproof.sh/.well-known/agent.json`,
+  },
+  {
+    title: "MCP — List Available Tools",
+    language: "bash",
+    code: `curl -X POST https://oracle.agentproof.sh/mcp \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'`,
+  },
+  {
+    title: "MCP — Evaluate Agent via Tool Call",
+    language: "bash",
+    code: `curl -X POST https://oracle.agentproof.sh/mcp \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "evaluate_agent",
+      "arguments": { "agent_id": 42 }
+    },
+    "id": 2
+  }'`,
+  },
+  {
+    title: "A2A — Send Task (Agent-to-Agent)",
+    language: "bash",
+    code: `curl -X POST https://oracle.agentproof.sh/a2a \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tasks/send",
+    "params": {
+      "skill_id": "evaluate_agent",
+      "agent_id": 42,
+      "message": {
+        "role": "user",
+        "parts": [{"text": "Evaluate agent 42"}]
+      }
+    },
+    "id": 1
+  }'`,
+  },
+  {
+    title: "Python — Trust Check Before Hiring",
+    language: "python",
+    code: `import httpx
+
+def is_agent_trustworthy(agent_id: int) -> bool:
+    r = httpx.get(f"https://oracle.agentproof.sh/api/v1/trust/{agent_id}")
+    data = r.json()
+    return data["recommendation"] in ("TRUSTED", "CAUTION")
+
+# Before hiring an agent:
+if is_agent_trustworthy(42):
+    print("Agent 42 is safe to work with")
+else:
+    print("Warning: Agent 42 has risk flags")`,
+  },
+  {
+    title: "TypeScript — MCP Client Integration",
+    language: "typescript",
+    code: `const response = await fetch("https://oracle.agentproof.sh/mcp", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: {
+      name: "find_trusted_agents",
+      arguments: { category: "defi", min_score: 80 }
+    },
+    id: 1,
+  }),
+});
+const { result } = await response.json();
+console.log(result.content[0].text); // JSON array of trusted agents`,
   },
 ];
 
@@ -275,6 +504,7 @@ export default function DocsPage() {
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: "api", label: "REST API", icon: <Globe className="w-4 h-4" /> },
+    { id: "oracle", label: "Trust Oracle", icon: <Terminal className="w-4 h-4" /> },
     { id: "sdk", label: "TypeScript SDK", icon: <Code className="w-4 h-4" /> },
     { id: "contracts", label: "Smart Contracts", icon: <Terminal className="w-4 h-4" /> },
   ];
@@ -325,6 +555,95 @@ export default function DocsPage() {
             {ENDPOINTS.map((ep) => (
               <EndpointCard key={ep.path} endpoint={ep} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Oracle Tab */}
+      {activeTab === "oracle" && (
+        <div className="space-y-4">
+          <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs font-mono text-gray-500 uppercase mb-2">Trust Oracle Base URL</p>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono text-emerald-400">{ORACLE_BASE}</code>
+              <CopyButton text={ORACLE_BASE} />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              The Trust Oracle is AgentProof{"'"}s reputation oracle for the ERC-8004 ecosystem.
+              Query it via REST, Google A2A protocol, or Anthropic MCP protocol. No authentication required.
+            </p>
+          </div>
+
+          <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-mono text-gray-500 uppercase mb-2">Supported Protocols</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-black/30 rounded-lg p-3 border border-gray-800">
+                <p className="text-xs font-bold text-emerald-400 mb-1">REST API</p>
+                <p className="text-[10px] text-gray-500">Standard HTTP endpoints for any client</p>
+                <code className="text-[10px] font-mono text-gray-400 mt-1 block">/api/v1/*</code>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 border border-gray-800">
+                <p className="text-xs font-bold text-emerald-400 mb-1">Google A2A</p>
+                <p className="text-[10px] text-gray-500">Agent-to-agent discovery and task execution</p>
+                <code className="text-[10px] font-mono text-gray-400 mt-1 block">/.well-known/agent.json</code>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 border border-gray-800">
+                <p className="text-xs font-bold text-emerald-400 mb-1">Anthropic MCP</p>
+                <p className="text-[10px] text-gray-500">LLM tool integration via JSON-RPC 2.0</p>
+                <code className="text-[10px] font-mono text-gray-400 mt-1 block">POST /mcp</code>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-mono text-gray-500 uppercase mb-3">Quick Start</p>
+            <div className="space-y-3">
+              {ORACLE_SNIPPETS.map((snippet) => (
+                <div key={snippet.title} className="border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-900/50 border-b border-gray-800">
+                    <span className="text-xs font-semibold text-white">{snippet.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-gray-600 uppercase">{snippet.language}</span>
+                      <CopyButton text={snippet.code} />
+                    </div>
+                  </div>
+                  <pre className="p-4 text-xs font-mono text-gray-300 overflow-x-auto bg-black/30">
+                    {snippet.code}
+                  </pre>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-mono text-gray-500 uppercase mb-3">Endpoints</p>
+            <div className="space-y-2">
+              {ORACLE_ENDPOINTS.map((ep) => (
+                <EndpointCard key={ep.path} endpoint={ep} />
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
+            <p className="text-xs font-mono text-gray-500 uppercase mb-2">Recommendation Values</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 text-center">
+                <p className="text-xs font-bold text-emerald-400">TRUSTED</p>
+                <p className="text-[10px] text-gray-500">Score 70+, 10+ feedback</p>
+              </div>
+              <div className="bg-yellow-500/5 border border-yellow-500/20 rounded p-2 text-center">
+                <p className="text-xs font-bold text-yellow-400">CAUTION</p>
+                <p className="text-[10px] text-gray-500">Score 50+, 5+ feedback</p>
+              </div>
+              <div className="bg-red-500/5 border border-red-500/20 rounded p-2 text-center">
+                <p className="text-xs font-bold text-red-400">HIGH_RISK</p>
+                <p className="text-[10px] text-gray-500">Score below 50 or flagged</p>
+              </div>
+              <div className="bg-gray-500/5 border border-gray-500/20 rounded p-2 text-center">
+                <p className="text-xs font-bold text-gray-400">UNVERIFIED</p>
+                <p className="text-[10px] text-gray-500">Less than 5 feedback</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

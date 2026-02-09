@@ -81,6 +81,72 @@ AgentProof = Analytics + Scoring + Validation layer **on top of** the official E
 | ReputationGate | [`0xD66C677Cf394D68fD847d760151304697D3A1a0B`](https://snowtrace.io/address/0xD66C677Cf394D68fD847d760151304697D3A1a0B) | [`0x655DAfDe77290Fec2fFA2C77da9508859C0602c4`](https://testnet.snowtrace.io/address/0x655DAfDe77290Fec2fFA2C77da9508859C0602c4) | DeFi middleware: collateral, interest, trust gating |
 | ReputationSource | [`0x3D61349a610CB6651A5A077eeda7D723eE3F2545`](https://snowtrace.io/address/0x3D61349a610CB6651A5A077eeda7D723eE3F2545) | [`0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1`](https://testnet.snowtrace.io/address/0xf71dacC145AE6AFe343C6139b9Bb7cD5395AE3C1) | ICM C-Chain responder for L1 reputation requests |
 
+## Trust Oracle
+
+The Trust Oracle is AgentProof's reputation oracle for the ERC-8004 ecosystem. Query any agent's trust score via REST, Google A2A, or Anthropic MCP — no authentication required.
+
+```bash
+# Evaluate an agent
+curl https://oracle.agentproof.sh/api/v1/trust/42
+
+# Risk assessment
+curl https://oracle.agentproof.sh/api/v1/trust/42/risk
+
+# Find top DeFi agents
+curl "https://oracle.agentproof.sh/api/v1/agents/trusted?category=defi&min_score=70&limit=10"
+
+# Network stats
+curl https://oracle.agentproof.sh/api/v1/network/stats
+```
+
+### A2A (Agent-to-Agent) Discovery
+
+```bash
+curl https://oracle.agentproof.sh/.well-known/agent.json
+```
+
+### MCP (Model Context Protocol) — for LLMs
+
+```bash
+# List available tools
+curl -X POST https://oracle.agentproof.sh/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
+# Evaluate agent via tool call
+curl -X POST https://oracle.agentproof.sh/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0",
+    "method":"tools/call",
+    "params":{"name":"evaluate_agent","arguments":{"agent_id":42}},
+    "id":2
+  }'
+```
+
+### Oracle Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/trust/{agent_id}` | GET | Full trust evaluation (score, tier, risk flags, recommendation) |
+| `/api/v1/trust/{agent_id}/risk` | GET | Risk assessment (concentrated feedback, volatility, uptime) |
+| `/api/v1/agents/trusted` | GET | Find trusted agents (filter by category, score, tier) |
+| `/api/v1/network/stats` | GET | Network-wide statistics |
+| `/.well-known/agent.json` | GET | A2A agent card discovery |
+| `/mcp` | POST | MCP JSON-RPC 2.0 (tools/list, tools/call) |
+| `/a2a` | POST | A2A JSON-RPC 2.0 (tasks/send) |
+
+### Recommendation Values
+
+| Value | Meaning |
+|-------|---------|
+| `TRUSTED` | Score 70+, 10+ feedback, no critical risk flags |
+| `CAUTION` | Score 50+, 5+ feedback, proceed with care |
+| `HIGH_RISK` | Score below 50 or critical risk flags detected |
+| `UNVERIFIED` | Fewer than 5 feedback entries |
+
+---
+
 ## TypeScript SDK
 
 ```bash
@@ -281,6 +347,10 @@ agentproof/
 │       └── lib/        # Utils, constants, ABIs, Supabase client
 ├── sdk/                # @agentproof/sdk TypeScript package
 │   └── src/            # AgentProof client, types, utils, ABIs
+├── oracle/             # Trust Oracle (REST + A2A + MCP reputation oracle)
+│   ├── main.py         # FastAPI app
+│   ├── services/       # TrustService, self-registration
+│   └── routes/         # rest.py, a2a.py, mcp.py
 ├── indexer/            # Standalone event indexer (ERC-8004 + custom)
 ├── supabase/           # Database migration SQL
 ├── docker-compose.yml
@@ -308,6 +378,7 @@ agentproof/
 - [x] 88 Hardhat tests passing
 - [x] Phase 3 contract deployment to Fuji testnet (all verified on Snowtrace)
 - [x] Mainnet deployment (8 contracts deployed + verified on Snowtrace)
+- [x] Trust Oracle (REST + A2A + MCP reputation oracle)
 - [ ] IPFS metadata storage
 - [ ] DAO governance for claim resolution
 - [ ] Decentralized validator selection
