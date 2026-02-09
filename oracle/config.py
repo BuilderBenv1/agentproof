@@ -26,6 +26,7 @@ class OracleSettings(BaseSettings):
     # Server
     oracle_host: str = "0.0.0.0"
     oracle_port: int = 8001
+    port: int = 0  # Railway sets PORT automatically; takes precedence over oracle_port
     oracle_base_url: str = "https://oracle.agentproof.sh"
     cors_origins: str = "http://localhost:3000"
 
