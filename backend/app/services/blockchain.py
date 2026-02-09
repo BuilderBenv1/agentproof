@@ -1,7 +1,34 @@
 import json
 import logging
+import httpx
+from dataclasses import dataclass
+from eth_abi import decode as abi_decode
 from web3 import Web3
+from web3.middleware import ExtraDataToPOAMiddleware
 from app.config import get_settings
+
+
+@dataclass
+class _RawEventArgs:
+    agentId: int
+    owner: str
+    agentURI: str
+
+
+@dataclass
+class _RawEvent:
+    """Lightweight event object matching the interface indexer.py expects
+    (event.args.agentId, event.args.owner, event.args.agentURI,
+    event.blockNumber, event.transactionHash)."""
+    agentId: int
+    owner: str
+    agentURI: str
+    blockNumber: int
+    transactionHash: bytes
+
+    @property
+    def args(self):
+        return _RawEventArgs(agentId=self.agentId, owner=self.owner, agentURI=self.agentURI)
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +83,14 @@ class BlockchainService:
     def __init__(self):
         settings = get_settings()
         self.w3 = Web3(Web3.HTTPProvider(settings.avalanche_rpc_url))
+        # Avalanche C-Chain uses POA consensus; some blocks have extraData > 32 bytes
+        self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
         self.use_official = settings.use_official_erc8004
 
         # Ethereum web3 instance (for cross-chain ERC-8004 indexing)
         # Try primary + fallback RPCs until one connects
         self.w3_eth = None
+        self._eth_rpc_url = ""  # current active URL for raw httpx calls
         self._eth_rpc_urls = settings.ethereum_rpc_urls
         self._eth_rpc_index = 0
         for i, rpc_url in enumerate(self._eth_rpc_urls):
@@ -68,6 +98,7 @@ class BlockchainService:
                 candidate = Web3(Web3.HTTPProvider(rpc_url))
                 if candidate.is_connected():
                     self.w3_eth = candidate
+                    self._eth_rpc_url = rpc_url
                     self._eth_rpc_index = i
                     logger.info(f"Ethereum RPC connected: {rpc_url[:50]}...")
                     break
@@ -136,6 +167,7 @@ class BlockchainService:
                 candidate = Web3(Web3.HTTPProvider(rpc_url))
                 if candidate.is_connected():
                     self.w3_eth = candidate
+                    self._eth_rpc_url = rpc_url
                     self._eth_rpc_index = idx
                     # Re-bind the Ethereum identity contract
                     settings = get_settings()
@@ -151,6 +183,36 @@ class BlockchainService:
                 continue
         logger.error("All Ethereum RPC fallbacks exhausted")
         return False
+
+    def probe_eth_block_range_limit(self) -> int:
+        """Probe the ETH RPC to discover its max eth_getLogs block range.
+        Returns detected limit, or 0 if probing fails."""
+        if not self._eth_rpc_url:
+            return 0
+        settings = get_settings()
+        addr = settings.erc8004_eth_identity_registry
+        topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
+        # Test progressively larger ranges: 10, 100, 500, 800
+        for test_range in [10, 100, 500, 800]:
+            payload = {
+                "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+                "params": [{
+                    "address": addr,
+                    "fromBlock": hex(24420000),
+                    "toBlock": hex(24420000 + test_range),
+                    "topics": [topic0],
+                }],
+            }
+            try:
+                r = httpx.post(self._eth_rpc_url, json=payload, timeout=15)
+                if r.status_code != 200 or "error" in r.json():
+                    err = r.json().get("error", {})
+                    logger.info(f"ETH RPC block range probe: {test_range} blocks → rejected ({err.get('message', '')[:80]})")
+                    # The previous test_range worked, so return that
+                    return max(test_range // 2, 1)
+            except Exception:
+                return max(test_range // 2, 1)
+        return 800  # all passed
 
     def is_connected(self) -> bool:
         try:
@@ -191,27 +253,86 @@ class BlockchainService:
         return self.w3_eth.eth.block_number
 
     def get_erc8004_eth_registered_events(self, from_block: int, to_block: int):
-        """Get Registered events from the ERC-8004 Identity Registry on Ethereum."""
-        if not self.erc8004_eth_identity:
+        """Get Registered events from the ERC-8004 Identity Registry on Ethereum.
+
+        Uses raw httpx JSON-RPC calls instead of web3.py's get_logs to:
+        - Bypass web3.py v7 middleware that wraps address in an array
+        - Capture the full RPC error body for debugging (e.g. Alchemy block range limits)
+        - Work with any RPC provider without middleware quirks
+        """
+        if not self.erc8004_eth_identity or not self._eth_rpc_url:
             logger.warning("ERC-8004 Ethereum identity contract not initialized")
             return []
-        try:
-            events = self.erc8004_eth_identity.events.Registered().get_logs(
-                from_block=from_block, to_block=to_block
-            )
+
+        settings = get_settings()
+        addr = settings.erc8004_eth_identity_registry
+        topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
+
+        payload = {
+            "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+            "params": [{
+                "address": addr,
+                "fromBlock": hex(from_block),
+                "toBlock": hex(to_block),
+                "topics": [topic0],
+            }],
+        }
+
+        for attempt in range(2):  # try current RPC, then fallback
+            rpc_url = self._eth_rpc_url
+            try:
+                r = httpx.post(rpc_url, json=payload, timeout=30)
+            except httpx.RequestError as e:
+                logger.error(f"ERC-8004 ETH HTTP error ({rpc_url[:50]}): {e}")
+                if attempt == 0 and self.reconnect_eth():
+                    continue
+                raise
+
+            if r.status_code != 200:
+                body = r.text[:500]
+                logger.error(
+                    f"ERC-8004 ETH get_logs({from_block}-{to_block}) HTTP {r.status_code} "
+                    f"from {rpc_url[:50]}: {body}"
+                )
+                if attempt == 0 and self.reconnect_eth():
+                    continue
+                raise Exception(f"eth_getLogs HTTP {r.status_code}: {body}")
+
+            resp = r.json()
+            if "error" in resp:
+                err_msg = resp["error"].get("message", str(resp["error"]))
+                logger.error(
+                    f"ERC-8004 ETH get_logs({from_block}-{to_block}) RPC error "
+                    f"from {rpc_url[:50]}: {err_msg}"
+                )
+                if attempt == 0 and self.reconnect_eth():
+                    continue
+                raise Exception(f"eth_getLogs RPC error: {err_msg}")
+
+            # Decode raw logs into event-like objects
+            # Registered(uint256 indexed agentId, string agentURI, address indexed owner)
+            raw_logs = resp["result"]
+            events = []
+            for log in raw_logs:
+                try:
+                    agent_id = int(log["topics"][1], 16)
+                    owner = "0x" + log["topics"][2][-40:]
+                    # data contains the ABI-encoded agentURI string
+                    data_bytes = bytes.fromhex(log["data"][2:])
+                    agent_uri = abi_decode(["string"], data_bytes)[0] if data_bytes else ""
+                    events.append(_RawEvent(
+                        agentId=agent_id,
+                        owner=Web3.to_checksum_address(owner),
+                        agentURI=agent_uri,
+                        blockNumber=int(log["blockNumber"], 16),
+                        transactionHash=bytes.fromhex(log["transactionHash"][2:]),
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to decode ETH log: {e}")
             logger.info(f"ERC-8004 ETH get_logs({from_block}-{to_block}): {len(events)} events")
             return events
-        except Exception as e:
-            logger.error(f"ERC-8004 ETH get_logs({from_block}-{to_block}) FAILED: {e}")
-            # Try reconnecting to a fallback RPC before re-raising
-            if self.reconnect_eth():
-                logger.info("Retrying with fallback Ethereum RPC...")
-                events = self.erc8004_eth_identity.events.Registered().get_logs(
-                    from_block=from_block, to_block=to_block
-                )
-                logger.info(f"ERC-8004 ETH get_logs({from_block}-{to_block}) via fallback: {len(events)} events")
-                return events
-            raise
+
+        return []  # unreachable
 
     def diagnose_erc8004_identity(self):
         """One-time diagnostic: check contract, compute topic, try raw logs."""
