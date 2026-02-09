@@ -23,10 +23,7 @@ DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
 ERC8004_ETH_IDENTITY_START_BLOCK = 24_200_000  # Ethereum contract deployed ~Jan 10 2026
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
-ETH_MAX_BLOCK_RANGE = 800    # Default for Ethereum RPCs; probed at startup
-
-# Will be overridden at first indexer cycle after probing the RPC
-_eth_chunk_size_probed = False
+ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
 
 
 def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
@@ -488,24 +485,7 @@ def run_indexer_cycle():
         return
 
     # --- Ethereum first (highest priority during catchup) ---
-    global ETH_MAX_BLOCK_RANGE, _eth_chunk_size_probed
     if blockchain.w3_eth:
-        # Probe RPC block range limit once at startup
-        if not _eth_chunk_size_probed:
-            _eth_chunk_size_probed = True
-            detected = blockchain.probe_eth_block_range_limit()
-            if detected > 0:
-                ETH_MAX_BLOCK_RANGE = detected
-                logger.info(f"ETH RPC block range limit detected: {detected} blocks")
-                if detected < 50:
-                    logger.warning(
-                        f"ETH RPC block range limit is very low ({detected} blocks). "
-                        "This is likely an Alchemy/Infura free tier limitation. "
-                        "Use a public RPC like ethereum.publicnode.com for faster indexing."
-                    )
-            else:
-                logger.info(f"ETH RPC probe inconclusive, using default: {ETH_MAX_BLOCK_RANGE}")
-
         try:
             eth_current = blockchain.get_eth_current_block()
             eth_safe = eth_current - CONFIRMATION_BLOCKS
