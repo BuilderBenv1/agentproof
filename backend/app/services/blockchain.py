@@ -266,12 +266,11 @@ class BlockchainService:
         - Capture the full RPC error body for debugging (e.g. Alchemy block range limits)
         - Work with any RPC provider without middleware quirks
         """
-        if not self.erc8004_eth_identity or not self._eth_rpc_url:
-            logger.warning("ERC-8004 Ethereum identity contract not initialized")
-            return []
-
         settings = get_settings()
         addr = settings.erc8004_eth_identity_registry
+        if not addr or not self._eth_rpc_url:
+            logger.warning("ERC-8004 Ethereum identity not configured (addr=%s, rpc=%s)", bool(addr), bool(self._eth_rpc_url))
+            return []
         topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
 
         payload = {
