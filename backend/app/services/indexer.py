@@ -460,30 +460,31 @@ def _process_chunked(
     return total_count
 
 
+def _eth_blocks_behind() -> int:
+    """Return how many ETH blocks the indexer is behind, or 0 if caught up."""
+    try:
+        blockchain = get_blockchain_service()
+        if not blockchain.w3_eth:
+            return 0
+        eth_current = blockchain.get_eth_current_block()
+        last = get_last_processed_block(
+            "erc8004_eth_identity",
+            default_start=ERC8004_ETH_IDENTITY_START_BLOCK,
+        )
+        return max(0, eth_current - last)
+    except Exception:
+        return 0
+
+
 def run_indexer_cycle():
-    """Run one full indexer cycle: fetch events, update scores, update leaderboard."""
+    """Run one indexer cycle: scan blocks and index events. No scoring."""
     blockchain = get_blockchain_service()
 
     if not blockchain.is_connected():
         logger.warning("Blockchain not connected, skipping indexer cycle")
         return
 
-    try:
-        current_block = blockchain.get_current_block()
-    except Exception as e:
-        logger.error(f"Error getting current block: {e}")
-        return
-
-    safe_block = current_block - CONFIRMATION_BLOCKS
-    if safe_block < 0:
-        return
-
-    # Process official ERC-8004 Identity Registry events on Avalanche
-    count = _process_chunked("erc8004_identity", process_erc8004_identity_events, safe_block, start_block=ERC8004_IDENTITY_START_BLOCK)
-    if count > 0:
-        logger.info(f"Processed {count} ERC-8004 Avalanche agent registration events")
-
-    # Process ERC-8004 Identity Registry events on Ethereum (smaller chunks for RPC limits)
+    # --- Ethereum first (highest priority during catchup) ---
     if blockchain.w3_eth:
         try:
             eth_current = blockchain.get_eth_current_block()
@@ -501,6 +502,22 @@ def run_indexer_cycle():
         except Exception as e:
             logger.error(f"Error processing Ethereum ERC-8004 events: {e}")
 
+    # --- Avalanche ---
+    try:
+        current_block = blockchain.get_current_block()
+    except Exception as e:
+        logger.error(f"Error getting current block: {e}")
+        return
+
+    safe_block = current_block - CONFIRMATION_BLOCKS
+    if safe_block < 0:
+        return
+
+    # Process official ERC-8004 Identity Registry events on Avalanche
+    count = _process_chunked("erc8004_identity", process_erc8004_identity_events, safe_block, start_block=ERC8004_IDENTITY_START_BLOCK)
+    if count > 0:
+        logger.info(f"Processed {count} ERC-8004 Avalanche agent registration events")
+
     # Process custom identity events (chunked)
     count = _process_chunked("identity", process_agent_registered_events, safe_block)
     if count > 0:
@@ -516,6 +533,18 @@ def run_indexer_cycle():
     if count > 0:
         logger.info(f"Processed {count} validation events")
 
-    # Recalculate scores and leaderboard
+
+def run_scoring_cycle():
+    """Recalculate scores and leaderboard. Runs on a separate, slower schedule.
+    Skips entirely if the Ethereum indexer has a large backlog to avoid blocking."""
+    behind = _eth_blocks_behind()
+    if behind > 5000:
+        logger.info(
+            f"Scoring deferred — ETH indexer is {behind} blocks behind, "
+            "will score after catchup"
+        )
+        return
+    logger.info("Starting scoring cycle")
     recalculate_agent_scores()
     update_leaderboard()
+    logger.info("Scoring cycle complete")

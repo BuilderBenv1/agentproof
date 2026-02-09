@@ -41,12 +41,21 @@ async def lifespan(app: FastAPI):
     if settings.identity_registry_address or settings.erc8004_identity_registry or settings.erc8004_eth_identity_registry:
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
-            from app.services.indexer import run_indexer_cycle
+            from app.services.indexer import run_indexer_cycle, run_scoring_cycle
 
             scheduler = BackgroundScheduler()
-            scheduler.add_job(run_indexer_cycle, "interval", seconds=10, id="indexer")
+            # Block scanning — fast, 10s interval, skip if previous still running
+            scheduler.add_job(
+                run_indexer_cycle, "interval", seconds=10, id="indexer",
+                max_instances=1, coalesce=True, misfire_grace_time=30,
+            )
+            # Scoring & leaderboard — slow, every 5 min, separate from indexing
+            scheduler.add_job(
+                run_scoring_cycle, "interval", minutes=5, id="scoring",
+                max_instances=1, coalesce=True, misfire_grace_time=120,
+            )
             scheduler.start()
-            logger.info("Indexer scheduler started (10s interval)")
+            logger.info("Scheduler started — indexer (10s), scoring (5min)")
         except Exception as e:
             logger.warning(f"Could not start indexer scheduler: {e}")
     else:
