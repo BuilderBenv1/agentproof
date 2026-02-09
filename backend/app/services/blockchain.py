@@ -272,6 +272,7 @@ class BlockchainService:
             logger.warning("ERC-8004 Ethereum identity not configured (addr=%s, rpc=%s)", bool(addr), bool(self._eth_rpc_url))
             return []
         topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
+        logger.info(f"[ETH-DEBUG] addr={addr}, rpc={self._eth_rpc_url[:50]}, range={from_block}-{to_block}")
 
         payload = {
             "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
@@ -317,6 +318,8 @@ class BlockchainService:
             # Decode raw logs into event-like objects
             # Registered(uint256 indexed agentId, string agentURI, address indexed owner)
             raw_logs = resp["result"]
+            if raw_logs:
+                logger.info(f"[ETH-DEBUG] raw_logs={len(raw_logs)}, first_topics={raw_logs[0].get('topics',[])[1] if len(raw_logs[0].get('topics',[])) > 1 else 'N/A'}")
             events = []
             for log in raw_logs:
                 try:
