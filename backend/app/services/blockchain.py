@@ -186,14 +186,16 @@ class BlockchainService:
 
     def probe_eth_block_range_limit(self) -> int:
         """Probe the ETH RPC to discover its max eth_getLogs block range.
-        Returns detected limit, or 0 if probing fails."""
+        Returns detected limit, or 0 if probing fails.
+        Tests progressively: 10 → 100 → 500 → 800 → 1800.
+        Alchemy free=10, Alchemy PAYG=2000, publicnode/llamarpc≈1000."""
         if not self._eth_rpc_url:
             return 0
         settings = get_settings()
         addr = settings.erc8004_eth_identity_registry
         topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
-        # Test progressively larger ranges: 10, 100, 500, 800
-        for test_range in [10, 100, 500, 800]:
+        last_ok = 0
+        for test_range in [10, 100, 500, 800, 1800]:
             payload = {
                 "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
                 "params": [{
@@ -205,14 +207,18 @@ class BlockchainService:
             }
             try:
                 r = httpx.post(self._eth_rpc_url, json=payload, timeout=15)
-                if r.status_code != 200 or "error" in r.json():
-                    err = r.json().get("error", {})
-                    logger.info(f"ETH RPC block range probe: {test_range} blocks → rejected ({err.get('message', '')[:80]})")
-                    # The previous test_range worked, so return that
-                    return max(test_range // 2, 1)
+                resp = r.json()
+                if r.status_code != 200 or "error" in resp:
+                    err = resp.get("error", {})
+                    logger.info(
+                        f"ETH RPC block range probe: {test_range} blocks → rejected "
+                        f"({err.get('message', '')[:80]})"
+                    )
+                    return last_ok if last_ok > 0 else max(test_range // 2, 1)
+                last_ok = test_range
             except Exception:
-                return max(test_range // 2, 1)
-        return 800  # all passed
+                return last_ok if last_ok > 0 else max(test_range // 2, 1)
+        return last_ok  # all passed
 
     def is_connected(self) -> bool:
         try:
