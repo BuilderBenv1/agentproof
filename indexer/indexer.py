@@ -726,12 +726,27 @@ class AgentProofIndexer:
 
     def recalculate_scores(self):
         try:
-            agents = self.db.table("agents").select("*").execute()
+            # Paginate to avoid Supabase default 1000-row limit
+            all_agents: list[dict] = []
+            offset = 0
+            while True:
+                batch = (
+                    self.db.table("agents")
+                    .select("*")
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                if not batch.data:
+                    break
+                all_agents.extend(batch.data)
+                if len(batch.data) < 1000:
+                    break
+                offset += 1000
         except Exception as e:
             logger.error(f"Error fetching agents: {e}")
             return
 
-        for agent in agents.data:
+        for agent in all_agents:
             agent_id = agent["agent_id"]
 
             try:

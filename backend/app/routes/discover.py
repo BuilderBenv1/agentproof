@@ -352,10 +352,25 @@ async def get_category_stats():
     """Get agent statistics grouped by category."""
     db = get_supabase()
 
-    agents = db.table("agents").select("category,composite_score,total_feedback,tier").execute()
+    # Paginate to avoid Supabase default 1000-row limit
+    all_agents: list[dict] = []
+    offset = 0
+    while True:
+        batch = (
+            db.table("agents")
+            .select("category,composite_score,total_feedback,tier")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        if not batch.data:
+            break
+        all_agents.extend(batch.data)
+        if len(batch.data) < 1000:
+            break
+        offset += 1000
 
     categories: dict[str, dict] = {}
-    for a in agents.data:
+    for a in all_agents:
         cat = a.get("category", "general") or "general"
         if cat not in categories:
             categories[cat] = {

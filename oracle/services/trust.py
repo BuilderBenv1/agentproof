@@ -381,24 +381,42 @@ class TrustService:
     def network_stats(self) -> NetworkStats:
         db = get_supabase()
 
-        # Total agents + avg score
-        agents_result = (
-            db.table("agents").select("composite_score, tier").execute()
+        # Total agents via exact count (avoids Supabase default 1000-row limit)
+        count_result = (
+            db.table("agents")
+            .select("agent_id", count="exact")
+            .limit(0)
+            .execute()
         )
-        agents = agents_result.data
-        total_agents = len(agents)
-        avg_score = 0.0
-        if total_agents > 0:
-            avg_score = round(
-                sum(float(a.get("composite_score") or 0) for a in agents) / total_agents,
-                2,
-            )
+        total_agents = count_result.count or 0
 
-        # Tier distribution
+        # Paginate all agents for avg score + tier distribution
+        # Supabase default limit is 1000, so we fetch in pages
+        all_scores: list[float] = []
         tier_dist: dict[str, int] = {}
-        for a in agents:
-            t = a.get("tier", "unranked")
-            tier_dist[t] = tier_dist.get(t, 0) + 1
+        page_size = 1000
+        offset = 0
+        while True:
+            batch = (
+                db.table("agents")
+                .select("composite_score, tier")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            if not batch.data:
+                break
+            for a in batch.data:
+                score = float(a.get("composite_score") or 0)
+                all_scores.append(score)
+                t = a.get("tier", "unranked")
+                tier_dist[t] = tier_dist.get(t, 0) + 1
+            if len(batch.data) < page_size:
+                break
+            offset += page_size
+
+        avg_score = 0.0
+        if all_scores:
+            avg_score = round(sum(all_scores) / len(all_scores), 2)
 
         # Total feedback
         try:

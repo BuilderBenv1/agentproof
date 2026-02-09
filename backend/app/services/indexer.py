@@ -316,15 +316,30 @@ def recalculate_agent_scores():
     db = get_supabase()
 
     try:
-        agents = db.table("agents").select("agent_id, registered_at").execute()
+        # Paginate to avoid Supabase default 1000-row limit
+        all_agent_data: list[dict] = []
+        offset = 0
+        while True:
+            batch = (
+                db.table("agents")
+                .select("agent_id, registered_at")
+                .range(offset, offset + 999)
+                .execute()
+            )
+            if not batch.data:
+                break
+            all_agent_data.extend(batch.data)
+            if len(batch.data) < 1000:
+                break
+            offset += 1000
     except Exception as e:
         logger.error(f"Error fetching agents for scoring: {e}")
         return
 
-    if not agents.data:
+    if not all_agent_data:
         return
 
-    agent_ids = [a["agent_id"] for a in agents.data]
+    agent_ids = [a["agent_id"] for a in all_agent_data]
 
     # Bulk-fetch all ratings in one query (Supabase returns up to 1000 by default)
     all_ratings: dict[int, list[int]] = {}
@@ -378,7 +393,7 @@ def recalculate_agent_scores():
     # Calculate scores for all agents
     now = datetime.now(timezone.utc).isoformat()
     update_rows = []
-    for agent in agents.data:
+    for agent in all_agent_data:
         agent_id = agent["agent_id"]
         ratings = all_ratings.get(agent_id, [])
         feedback_count = len(ratings)
@@ -432,12 +447,23 @@ def update_leaderboard():
     db = get_supabase()
 
     try:
-        agents = (
-            db.table("agents")
-            .select("agent_id, category, composite_score")
-            .order("composite_score", desc=True)
-            .execute()
-        )
+        # Paginate to avoid Supabase default 1000-row limit
+        all_agents: list[dict] = []
+        offset = 0
+        while True:
+            batch = (
+                db.table("agents")
+                .select("agent_id, category, composite_score")
+                .order("composite_score", desc=True)
+                .range(offset, offset + 999)
+                .execute()
+            )
+            if not batch.data:
+                break
+            all_agents.extend(batch.data)
+            if len(batch.data) < 1000:
+                break
+            offset += 1000
     except Exception as e:
         logger.error(f"Error fetching agents for leaderboard: {e}")
         return
@@ -452,7 +478,7 @@ def update_leaderboard():
     categories: dict[str, list] = {}
     rank_updates = []
     global_rank = 0
-    for agent in agents.data:
+    for agent in all_agents:
         global_rank += 1
         cat = agent.get("category", "general") or "general"
         if cat not in categories:

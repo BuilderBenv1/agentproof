@@ -18,24 +18,34 @@ async def get_overview():
     feedback_result = db.table("reputation_events").select("id", count="exact").execute()
     total_feedback = feedback_result.count or 0
 
-    # Average composite score
-    agents_data = db.table("agents").select("composite_score, category").execute()
-
-    scores = [float(a["composite_score"]) for a in agents_data.data if a["composite_score"]]
-    avg_score = round(sum(scores) / len(scores), 2) if scores else 0
-
-    # Category breakdown
+    # Average composite score, category breakdown, tier distribution
+    # Paginate to avoid Supabase default 1000-row limit
+    scores: list[float] = []
     category_counts: dict[str, int] = {}
-    for agent in agents_data.data:
-        cat = agent.get("category", "general") or "general"
-        category_counts[cat] = category_counts.get(cat, 0) + 1
-
-    # Tier distribution
-    tier_result = db.table("agents").select("tier").execute()
     tier_counts: dict[str, int] = {}
-    for agent in tier_result.data:
-        tier = agent.get("tier", "unranked")
-        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+    page_size = 1000
+    offset = 0
+    while True:
+        batch = (
+            db.table("agents")
+            .select("composite_score, category, tier")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        if not batch.data:
+            break
+        for a in batch.data:
+            if a.get("composite_score"):
+                scores.append(float(a["composite_score"]))
+            cat = a.get("category", "general") or "general"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+            tier = a.get("tier", "unranked")
+            tier_counts[tier] = tier_counts.get(tier, 0) + 1
+        if len(batch.data) < page_size:
+            break
+        offset += page_size
+
+    avg_score = round(sum(scores) / len(scores), 2) if scores else 0
 
     # Total validations
     validations_result = db.table("validation_records").select("id", count="exact").execute()
@@ -114,12 +124,24 @@ async def get_categories():
 
     categories = db.table("agent_categories").select("*").execute()
 
-    # Get agent counts per category
-    agents = db.table("agents").select("category").execute()
+    # Get agent counts per category (paginate past 1000-row limit)
     category_counts: dict[str, int] = {}
-    for agent in agents.data:
-        cat = agent.get("category", "general") or "general"
-        category_counts[cat] = category_counts.get(cat, 0) + 1
+    offset = 0
+    while True:
+        batch = (
+            db.table("agents")
+            .select("category")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        if not batch.data:
+            break
+        for agent in batch.data:
+            cat = agent.get("category", "general") or "general"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+        if len(batch.data) < 1000:
+            break
+        offset += 1000
 
     result = []
     for cat in categories.data:
