@@ -45,8 +45,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Self-registration failed: {e}")
 
+    # Start autonomous scheduler
+    from services.autonomous import get_screener
+    screener = get_screener()
+    await screener.start()
+
     yield
 
+    # Shutdown autonomous scheduler
+    await screener.stop()
     logger.info("Trust Oracle shutting down")
 
 
@@ -275,6 +282,38 @@ async def landing():
 async def health():
     """Top-level health check."""
     return {"status": "healthy", "service": "agentproof-trust-oracle"}
+
+
+@app.get("/api/v1/autonomous/status")
+async def autonomous_status():
+    """Show scheduler status — last run times and job counts."""
+    from services.autonomous import get_screener
+    return get_screener().status()
+
+
+@app.get("/api/v1/reports/latest")
+async def latest_report():
+    """Return the most recent network report."""
+    import asyncio
+    from database import get_supabase
+
+    def _fetch():
+        db = get_supabase()
+        result = (
+            db.table("oracle_reports")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        return result.data[0]
+
+    report = await asyncio.to_thread(_fetch)
+    if not report:
+        return JSONResponse(status_code=404, content={"detail": "No reports generated yet"})
+    return report
 
 
 @app.exception_handler(Exception)
