@@ -184,3 +184,20 @@ class MCPResponse(BaseModel):
     result: Any = None
     error: dict[str, Any] | None = None
     id: int | str | None = None
+
+
+# ─── x402 Payment Models ────────────────────────────────────────────
+
+
+class PaymentRecord(BaseModel):
+    id: str | None = None
+    tx_hash: str | None = None
+    network: str
+    payer_address: str
+    amount_usd: float
+    endpoint: str
+    http_method: str = "GET"
+    http_path: str
+    agent_id_queried: int | None = None
+    oracle_address: str
+    paid_at: datetime

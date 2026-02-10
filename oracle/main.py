@@ -101,6 +101,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# x402 payment middleware (opt-in via X402_ENABLED env var)
+if settings.x402_enabled:
+    try:
+        from middleware.x402 import setup_x402_middleware
+        setup_x402_middleware(app, settings)
+    except ImportError:
+        logger.warning(
+            "x402 package not installed — payment gating disabled. "
+            "Install with: pip install 'x402[fastapi,evm]'"
+        )
+    except Exception as e:
+        logger.error(f"x402 middleware setup failed: {e}")
+
 # Include routers
 app.include_router(rest.router)
 app.include_router(a2a.router)
@@ -217,10 +230,20 @@ footer{text-align:center;color:#444460;font-size:.75rem;padding:2rem 0 1rem}
 </div>
 </section>
 
+<section>
+<h2>Pricing &mdash; x402 Micropayments</h2>
+<p style="color:#8888a0;font-size:.85rem;margin-bottom:1rem">Premium endpoints accept USDC micropayments via the <a href="https://www.x402.org/">x402 protocol</a> (HTTP 402). Free endpoints require no payment.</p>
+<div class="skills">
+<div class="skill"><div class="name" style="color:#fff">Premium &mdash; $0.01 USDC</div><div class="desc">/api/v1/trust/{id} &mdash; trust evaluation<br>/api/v1/trust/{id}/risk &mdash; risk assessment<br>/api/v1/agents/trusted &mdash; search trusted agents</div></div>
+<div class="skill"><div class="name" style="color:#fff">Free</div><div class="desc">/api/v1/network/stats &mdash; network statistics<br>/api/v1/health &mdash; health check<br>/api/v1/pricing &mdash; pricing details<br>/.well-known/agent.json &mdash; A2A card</div></div>
+</div>
+<p style="color:#666680;font-size:.75rem;margin-top:.75rem">Network: Base (USDC) &middot; <a href="/api/v1/pricing">GET /api/v1/pricing</a> for machine-readable details</p>
+</section>
+
 <div class="links">
 <a href="https://agentproof.sh">agentproof.sh</a>
 <a href="/.well-known/agent.json">A2A Agent Card</a>
-<a href="https://agentproof.sh/docs">Developer Docs</a>
+<a href="/api/v1/pricing">Pricing API</a>
 <a href="https://github.com/BuilderBenv1/agentproof">GitHub</a>
 </div>
 <footer>AgentProof Trust Oracle &middot; ERC-8004 Reputation Infrastructure</footer>
@@ -308,6 +331,36 @@ async def landing():
 async def health():
     """Top-level health check."""
     return {"status": "healthy", "service": "agentproof-trust-oracle"}
+
+
+@app.get("/api/v1/pricing")
+async def pricing():
+    """Return pricing information for premium endpoints."""
+    settings = get_settings()
+    if not settings.x402_enabled:
+        return {"payment_required": False, "message": "All endpoints are currently free"}
+    return {
+        "payment_required": True,
+        "protocol": "x402",
+        "network": settings.x402_network,
+        "pay_to": settings.x402_pay_to,
+        "facilitator": settings.x402_facilitator_url,
+        "price_per_request": settings.x402_price_usd,
+        "premium_endpoints": {
+            "GET /api/v1/trust/{agent_id}": "Full trust evaluation with score breakdown",
+            "GET /api/v1/trust/{agent_id}/risk": "Risk assessment with flags and recommendation",
+            "GET /api/v1/agents/trusted": "Search trusted agents by category, score, tier",
+        },
+        "free_endpoints": [
+            "GET /api/v1/health",
+            "GET /api/v1/network/stats",
+            "GET /api/v1/info",
+            "GET /api/v1/pricing",
+            "GET /api/v1/autonomous/status",
+            "GET /api/v1/reports/latest",
+            "GET /.well-known/agent.json",
+        ],
+    }
 
 
 @app.get("/api/v1/autonomous/status")
