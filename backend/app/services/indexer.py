@@ -633,6 +633,28 @@ def run_indexer_cycle():
     if count > 0:
         logger.info(f"Processed {count} custom agent registration events")
 
+    # Self-healing: if reputation_events is empty but the checkpoint has
+    # already advanced, reset it so we rescan from the contract deployment
+    # block.  This covers the case where the old buggy field-mapping code
+    # silently advanced the checkpoint without writing any rows.
+    try:
+        rep_check = get_last_processed_block("reputation")
+        if rep_check > ERC8004_IDENTITY_START_BLOCK:
+            rep_count = (
+                get_supabase().table("reputation_events")
+                .select("id", count="exact")
+                .execute()
+            )
+            if rep_count.count == 0:
+                reset_to = ERC8004_IDENTITY_START_BLOCK
+                logger.warning(
+                    f"reputation_events is empty but checkpoint is at {rep_check} — "
+                    f"resetting reputation checkpoint to {reset_to} to rescan"
+                )
+                update_last_processed_block("reputation", reset_to)
+    except Exception as e:
+        logger.error(f"Error in reputation checkpoint self-heal check: {e}")
+
     # Process reputation events (chunked)
     count = _process_chunked("reputation", process_feedback_events, safe_block)
     if count > 0:
