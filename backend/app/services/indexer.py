@@ -216,7 +216,7 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
 
 
 def process_feedback_events(from_block: int, to_block: int):
-    """Process FeedbackSubmitted events."""
+    """Process NewFeedback (ERC-8004) or FeedbackSubmitted (legacy) events."""
     blockchain = get_blockchain_service()
     events = blockchain.get_feedback_events(from_block, to_block)
     if not events:
@@ -232,11 +232,21 @@ def process_feedback_events(from_block: int, to_block: int):
             block_data = blockchain.w3.eth.get_block(block)
             block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
 
+        if blockchain.use_official:
+            # ERC-8004 NewFeedback: feedbackId, agentId, reviewer, value, valueDecimals, tag1, tag2
+            raw_value = int(event.args.value)
+            rating = max(1, min(100, raw_value))
+            task_hash = event.args.tag1.hex() if hasattr(event.args, 'tag1') else ""
+        else:
+            # Legacy FeedbackSubmitted: agentId, reviewer, rating, taskHash
+            rating = event.args.rating
+            task_hash = event.args.taskHash.hex()
+
         rows.append({
             "agent_id": event.args.agentId,
             "reviewer_address": event.args.reviewer,
-            "rating": event.args.rating,
-            "task_hash": event.args.taskHash.hex(),
+            "rating": rating,
+            "task_hash": task_hash,
             "tx_hash": event.transactionHash.hex(),
             "block_number": block,
             "created_at": block_ts_cache[block].isoformat(),
