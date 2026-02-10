@@ -372,8 +372,10 @@ def recalculate_agent_scores():
         return
 
     if not all_agent_data:
+        logger.info("No agents found for scoring")
         return
 
+    logger.info(f"Scoring {len(all_agent_data)} agents")
     agent_ids = [a["agent_id"] for a in all_agent_data]
 
     # Bulk-fetch all ratings in one query (Supabase returns up to 1000 by default)
@@ -399,6 +401,10 @@ def recalculate_agent_scores():
             offset += page_size
     except Exception as e:
         logger.error(f"Error bulk-fetching ratings: {e}")
+
+    total_ratings = sum(len(v) for v in all_ratings.values())
+    agents_with_feedback = len(all_ratings)
+    logger.info(f"Fetched {total_ratings} ratings across {agents_with_feedback} agents")
 
     # Bulk-fetch all completed validations
     all_validations: dict[int, dict] = {}  # agent_id -> {completed, successful}
@@ -681,6 +687,10 @@ def run_indexer_cycle():
         logger.error(f"Error in reputation checkpoint self-heal check: {e}")
 
     # Process reputation events (chunked)
+    rep_checkpoint = get_last_processed_block("reputation")
+    rep_behind = safe_block - rep_checkpoint
+    if rep_behind > 10000:
+        logger.info(f"Reputation indexer is {rep_behind} blocks behind (checkpoint={rep_checkpoint}, head={safe_block})")
     count = _process_chunked("reputation", process_feedback_events, safe_block)
     if count > 0:
         logger.info(f"Processed {count} feedback events")
@@ -692,16 +702,17 @@ def run_indexer_cycle():
 
 
 def run_scoring_cycle():
-    """Recalculate scores and leaderboard. Runs on a separate, slower schedule.
-    Skips entirely if the Ethereum indexer has a large backlog to avoid blocking."""
+    """Recalculate scores and leaderboard. Runs on a separate, slower schedule."""
     behind = _eth_blocks_behind()
     if behind > 5000:
         logger.info(
-            f"Scoring deferred — ETH indexer is {behind} blocks behind, "
-            "will score after catchup"
+            f"Note: ETH indexer is {behind} blocks behind (identity only, "
+            "does not affect reputation scoring)"
         )
-        return
     logger.info("Starting scoring cycle")
-    recalculate_agent_scores()
-    update_leaderboard()
-    logger.info("Scoring cycle complete")
+    try:
+        recalculate_agent_scores()
+        update_leaderboard()
+        logger.info("Scoring cycle complete")
+    except Exception as e:
+        logger.error(f"Scoring cycle failed: {e}", exc_info=True)
