@@ -110,21 +110,39 @@ class AgentScreener:
     # ─── Job 1: Screen New Agents (every 5 min) ──────────────────────
 
     def _screen_new_agents(self):
-        """Screen agents that haven't been evaluated by the oracle yet."""
+        """Screen agents that haven't been evaluated by the oracle yet.
+
+        Prioritises Avalanche agents (agent_id <= 1621) first, then backfills
+        with Ethereum agents (agent_id > 1621) up to SCREEN_BATCH_SIZE.
+        """
         db = get_supabase()
 
-        result = (
+        # Avalanche agents first (IDs 1-1621)
+        avax_result = (
             db.table("agents")
             .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
             .is_("oracle_last_screened", "null")
+            .lte("agent_id", 1621)
             .limit(SCREEN_BATCH_SIZE)
             .execute()
         )
+        agents = avax_result.data or []
 
-        if not result.data:
+        # Backfill with Ethereum agents if room remains
+        remaining = SCREEN_BATCH_SIZE - len(agents)
+        if remaining > 0:
+            eth_result = (
+                db.table("agents")
+                .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
+                .is_("oracle_last_screened", "null")
+                .gt("agent_id", 1621)
+                .limit(remaining)
+                .execute()
+            )
+            agents.extend(eth_result.data or [])
+
+        if not agents:
             return
-
-        agents = result.data
         logger.info(f"[screen_new_agents] Screening {len(agents)} unscreened agents")
 
         now = datetime.now(timezone.utc).isoformat()

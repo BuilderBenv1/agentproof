@@ -21,6 +21,14 @@ class OracleSettings(BaseSettings):
     # ReputationRegistry contract — mainnet ERC-8004 (Ava Labs official)
     reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
 
+    # Ethereum mainnet (same CREATE2 addresses as Avalanche)
+    ethereum_rpc_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("ETHEREUM_RPC_URL", "ETH_RPC_URL"),
+    )
+    eth_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    eth_reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
+
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
     oracle_agent_description: str = (

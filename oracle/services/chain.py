@@ -1,8 +1,9 @@
 """
 On-chain feedback submission via the ReputationRegistry contract.
 
-Submits ERC-8004 reputation feedback after the oracle screens agents.
-Rate-limited to 1 tx per 30 seconds to manage gas costs.
+Supports multiple chains (Avalanche C-Chain + Ethereum mainnet).
+ERC-8004 uses CREATE2 — same contract addresses on both chains.
+Each chain has independent 30-second rate limiting.
 """
 
 import json
@@ -77,39 +78,200 @@ IDENTITY_REGISTRY_ABI = json.loads("""[
 # ERC-721 Transfer(address,address,uint256) event topic for scanning mints
 TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)")
 
-# Minimum seconds between successive transactions
+# Minimum seconds between successive transactions (per chain)
 TX_RATE_LIMIT_SECONDS = 30
 
 
-class ChainService:
-    """Submits on-chain reputation feedback to the ReputationRegistry."""
+class _ChainBackend:
+    """Single-chain backend: holds w3, contracts, account, rate limit state."""
 
-    def __init__(self):
-        settings = get_settings()
-        self._w3 = Web3(Web3.HTTPProvider(settings.avalanche_rpc_url))
-        self._w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+    def __init__(
+        self,
+        chain_name: str,
+        rpc_url: str,
+        chain_id: int,
+        identity_registry_addr: str,
+        reputation_registry_addr: str,
+        private_key: str,
+        *,
+        poa_middleware: bool = False,
+    ):
+        self.chain_name = chain_name
+        self.chain_id = chain_id
+        self._w3 = Web3(Web3.HTTPProvider(rpc_url))
 
-        self._account = self._w3.eth.account.from_key(settings.private_key)
+        if poa_middleware:
+            self._w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
-        self._reputation_registry = self._w3.eth.contract(
-            address=Web3.to_checksum_address(settings.reputation_registry),
-            abi=REPUTATION_REGISTRY_ABI,
-        )
+        self._account = self._w3.eth.account.from_key(private_key)
+
         self._identity_registry = self._w3.eth.contract(
-            address=Web3.to_checksum_address(settings.erc8004_identity_registry),
+            address=Web3.to_checksum_address(identity_registry_addr),
             abi=IDENTITY_REGISTRY_ABI,
+        )
+        self._reputation_registry = self._w3.eth.contract(
+            address=Web3.to_checksum_address(reputation_registry_addr),
+            abi=REPUTATION_REGISTRY_ABI,
         )
 
         self._last_tx_time: float = 0.0
+
+        logger.info(
+            f"_ChainBackend initialized — chain={chain_name} chain_id={chain_id} "
+            f"wallet={self._account.address} "
+            f"reputation_registry={reputation_registry_addr}"
+        )
+
+    @property
+    def wallet_address(self) -> str:
+        return self._account.address
+
+    def agent_exists(self, agent_id: int) -> str | None:
+        """Check if agent_id is registered on this chain. Returns owner address or None."""
+        try:
+            owner = self._identity_registry.functions.ownerOf(agent_id).call()
+            return owner
+        except Exception:
+            return None
+
+    def submit_feedback(self, agent_id: int, score: int, comment: str) -> str | None:
+        """
+        Submit reputation feedback via the ERC-8004 giveFeedback function.
+
+        Returns transaction hash hex string on success, None on failure.
+        """
+        # Check agent exists on this chain's IdentityRegistry
+        owner = self.agent_exists(agent_id)
+        if owner is None:
+            logger.debug(
+                f"Agent {agent_id} not on {self.chain_name} IdentityRegistry — skipping"
+            )
+            return None
+
+        # Don't rate our own agent
+        if owner.lower() == self._account.address.lower():
+            logger.debug(
+                f"Agent {agent_id} owned by oracle wallet on {self.chain_name} — "
+                f"skipping self-feedback"
+            )
+            return None
+
+        # Enforce per-chain rate limit
+        now = time.monotonic()
+        elapsed = now - self._last_tx_time
+        if elapsed < TX_RATE_LIMIT_SECONDS:
+            wait = TX_RATE_LIMIT_SECONDS - elapsed
+            logger.debug(
+                f"Rate limiting {self.chain_name} — waiting {wait:.1f}s before next tx"
+            )
+            time.sleep(wait)
+
+        # Clamp score to valid range
+        score = max(1, min(100, score))
+
+        # Build a unique nonce for this feedback
+        nonce_input = f"oracle-screening:{agent_id}:{int(time.time())}"
+        feedback_nonce = Web3.keccak(text=nonce_input)
+
+        content = comment[:256] if comment else "oracle-screening"
+
+        try:
+            call = self._reputation_registry.functions.giveFeedback(
+                agent_id,
+                score,              # value (int128)
+                0,                  # valueDecimals (whole numbers)
+                "trust",            # tag1
+                "oracle-screening", # tag2
+                content,            # screening summary
+                "",                 # uri (empty for MVP)
+                feedback_nonce,
+            )
+
+            estimated_gas = call.estimate_gas({"from": self._account.address})
+            gas_limit = int(estimated_gas * 1.3)
+
+            tx = call.build_transaction({
+                "from": self._account.address,
+                "nonce": self._w3.eth.get_transaction_count(self._account.address),
+                "gas": gas_limit,
+                "gasPrice": self._w3.eth.gas_price,
+                "chainId": self.chain_id,
+            })
+
+            signed = self._account.sign_transaction(tx)
+            tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+            receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+
+            self._last_tx_time = time.monotonic()
+
+            if receipt.status == 1:
+                hex_hash = tx_hash.hex()
+                logger.info(
+                    f"On-chain feedback submitted — agent_id={agent_id} "
+                    f"score={score} chain={self.chain_name} tx={hex_hash}"
+                )
+                return hex_hash
+            else:
+                logger.error(
+                    f"Feedback tx reverted — agent_id={agent_id} "
+                    f"chain={self.chain_name} tx={tx_hash.hex()}"
+                )
+                return None
+
+        except Exception as e:
+            self._last_tx_time = time.monotonic()
+            logger.error(
+                f"Failed to submit on-chain feedback for agent {agent_id} "
+                f"on {self.chain_name}: {e}"
+            )
+            return None
+
+
+class ChainService:
+    """Multi-chain feedback service. Routes to Avalanche or Ethereum automatically."""
+
+    def __init__(self):
+        settings = get_settings()
+
+        # Avalanche backend (always initialized)
+        self._avax = _ChainBackend(
+            chain_name="avalanche",
+            rpc_url=settings.avalanche_rpc_url,
+            chain_id=43114,
+            identity_registry_addr=settings.erc8004_identity_registry,
+            reputation_registry_addr=settings.reputation_registry,
+            private_key=settings.private_key,
+            poa_middleware=True,
+        )
+
+        # Ethereum backend (optional — only if ETHEREUM_RPC_URL is set)
+        self._eth: _ChainBackend | None = None
+        if settings.ethereum_rpc_url:
+            try:
+                self._eth = _ChainBackend(
+                    chain_name="ethereum",
+                    rpc_url=settings.ethereum_rpc_url,
+                    chain_id=1,
+                    identity_registry_addr=settings.eth_identity_registry,
+                    reputation_registry_addr=settings.eth_reputation_registry,
+                    private_key=settings.private_key,
+                    poa_middleware=False,
+                )
+            except Exception as e:
+                logger.error(f"Ethereum backend init failed: {e}")
+                self._eth = None
+        else:
+            logger.info("ETHEREUM_RPC_URL not set — Ethereum feedback disabled")
+
         self._cached_oracle_agent_id: int | None = None
 
         logger.info(
-            f"ChainService initialized — wallet={self._account.address}, "
-            f"reputation_registry={settings.reputation_registry}"
+            f"ChainService initialized — avax={settings.reputation_registry}, "
+            f"eth={'enabled' if self._eth else 'disabled'}"
         )
 
     def get_oracle_agent_id(self) -> int | None:
-        """Look up the oracle wallet's registered agent ID on the IdentityRegistry."""
+        """Look up the oracle wallet's registered agent ID on the IdentityRegistry (Avalanche)."""
         if self._cached_oracle_agent_id is not None:
             return self._cached_oracle_agent_id
 
@@ -122,8 +284,8 @@ class ChainService:
             return settings.oracle_agent_id
 
         try:
-            balance = self._identity_registry.functions.balanceOf(
-                self._account.address
+            balance = self._avax._identity_registry.functions.balanceOf(
+                self._avax.wallet_address
             ).call()
 
             if balance == 0:
@@ -133,17 +295,17 @@ class ChainService:
             # No tokenOfOwnerByIndex on this contract — scan Transfer events
             # for mints (from=0x0) to the oracle wallet
             registry_addr = Web3.to_checksum_address(settings.erc8004_identity_registry)
-            wallet_topic = "0x" + self._account.address.lower()[2:].zfill(64)
+            wallet_topic = "0x" + self._avax.wallet_address.lower()[2:].zfill(64)
             zero_topic = "0x" + "0" * 64
 
-            latest = self._w3.eth.block_number
+            latest = self._avax._w3.eth.block_number
             # Scan last 50k blocks in 2000-block chunks (Avalanche RPC limit)
             from_block = max(0, latest - 50_000)
             chunk = 2000
 
             for start in range(from_block, latest + 1, chunk):
                 end = min(start + chunk - 1, latest)
-                logs = self._w3.eth.get_logs({
+                logs = self._avax._w3.eth.get_logs({
                     "address": registry_addr,
                     "fromBlock": start,
                     "toBlock": end,
@@ -168,91 +330,27 @@ class ChainService:
 
     def submit_feedback(self, agent_id: int, score: int, comment: str) -> str | None:
         """
-        Submit reputation feedback via the ERC-8004 giveFeedback function.
+        Submit reputation feedback, auto-routing to the correct chain.
 
-        Args:
-            agent_id: The on-chain agent token ID to rate.
-            score: Rating from 1-100 (mapped to int128 value).
-            comment: Screening summary text (stored as content param).
+        Tries Avalanche first (agents 1-1621 live there). If the agent
+        isn't found on Avalanche and the Ethereum backend is available,
+        tries Ethereum.
 
-        Returns:
-            Transaction hash hex string on success, None on failure.
+        Returns transaction hash hex string on success, None on failure.
         """
-        # Check agent exists on the IdentityRegistry before spending gas
-        try:
-            owner = self._identity_registry.functions.ownerOf(agent_id).call()
-        except Exception:
-            logger.debug(f"Agent {agent_id} not on IdentityRegistry — skipping feedback")
-            return None
+        # Try Avalanche first
+        result = self._avax.submit_feedback(agent_id, score, comment)
+        if result is not None:
+            return result
 
-        # Don't rate our own agent
-        if owner.lower() == self._account.address.lower():
-            logger.debug(f"Agent {agent_id} owned by oracle wallet — skipping self-feedback")
-            return None
-
-        # Enforce rate limit
-        now = time.monotonic()
-        elapsed = now - self._last_tx_time
-        if elapsed < TX_RATE_LIMIT_SECONDS:
-            wait = TX_RATE_LIMIT_SECONDS - elapsed
-            logger.debug(f"Rate limiting — waiting {wait:.1f}s before next tx")
-            time.sleep(wait)
-
-        # Clamp score to valid range
-        score = max(1, min(100, score))
-
-        # Build a unique nonce for this feedback
-        nonce_input = f"oracle-screening:{agent_id}:{int(time.time())}"
-        feedback_nonce = Web3.keccak(text=nonce_input)
-
-        content = comment[:256] if comment else "oracle-screening"
-
-        try:
-            call = self._reputation_registry.functions.giveFeedback(
-                agent_id,
-                score,              # value (int128)
-                0,                  # valueDecimals (whole numbers)
-                "trust",            # tag1 — categorizes this as a trust score
-                "oracle-screening", # tag2 — identifies the oracle screening process
-                content,            # screening summary
-                "",                 # uri (empty for MVP)
-                feedback_nonce,
+        # Agent not on Avalanche — try Ethereum if available
+        if self._eth is not None:
+            logger.debug(
+                f"Agent {agent_id} not on Avalanche — trying Ethereum"
             )
+            return self._eth.submit_feedback(agent_id, score, comment)
 
-            estimated_gas = call.estimate_gas({"from": self._account.address})
-            gas_limit = int(estimated_gas * 1.3)
-
-            tx = call.build_transaction({
-                "from": self._account.address,
-                "nonce": self._w3.eth.get_transaction_count(self._account.address),
-                "gas": gas_limit,
-                "gasPrice": self._w3.eth.gas_price,
-                "chainId": 43114,
-            })
-
-            signed = self._account.sign_transaction(tx)
-            tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
-            receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
-
-            self._last_tx_time = time.monotonic()
-
-            if receipt.status == 1:
-                hex_hash = tx_hash.hex()
-                logger.info(
-                    f"On-chain feedback submitted — agent_id={agent_id} "
-                    f"score={score} tx={hex_hash}"
-                )
-                return hex_hash
-            else:
-                logger.error(
-                    f"Feedback tx reverted — agent_id={agent_id} tx={tx_hash.hex()}"
-                )
-                return None
-
-        except Exception as e:
-            self._last_tx_time = time.monotonic()
-            logger.error(f"Failed to submit on-chain feedback for agent {agent_id}: {e}")
-            return None
+        return None
 
 
 # Singleton — lazily initialized, None if PRIVATE_KEY not set
