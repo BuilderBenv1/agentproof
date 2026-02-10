@@ -44,11 +44,13 @@ ERC8004_IDENTITY_ABI = json.loads("""[
 ]""")
 
 # ─── Official ERC-8004 Reputation Registry ABI (Ava Labs) ───────────
+# Verified from implementation contract 0x16e0fa7f7c56b9a767e34b192b51f921be31da34
+# (proxy at 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63)
 ERC8004_REPUTATION_ABI = json.loads("""[
-    {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getFeedbackCount","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
-    {"inputs":[{"name":"agentId","type":"uint256"}],"name":"getSummary","outputs":[{"components":[{"name":"totalFeedback","type":"uint256"},{"name":"averageValue","type":"int128"},{"name":"averageValueDecimals","type":"uint8"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"feedbackId","type":"uint256"},{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"reviewer","type":"address"},{"indexed":false,"name":"value","type":"int128"},{"indexed":false,"name":"valueDecimals","type":"uint8"},{"indexed":false,"name":"tag1","type":"bytes32"},{"indexed":false,"name":"tag2","type":"bytes32"}],"name":"NewFeedback","type":"event"},
-    {"anonymous":false,"inputs":[{"indexed":true,"name":"feedbackId","type":"uint256"}],"name":"FeedbackRevoked","type":"event"}
+    {"inputs":[{"name":"agentId","type":"uint256"},{"name":"clientAddresses","type":"address[]"},{"name":"tag1","type":"string"},{"name":"tag2","type":"string"}],"name":"getSummary","outputs":[{"name":"count","type":"uint64"},{"name":"summaryValue","type":"int128"},{"name":"summaryValueDecimals","type":"uint8"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"agentId","type":"uint256"},{"name":"value","type":"int128"},{"name":"valueDecimals","type":"uint8"},{"name":"tag1","type":"string"},{"name":"tag2","type":"string"},{"name":"endpoint","type":"string"},{"name":"feedbackURI","type":"string"},{"name":"feedbackHash","type":"bytes32"}],"name":"giveFeedback","outputs":[],"stateMutability":"nonpayable","type":"function"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":false,"name":"feedbackIndex","type":"uint64"},{"indexed":false,"name":"value","type":"int128"},{"indexed":false,"name":"valueDecimals","type":"uint8"},{"indexed":true,"name":"indexedTag1","type":"string"},{"indexed":false,"name":"tag1","type":"string"},{"indexed":false,"name":"tag2","type":"string"},{"indexed":false,"name":"endpoint","type":"string"},{"indexed":false,"name":"feedbackURI","type":"string"},{"indexed":false,"name":"feedbackHash","type":"bytes32"}],"name":"NewFeedback","type":"event"},
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":true,"name":"feedbackIndex","type":"uint64"}],"name":"FeedbackRevoked","type":"event"}
 ]""")
 
 # ─── Legacy Custom Identity Registry ABI ─────────────────────────────
@@ -452,11 +454,15 @@ class BlockchainService:
         return self.identity_registry.functions.totalAgents().call()
 
     def get_reputation_summary(self, agent_id: int) -> dict:
-        """Get reputation summary from official ERC-8004 registry."""
+        """Get reputation summary from official ERC-8004 registry.
+        getSummary(agentId, clientAddresses[], tag1, tag2) — pass empty
+        clients and empty tags to get the global summary for this agent."""
         if not self.reputation_registry or not self.use_official:
             return {"total_feedback": 0, "average_value": 0, "average_value_decimals": 0}
         try:
-            result = self.reputation_registry.functions.getSummary(agent_id).call()
+            result = self.reputation_registry.functions.getSummary(
+                agent_id, [], "", ""
+            ).call()
             return {
                 "total_feedback": result[0],
                 "average_value": result[1],

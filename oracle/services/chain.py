@@ -17,10 +17,8 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 # Official ERC-8004 Reputation Registry ABI (Ava Labs mainnet)
-# Function: giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals,
-#           string tag1, string tag2, string content, string uri, bytes32 nonce)
-# Event: NewFeedback(uint256 feedbackId, uint256 agentId, address reviewer,
-#         int128 value, uint8 valueDecimals, bytes32 tag1, bytes32 tag2)
+# Verified from implementation 0x16e0fa7f7c56b9a767e34b192b51f921be31da34
+# (proxy at 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63)
 REPUTATION_REGISTRY_ABI = json.loads("""[
     {
         "inputs": [
@@ -29,9 +27,9 @@ REPUTATION_REGISTRY_ABI = json.loads("""[
             {"name": "valueDecimals", "type": "uint8"},
             {"name": "tag1", "type": "string"},
             {"name": "tag2", "type": "string"},
-            {"name": "content", "type": "string"},
-            {"name": "uri", "type": "string"},
-            {"name": "nonce", "type": "bytes32"}
+            {"name": "endpoint", "type": "string"},
+            {"name": "feedbackURI", "type": "string"},
+            {"name": "feedbackHash", "type": "bytes32"}
         ],
         "name": "giveFeedback",
         "outputs": [],
@@ -41,17 +39,15 @@ REPUTATION_REGISTRY_ABI = json.loads("""[
     {
         "inputs": [
             {"name": "agentId", "type": "uint256"},
-            {"name": "clients", "type": "address[]"},
+            {"name": "clientAddresses", "type": "address[]"},
             {"name": "tag1", "type": "string"},
             {"name": "tag2", "type": "string"}
         ],
         "name": "getSummary",
         "outputs": [
-            {"components": [
-                {"name": "totalFeedback", "type": "uint256"},
-                {"name": "averageValue", "type": "int128"},
-                {"name": "averageValueDecimals", "type": "uint8"}
-            ], "type": "tuple"}
+            {"name": "count", "type": "uint64"},
+            {"name": "summaryValue", "type": "int128"},
+            {"name": "summaryValueDecimals", "type": "uint8"}
         ],
         "stateMutability": "view",
         "type": "function"

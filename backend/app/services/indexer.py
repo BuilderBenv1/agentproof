@@ -233,18 +233,24 @@ def process_feedback_events(from_block: int, to_block: int):
             block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
 
         if blockchain.use_official:
-            # ERC-8004 NewFeedback: feedbackId, agentId, reviewer, value, valueDecimals, tag1, tag2
+            # ERC-8004 NewFeedback (verified from on-chain implementation):
+            # (uint256 indexed agentId, address indexed clientAddress,
+            #  uint64 feedbackIndex, int128 value, uint8 valueDecimals,
+            #  string indexed indexedTag1, string tag1, string tag2,
+            #  string endpoint, string feedbackURI, bytes32 feedbackHash)
             raw_value = int(event.args.value)
             rating = max(1, min(100, raw_value))
-            task_hash = event.args.tag1.hex() if hasattr(event.args, 'tag1') else ""
+            task_hash = event.args.feedbackHash.hex() if hasattr(event.args, 'feedbackHash') else ""
+            reviewer = event.args.clientAddress
         else:
             # Legacy FeedbackSubmitted: agentId, reviewer, rating, taskHash
             rating = event.args.rating
             task_hash = event.args.taskHash.hex()
+            reviewer = event.args.reviewer
 
         rows.append({
             "agent_id": event.args.agentId,
-            "reviewer_address": event.args.reviewer,
+            "reviewer_address": reviewer,
             "rating": rating,
             "task_hash": task_hash,
             "tx_hash": event.transactionHash.hex(),
