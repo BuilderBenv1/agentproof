@@ -186,15 +186,17 @@ class AgentScreener:
             logger.error(f"[screen_new_agents] Failed to insert screenings: {e}")
             return
 
-        # Batch mark agents as screened
-        update_rows = [
-            {"agent_id": r["agent_id"], "oracle_last_screened": now}
-            for r in screening_rows
-        ]
-        try:
-            db.table("agents").upsert(update_rows, on_conflict="agent_id").execute()
-        except Exception as e:
-            logger.error(f"[screen_new_agents] Failed to update oracle_last_screened: {e}")
+        # Mark each agent as screened (update only, not upsert)
+        for r in screening_rows:
+            try:
+                db.table("agents").update(
+                    {"oracle_last_screened": now}
+                ).eq("agent_id", r["agent_id"]).execute()
+            except Exception as e:
+                logger.error(
+                    f"[screen_new_agents] Failed to update oracle_last_screened "
+                    f"for agent {r['agent_id']}: {e}"
+                )
 
         logger.info(f"[screen_new_agents] Screened {len(screening_rows)} agents")
 
