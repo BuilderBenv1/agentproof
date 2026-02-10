@@ -18,8 +18,8 @@ class OracleSettings(BaseSettings):
     # Official ERC-8004 Identity Registry
     erc8004_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
 
-    # ReputationRegistry contract (for on-chain feedback submission)
-    reputation_registry: str = "0x8004B663056A597Dffe9eCcC1965A193B7388713"
+    # ReputationRegistry contract — mainnet ERC-8004 (Ava Labs official)
+    reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
 
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
