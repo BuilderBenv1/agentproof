@@ -51,13 +51,6 @@ class OracleSettings(BaseSettings):
     # Oracle's own agent token ID (set after registration to skip event scanning)
     oracle_agent_id: int = 0
 
-    # x402 Payment Protocol (Coinbase HTTP 402 micropayments)
-    x402_enabled: bool = False
-    x402_pay_to: str = ""  # Wallet address to receive USDC payments
-    x402_network: str = "eip155:84532"  # Base Sepolia testnet (prod: eip155:8453)
-    x402_facilitator_url: str = "https://x402.org/facilitator"
-    x402_price_usd: str = "$0.01"  # Price per premium API call
-
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.cors_origins.split(",") if o.strip()]

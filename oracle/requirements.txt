@@ -7,4 +7,3 @@ python-dotenv>=1.0.0
 httpx>=0.26.0
 web3>=6.15.0
 slowapi>=0.1.9
-x402[fastapi,evm]>=2.0.0
