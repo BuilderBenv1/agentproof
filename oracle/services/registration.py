@@ -52,36 +52,27 @@ def register_oracle_agent() -> int | None:
         logger.info(f"Oracle wallet {account.address} already has {balance} agent(s) registered")
         return None
 
-    # Build agent metadata as data URI
-    metadata = {
-        "name": settings.oracle_agent_name,
-        "description": settings.oracle_agent_description,
-        "version": settings.oracle_version,
-        "category": "data",
-        "type": "oracle",
-        "protocols": ["rest", "a2a", "mcp"],
-        "endpoints": {
-            "rest": f"{settings.oracle_base_url}/api/v1",
-            "a2a": f"{settings.oracle_base_url}/.well-known/agent.json",
-            "mcp": f"{settings.oracle_base_url}/mcp",
-        },
-        "skills": [
-            "evaluate_agent",
-            "find_trusted_agents",
-            "risk_check",
-            "network_stats",
-        ],
-    }
-    metadata_json = json.dumps(metadata)
-    agent_uri = f"data:application/json;base64,{__import__('base64').b64encode(metadata_json.encode()).decode()}"
+    # Use a short HTTPS URL instead of a base64 data URI.
+    # The data URI was 809 chars and needed ~745k gas for on-chain string storage.
+    # A short URL needs ~135k gas — 5x cheaper.
+    agent_uri = f"{settings.oracle_base_url}/.well-known/agent.json"
+    logger.info(f"Registering with URI: {agent_uri}")
 
     try:
-        tx = registry.functions.register(agent_uri).build_transaction(
+        call = registry.functions.register(agent_uri)
+        estimated_gas = call.estimate_gas({
+            "from": account.address,
+            "value": 0,
+        })
+        gas_limit = int(estimated_gas * 1.3)  # 30% buffer
+        logger.info(f"Estimated gas: {estimated_gas}, using limit: {gas_limit}")
+
+        tx = call.build_transaction(
             {
                 "from": account.address,
-                "value": 0,  # No bond required on this contract
+                "value": 0,
                 "nonce": w3.eth.get_transaction_count(account.address),
-                "gas": 300_000,
+                "gas": gas_limit,
                 "gasPrice": w3.eth.gas_price,
                 "chainId": 43114,
             }
