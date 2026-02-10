@@ -5,6 +5,7 @@ A standalone reputation oracle for the ERC-8004 agent ecosystem.
 Queryable via REST API, Google A2A protocol, and Anthropic MCP protocol.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -37,11 +38,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Supabase connection failed: {e}")
 
-    # Optional self-registration
+    # Optional self-registration (with timeout so a hanging RPC can't kill startup)
     if settings.self_register:
+        logger.info("Attempting self-registration on ERC-8004 IdentityRegistry...")
         try:
             from services.registration import register_oracle_agent
-            register_oracle_agent()
+            agent_id = await asyncio.wait_for(
+                asyncio.to_thread(register_oracle_agent),
+                timeout=15,
+            )
+            if agent_id is not None:
+                logger.info(f"Registration complete — oracle agent_id={agent_id}")
+            else:
+                logger.info("Registration skipped (already registered or no key)")
+        except asyncio.TimeoutError:
+            logger.error("Self-registration timed out after 15s — skipping")
         except Exception as e:
             logger.error(f"Self-registration failed: {e}")
 
