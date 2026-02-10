@@ -102,6 +102,11 @@ CREATE INDEX IF NOT EXISTS idx_agents_composite_score ON agents(composite_score 
 CREATE INDEX IF NOT EXISTS idx_agents_tier ON agents(tier);
 CREATE INDEX IF NOT EXISTS idx_reputation_events_agent_id ON reputation_events(agent_id);
 CREATE INDEX IF NOT EXISTS idx_reputation_events_created_at ON reputation_events(created_at DESC);
+
+-- Add tag columns for distinguishing feedback types (screening, liveness, etc.)
+ALTER TABLE reputation_events ADD COLUMN IF NOT EXISTS tag1 TEXT DEFAULT '';
+ALTER TABLE reputation_events ADD COLUMN IF NOT EXISTS tag2 TEXT DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_reputation_events_tag1 ON reputation_events(tag1);
 CREATE INDEX IF NOT EXISTS idx_validation_records_agent_id ON validation_records(agent_id);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_cache_category ON leaderboard_cache(category);
 CREATE INDEX IF NOT EXISTS idx_score_history_agent_date ON score_history(agent_id, snapshot_date);

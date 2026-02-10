@@ -47,14 +47,27 @@ async def get_overview():
 
     avg_score = round(sum(scores) / len(scores), 2) if scores else 0
 
-    # Total validations
-    validations_result = db.table("validation_records").select("id", count="exact").execute()
-    total_validations = validations_result.count or 0
+    # Total screenings (oracle_screenings — no ValidationRegistry deployed)
+    screenings_result = db.table("oracle_screenings").select("id", count="exact").execute()
+    total_validations = screenings_result.count or 0
+
+    # Liveness attestations (on-chain feedback with tag1="liveness")
+    try:
+        liveness_result = (
+            db.table("reputation_events")
+            .select("id", count="exact")
+            .eq("tag1", "liveness")
+            .execute()
+        )
+        total_liveness = liveness_result.count or 0
+    except Exception:
+        total_liveness = 0
 
     return {
         "total_agents": total_agents,
         "total_feedback": total_feedback,
         "total_validations": total_validations,
+        "total_liveness": total_liveness,
         "average_score": avg_score,
         "category_breakdown": category_counts,
         "tier_distribution": tier_counts,

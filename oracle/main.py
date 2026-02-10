@@ -157,7 +157,7 @@ footer{text-align:center;color:#444460;font-size:.75rem;padding:2rem 0 1rem}
 <div class="stat"><div class="value" id="s-agents">&mdash;</div><div class="label">Agents Indexed</div></div>
 <div class="stat"><div class="value" id="s-score">&mdash;</div><div class="label">Avg Trust Score</div></div>
 <div class="stat"><div class="value" id="s-feedback">&mdash;</div><div class="label">Total Feedback</div></div>
-<div class="stat"><div class="value" id="s-validations">&mdash;</div><div class="label">Validations</div></div>
+<div class="stat"><div class="value" id="s-validations">&mdash;</div><div class="label">Screenings</div></div>
 </div>
 
 <section>

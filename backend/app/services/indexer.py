@@ -242,17 +242,23 @@ def process_feedback_events(from_block: int, to_block: int):
             rating = max(1, min(100, raw_value))
             task_hash = event.args.feedbackHash.hex() if hasattr(event.args, 'feedbackHash') else ""
             reviewer = event.args.clientAddress
+            tag1 = event.args.tag1 if hasattr(event.args, 'tag1') else ""
+            tag2 = event.args.tag2 if hasattr(event.args, 'tag2') else ""
         else:
             # Legacy FeedbackSubmitted: agentId, reviewer, rating, taskHash
             rating = event.args.rating
             task_hash = event.args.taskHash.hex()
             reviewer = event.args.reviewer
+            tag1 = ""
+            tag2 = ""
 
         rows.append({
             "agent_id": event.args.agentId,
             "reviewer_address": reviewer,
             "rating": rating,
             "task_hash": task_hash,
+            "tag1": tag1,
+            "tag2": tag2,
             "tx_hash": event.transactionHash.hex(),
             "block_number": block,
             "created_at": block_ts_cache[block].isoformat(),
@@ -262,13 +268,26 @@ def process_feedback_events(from_block: int, to_block: int):
         db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
         logger.info(f"Batch upserted {len(rows)} feedback events")
     except Exception as e:
-        logger.error(f"Batch upsert failed ({len(rows)} feedback events): {e}")
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
+        err_str = str(e)
+        # If tag1/tag2 columns don't exist yet, retry without them
+        if "tag1" in err_str or "tag2" in err_str or "column" in err_str.lower():
+            logger.warning("tag1/tag2 columns may not exist — retrying without tags")
+            for row in rows:
+                row.pop("tag1", None)
+                row.pop("tag2", None)
             try:
-                db.table("reputation_events").upsert(batch, on_conflict="tx_hash").execute()
+                db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
+                logger.info(f"Batch upserted {len(rows)} feedback events (without tags)")
             except Exception as e2:
-                logger.error(f"Sub-batch upsert failed: {e2}")
+                logger.error(f"Batch upsert without tags also failed: {e2}")
+        else:
+            logger.error(f"Batch upsert failed ({len(rows)} feedback events): {e}")
+            for i in range(0, len(rows), 50):
+                batch = rows[i:i + 50]
+                try:
+                    db.table("reputation_events").upsert(batch, on_conflict="tx_hash").execute()
+                except Exception as e2:
+                    logger.error(f"Sub-batch upsert failed: {e2}")
 
     return len(events)
 

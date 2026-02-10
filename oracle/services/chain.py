@@ -130,7 +130,14 @@ class _ChainBackend:
         except Exception:
             return None
 
-    def submit_feedback(self, agent_id: int, score: int, comment: str) -> str | None:
+    def submit_feedback(
+        self,
+        agent_id: int,
+        score: int,
+        comment: str,
+        tag1: str = "trust",
+        tag2: str = "oracle-screening",
+    ) -> str | None:
         """
         Submit reputation feedback via the ERC-8004 giveFeedback function.
 
@@ -170,7 +177,7 @@ class _ChainBackend:
         score = max(1, min(100, score))
 
         # Build a unique nonce for this feedback
-        nonce_input = f"oracle-screening:{agent_id}:{int(time.time())}"
+        nonce_input = f"{tag2}:{agent_id}:{int(time.time())}"
         feedback_nonce = Web3.keccak(text=nonce_input)
 
         content = comment[:256] if comment else "oracle-screening"
@@ -180,10 +187,10 @@ class _ChainBackend:
                 agent_id,
                 score,              # value (int128)
                 0,                  # valueDecimals (whole numbers)
-                "trust",            # tag1
-                "oracle-screening", # tag2
-                content,            # screening summary
-                "",                 # uri (empty for MVP)
+                tag1,               # tag1
+                tag2,               # tag2
+                content,            # endpoint field
+                "",                 # feedbackURI (empty for MVP)
                 feedback_nonce,
             )
 
@@ -328,7 +335,14 @@ class ChainService:
             logger.error(f"Failed to look up oracle agent ID: {e}")
             return None
 
-    def submit_feedback(self, agent_id: int, score: int, comment: str) -> str | None:
+    def submit_feedback(
+        self,
+        agent_id: int,
+        score: int,
+        comment: str,
+        tag1: str = "trust",
+        tag2: str = "oracle-screening",
+    ) -> str | None:
         """
         Submit reputation feedback, auto-routing to the correct chain.
 
@@ -339,7 +353,7 @@ class ChainService:
         Returns transaction hash hex string on success, None on failure.
         """
         # Try Avalanche first
-        result = self._avax.submit_feedback(agent_id, score, comment)
+        result = self._avax.submit_feedback(agent_id, score, comment, tag1, tag2)
         if result is not None:
             return result
 
@@ -348,7 +362,7 @@ class ChainService:
             logger.info(
                 f"Agent {agent_id} not on Avalanche — trying Ethereum"
             )
-            return self._eth.submit_feedback(agent_id, score, comment)
+            return self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
 
         return None
 

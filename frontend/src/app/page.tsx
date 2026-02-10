@@ -123,9 +123,9 @@ export default function HomePage() {
             sublabel="composite"
           />
           <StatCard
-            label="Validations"
+            label="Screenings"
             value={overview?.total_validations ?? "—"}
-            sublabel="task verifications"
+            sublabel="oracle screenings"
           />
         </div>
       </section>

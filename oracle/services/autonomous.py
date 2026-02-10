@@ -31,6 +31,8 @@ RISK_LEVEL_SCORES = {
 }
 LIVENESS_BATCH_SIZE = 20
 LIVENESS_TIMEOUT = 10
+RESCREEN_STALE_DAYS = 7
+RESCREEN_BATCH_SIZE = 10
 
 
 class AgentScreener:
@@ -107,104 +109,70 @@ class AgentScreener:
                 self.last_errors[name] = str(e)
             await asyncio.sleep(interval_seconds)
 
-    # ─── Job 1: Screen New Agents (every 5 min) ──────────────────────
+    # ─── Risk Evaluation Helper ───────────────────────────────────────
 
-    def _screen_new_agents(self):
-        """Screen agents that haven't been evaluated by the oracle yet.
+    def _evaluate_agent_risk(self, db, agent: dict) -> dict:
+        """Evaluate a single agent's risk level and flags. Returns a screening row dict."""
+        agent_id = agent["agent_id"]
+        flags: list[str] = []
 
-        Prioritises Avalanche agents (agent_id <= 1621) first, then backfills
-        with Ethereum agents (agent_id > 1621) up to SCREEN_BATCH_SIZE.
-        """
-        db = get_supabase()
+        feedback_count = agent.get("total_feedback", 0) or 0
+        score = float(agent.get("composite_score", 0) or 0)
 
-        # Avalanche agents first (IDs 1-1621)
-        avax_result = (
-            db.table("agents")
-            .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
-            .is_("oracle_last_screened", "null")
-            .lte("agent_id", 1621)
-            .limit(SCREEN_BATCH_SIZE)
-            .execute()
-        )
-        agents = avax_result.data or []
+        if feedback_count == 0:
+            flags.append("UNVERIFIED")
+        elif feedback_count < 5:
+            flags.append("LOW_FEEDBACK")
 
-        # Backfill with Ethereum agents if room remains
-        remaining = SCREEN_BATCH_SIZE - len(agents)
-        if remaining > 0:
-            eth_result = (
-                db.table("agents")
-                .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
-                .is_("oracle_last_screened", "null")
-                .gt("agent_id", 1621)
-                .limit(remaining)
-                .execute()
-            )
-            agents.extend(eth_result.data or [])
+        if score < 50 and feedback_count > 0:
+            flags.append("HIGH_RISK_SCORE")
 
-        if not agents:
-            return
-        logger.info(f"[screen_new_agents] Screening {len(agents)} unscreened agents")
+        # Check feedback concentration
+        if feedback_count >= 3:
+            try:
+                fb_result = (
+                    db.table("reputation_events")
+                    .select("reviewer_address")
+                    .eq("agent_id", agent_id)
+                    .execute()
+                )
+                if fb_result.data:
+                    counts = Counter(r["reviewer_address"] for r in fb_result.data)
+                    top = counts.most_common(1)[0][1]
+                    if top / len(fb_result.data) > 0.6:
+                        flags.append("CONCENTRATED_FEEDBACK")
+            except Exception:
+                pass
 
-        now = datetime.now(timezone.utc).isoformat()
-        screening_rows = []
+        if any(f in flags for f in ["HIGH_RISK_SCORE", "CONCENTRATED_FEEDBACK"]):
+            risk_level = "high"
+        elif "LOW_FEEDBACK" in flags:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
 
-        for agent in agents:
-            agent_id = agent["agent_id"]
-            flags: list[str] = []
+        return {
+            "agent_id": agent_id,
+            "risk_level": risk_level,
+            "flags": flags,
+            "screened_at": datetime.now(timezone.utc).isoformat(),
+        }
 
-            feedback_count = agent.get("total_feedback", 0) or 0
-            score = float(agent.get("composite_score", 0) or 0)
-
-            if feedback_count == 0:
-                flags.append("UNVERIFIED")
-            elif feedback_count < 5:
-                flags.append("LOW_FEEDBACK")
-
-            if score < 50 and feedback_count > 0:
-                flags.append("HIGH_RISK_SCORE")
-
-            # Check feedback concentration
-            if feedback_count >= 3:
-                try:
-                    fb_result = (
-                        db.table("reputation_events")
-                        .select("reviewer_address")
-                        .eq("agent_id", agent_id)
-                        .execute()
-                    )
-                    if fb_result.data:
-                        counts = Counter(r["reviewer_address"] for r in fb_result.data)
-                        top = counts.most_common(1)[0][1]
-                        if top / len(fb_result.data) > 0.6:
-                            flags.append("CONCENTRATED_FEEDBACK")
-                except Exception:
-                    pass
-
-            if any(f in flags for f in ["HIGH_RISK_SCORE", "CONCENTRATED_FEEDBACK"]):
-                risk_level = "high"
-            elif "LOW_FEEDBACK" in flags:
-                risk_level = "medium"
-            else:
-                risk_level = "low"
-
-            screening_rows.append({
-                "agent_id": agent_id,
-                "risk_level": risk_level,
-                "flags": flags,
-                "screened_at": now,
-            })
-
+    def _insert_screenings_and_submit(self, db, screening_rows: list[dict], label: str):
+        """Insert screening rows to Supabase, update oracle_last_screened, submit on-chain."""
         if not screening_rows:
             return
+
+        now = screening_rows[0]["screened_at"]
 
         # Batch insert screenings
         try:
             db.table("oracle_screenings").insert(screening_rows).execute()
         except Exception as e:
-            logger.error(f"[screen_new_agents] Failed to insert screenings: {e}")
+            logger.error(f"[{label}] Failed to insert screenings: {e}")
             return
 
-        # Mark each agent as screened (update only, not upsert)
+        # Mark each agent as screened
         for r in screening_rows:
             try:
                 db.table("agents").update(
@@ -212,13 +180,13 @@ class AgentScreener:
                 ).eq("agent_id", r["agent_id"]).execute()
             except Exception as e:
                 logger.error(
-                    f"[screen_new_agents] Failed to update oracle_last_screened "
+                    f"[{label}] Failed to update oracle_last_screened "
                     f"for agent {r['agent_id']}: {e}"
                 )
 
-        logger.info(f"[screen_new_agents] Screened {len(screening_rows)} agents")
+        logger.info(f"[{label}] Screened {len(screening_rows)} agents")
 
-        # Submit on-chain feedback for screened agents (max 5 per cycle)
+        # Submit on-chain feedback (max per cycle)
         chain = get_chain_service()
         if chain is not None:
             submitted = 0
@@ -234,18 +202,103 @@ class AgentScreener:
                     if tx_hash:
                         submitted += 1
                         logger.info(
-                            f"[screen_new_agents] On-chain feedback for agent {agent_id}: "
+                            f"[{label}] On-chain feedback for agent {agent_id}: "
                             f"score={score} tx={tx_hash}"
                         )
                 except Exception as e:
                     logger.error(
-                        f"[screen_new_agents] On-chain feedback failed for agent {agent_id}: {e}"
+                        f"[{label}] On-chain feedback failed for agent {agent_id}: {e}"
                     )
-                    # Don't block the screening loop
                     continue
 
             if submitted > 0:
-                logger.info(f"[screen_new_agents] Submitted {submitted} on-chain feedbacks")
+                logger.info(f"[{label}] Submitted {submitted} on-chain feedbacks")
+
+    # ─── Job 1: Screen New Agents (every 5 min) ──────────────────────
+
+    def _screen_new_agents(self):
+        """Screen agents that haven't been evaluated by the oracle yet.
+
+        Prioritises Avalanche agents (agent_id <= 1621) first, then backfills
+        with Ethereum agents (agent_id > 1621) up to SCREEN_BATCH_SIZE.
+        Also re-screens agents whose last screening is older than RESCREEN_STALE_DAYS.
+        """
+        db = get_supabase()
+
+        # ── Phase 1: New (unscreened) agents ──────────────────────────
+        avax_result = (
+            db.table("agents")
+            .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
+            .is_("oracle_last_screened", "null")
+            .lte("agent_id", 1621)
+            .limit(SCREEN_BATCH_SIZE)
+            .execute()
+        )
+        agents = avax_result.data or []
+
+        remaining = SCREEN_BATCH_SIZE - len(agents)
+        if remaining > 0:
+            eth_result = (
+                db.table("agents")
+                .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
+                .is_("oracle_last_screened", "null")
+                .gt("agent_id", 1621)
+                .limit(remaining)
+                .execute()
+            )
+            agents.extend(eth_result.data or [])
+
+        if agents:
+            logger.info(f"[screen_new_agents] Screening {len(agents)} unscreened agents")
+            screening_rows = [self._evaluate_agent_risk(db, a) for a in agents]
+            self._insert_screenings_and_submit(db, screening_rows, "screen_new_agents")
+
+        # ── Phase 2: Re-screen stale agents (screened > N days ago) ───
+        stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=RESCREEN_STALE_DAYS)).isoformat()
+        try:
+            stale_result = (
+                db.table("agents")
+                .select("agent_id, owner_address, registered_at, composite_score, total_feedback, tier")
+                .lt("oracle_last_screened", stale_cutoff)
+                .order("oracle_last_screened")
+                .limit(RESCREEN_BATCH_SIZE)
+                .execute()
+            )
+            stale_agents = stale_result.data or []
+        except Exception as e:
+            logger.warning(f"[screen_new_agents] Stale re-screen query failed: {e}")
+            stale_agents = []
+
+        if stale_agents:
+            logger.info(f"[screen_new_agents] Re-screening {len(stale_agents)} stale agents")
+            rescreen_rows = [self._evaluate_agent_risk(db, a) for a in stale_agents]
+
+            # Detect risk level changes and create alerts
+            for row in rescreen_rows:
+                try:
+                    prev = (
+                        db.table("oracle_screenings")
+                        .select("risk_level")
+                        .eq("agent_id", row["agent_id"])
+                        .order("screened_at", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    if prev.data and prev.data[0]["risk_level"] != row["risk_level"]:
+                        db.table("oracle_alerts").insert({
+                            "agent_id": row["agent_id"],
+                            "alert_type": "risk_level_change",
+                            "severity": "medium",
+                            "details": (
+                                f"Risk changed from {prev.data[0]['risk_level']} "
+                                f"to {row['risk_level']} on re-screening"
+                            ),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }).execute()
+                except Exception:
+                    pass
+
+            self._insert_screenings_and_submit(db, rescreen_rows, "rescreen_stale")
 
     # ─── Job 2: Monitor Anomalies (every 15 min) ─────────────────────
 
@@ -386,6 +439,8 @@ class AgentScreener:
         logger.info(f"[verify_agent_liveness] Checking {len(agents_to_check)} agents")
 
         checked = 0
+        liveness_results: list[tuple[int, bool, str]] = []
+
         with httpx.Client(timeout=LIVENESS_TIMEOUT, follow_redirects=True) as client:
             for agent in agents_to_check:
                 agent_id = agent["agent_id"]
@@ -419,7 +474,35 @@ class AgentScreener:
                 except Exception:
                     pass
 
+                liveness_results.append((agent_id, reachable, uri))
+
         logger.info(f"[verify_agent_liveness] Checked {checked}/{len(agents_to_check)} agents")
+
+        # Submit on-chain liveness attestations
+        chain = get_chain_service()
+        if chain is not None and liveness_results:
+            submitted = 0
+            for agent_id, reachable, endpoint in liveness_results:
+                score = 100 if reachable else 10
+                comment = f"Liveness: reachable={reachable}, endpoint={endpoint[:200]}"
+                try:
+                    tx_hash = chain.submit_feedback(
+                        agent_id, score, comment,
+                        tag1="liveness", tag2="liveness-check",
+                    )
+                    if tx_hash:
+                        submitted += 1
+                        logger.info(
+                            f"[verify_agent_liveness] On-chain liveness for agent {agent_id}: "
+                            f"reachable={reachable} tx={tx_hash}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"[verify_agent_liveness] On-chain liveness failed for agent {agent_id}: {e}"
+                    )
+                    continue
+            if submitted > 0:
+                logger.info(f"[verify_agent_liveness] Submitted {submitted} on-chain liveness attestations")
 
     # ─── Job 4: Publish Network Report (every 6 hours) ───────────────
 

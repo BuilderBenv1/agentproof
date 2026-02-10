@@ -82,6 +82,7 @@ class NetworkStats(BaseModel):
     tier_distribution: dict[str, int] = {}
     total_feedback: int = 0
     total_validations: int = 0
+    total_liveness: int = 0
 
 
 # ─── A2A Protocol Models ──────────────────────────────────────────────
