@@ -23,7 +23,7 @@ def calculate_composite_score(
     from topping the leaderboard (prior of 50 with k=10 pseudo-observations).
     """
     prior_rating = 50.0
-    k = 10
+    k = 3
     smoothed_rating = (
         (average_rating * feedback_count + prior_rating * k) / (feedback_count + k)
     )
