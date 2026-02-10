@@ -15,10 +15,20 @@ from urllib.parse import urlparse
 import httpx
 
 from database import get_supabase
+from services.chain import get_chain_service
 
 logger = logging.getLogger(__name__)
 
 SCREEN_BATCH_SIZE = 50
+ONCHAIN_FEEDBACK_LIMIT_PER_CYCLE = 5
+
+# Map risk_level → on-chain score (1-100)
+RISK_LEVEL_SCORES = {
+    "low": 85,
+    "medium": 60,
+    "high": 30,
+    "critical": 10,
+}
 LIVENESS_BATCH_SIZE = 20
 LIVENESS_TIMEOUT = 10
 
@@ -187,6 +197,35 @@ class AgentScreener:
             logger.error(f"[screen_new_agents] Failed to update oracle_last_screened: {e}")
 
         logger.info(f"[screen_new_agents] Screened {len(screening_rows)} agents")
+
+        # Submit on-chain feedback for screened agents (max 5 per cycle)
+        chain = get_chain_service()
+        if chain is not None:
+            submitted = 0
+            for row in screening_rows[:ONCHAIN_FEEDBACK_LIMIT_PER_CYCLE]:
+                agent_id = row["agent_id"]
+                risk_level = row["risk_level"]
+                score = RISK_LEVEL_SCORES.get(risk_level, 60)
+                flags_str = ", ".join(row["flags"]) if row["flags"] else "none"
+                comment = f"Oracle screening: risk={risk_level}, flags=[{flags_str}]"
+
+                try:
+                    tx_hash = chain.submit_feedback(agent_id, score, comment)
+                    if tx_hash:
+                        submitted += 1
+                        logger.info(
+                            f"[screen_new_agents] On-chain feedback for agent {agent_id}: "
+                            f"score={score} tx={tx_hash}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"[screen_new_agents] On-chain feedback failed for agent {agent_id}: {e}"
+                    )
+                    # Don't block the screening loop
+                    continue
+
+            if submitted > 0:
+                logger.info(f"[screen_new_agents] Submitted {submitted} on-chain feedbacks")
 
     # ─── Job 2: Monitor Anomalies (every 15 min) ─────────────────────
 

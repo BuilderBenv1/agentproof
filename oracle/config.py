@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -7,12 +8,18 @@ class OracleSettings(BaseSettings):
     supabase_url: str = ""
     supabase_key: str = ""
 
-    # Avalanche (for optional self-registration)
+    # Avalanche (for optional self-registration and on-chain feedback)
     avalanche_rpc_url: str = "https://api.avax.network/ext/bc/C/rpc"
-    private_key: str = ""
+    private_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("ORACLE_PRIVATE_KEY", "PRIVATE_KEY"),
+    )
 
     # Official ERC-8004 Identity Registry
     erc8004_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+
+    # ReputationRegistry contract (for on-chain feedback submission)
+    reputation_registry: str = "0x8004B663056A597Dffe9eCcC1965A193B7388713"
 
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
