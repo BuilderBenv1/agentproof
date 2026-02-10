@@ -143,14 +143,18 @@ class _ChainBackend:
         # Check agent exists on this chain's IdentityRegistry
         owner = self.agent_exists(agent_id)
         if owner is None:
-            logger.debug(
-                f"Agent {agent_id} not on {self.chain_name} IdentityRegistry — skipping"
+            logger.info(
+                f"Agent {agent_id} not found on {self.chain_name} IdentityRegistry — skipping"
             )
             return None
 
+        logger.info(
+            f"Agent {agent_id} found on {self.chain_name} — owner={owner[:10]}..."
+        )
+
         # Don't rate our own agent
         if owner.lower() == self._account.address.lower():
-            logger.debug(
+            logger.info(
                 f"Agent {agent_id} owned by oracle wallet on {self.chain_name} — "
                 f"skipping self-feedback"
             )
@@ -161,7 +165,7 @@ class _ChainBackend:
         elapsed = now - self._last_tx_time
         if elapsed < TX_RATE_LIMIT_SECONDS:
             wait = TX_RATE_LIMIT_SECONDS - elapsed
-            logger.debug(
+            logger.info(
                 f"Rate limiting {self.chain_name} — waiting {wait:.1f}s before next tx"
             )
             time.sleep(wait)
@@ -345,7 +349,7 @@ class ChainService:
 
         # Agent not on Avalanche — try Ethereum if available
         if self._eth is not None:
-            logger.debug(
+            logger.info(
                 f"Agent {agent_id} not on Avalanche — trying Ethereum"
             )
             return self._eth.submit_feedback(agent_id, score, comment)
