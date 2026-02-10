@@ -357,7 +357,7 @@ def recalculate_agent_scores():
         while True:
             batch = (
                 db.table("agents")
-                .select("agent_id, registered_at")
+                .select("agent_id, registered_at, owner_address, agent_uri")
                 .range(offset, offset + 999)
                 .execute()
             )
@@ -463,6 +463,9 @@ def recalculate_agent_scores():
 
         update_rows.append({
             "agent_id": agent_id,
+            "owner_address": agent.get("owner_address", ""),
+            "agent_uri": agent.get("agent_uri", ""),
+            "registered_at": agent["registered_at"],
             "total_feedback": feedback_count,
             "average_rating": round(avg_rating, 2),
             "composite_score": composite,
@@ -494,7 +497,7 @@ def update_leaderboard():
         while True:
             batch = (
                 db.table("agents")
-                .select("agent_id, category, composite_score")
+                .select("agent_id, category, composite_score, owner_address, agent_uri, registered_at")
                 .order("composite_score", desc=True)
                 .range(offset, offset + 999)
                 .execute()
@@ -525,7 +528,13 @@ def update_leaderboard():
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(agent)
-        rank_updates.append({"agent_id": agent["agent_id"], "rank": global_rank})
+        rank_updates.append({
+            "agent_id": agent["agent_id"],
+            "owner_address": agent.get("owner_address", ""),
+            "agent_uri": agent.get("agent_uri", ""),
+            "registered_at": agent["registered_at"],
+            "rank": global_rank,
+        })
 
     # Batch update ranks (upsert with agent_id conflict)
     batch_size = 500
