@@ -1,10 +1,12 @@
 FROM node:20-slim AS builder
 
 WORKDIR /app
+ENV NODE_ENV=development
 COPY package.json pnpm-lock.yaml* package-lock.json* ./
 RUN npm install --legacy-peer-deps
 
 COPY . .
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM node:20-slim AS runner
