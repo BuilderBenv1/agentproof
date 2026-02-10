@@ -64,6 +64,13 @@ IDENTITY_REGISTRY_ABI = json.loads("""[
         "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ownerOf",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
     }
 ]""")
 
@@ -171,6 +178,18 @@ class ChainService:
         Returns:
             Transaction hash hex string on success, None on failure.
         """
+        # Check agent exists on the IdentityRegistry before spending gas
+        try:
+            owner = self._identity_registry.functions.ownerOf(agent_id).call()
+        except Exception:
+            logger.debug(f"Agent {agent_id} not on IdentityRegistry — skipping feedback")
+            return None
+
+        # Don't rate our own agent
+        if owner.lower() == self._account.address.lower():
+            logger.debug(f"Agent {agent_id} owned by oracle wallet — skipping self-feedback")
+            return None
+
         # Enforce rate limit
         now = time.monotonic()
         elapsed = now - self._last_tx_time
