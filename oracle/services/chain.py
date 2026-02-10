@@ -68,6 +68,13 @@ IDENTITY_REGISTRY_ABI = json.loads("""[
         "outputs": [{"internalType": "address", "name": "", "type": "address"}],
         "stateMutability": "view",
         "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "tokenURI",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
     }
 ]""")
 
@@ -365,6 +372,79 @@ class ChainService:
             return self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
 
         return None
+
+    def get_agent_onchain_data(self, agent_id: int) -> dict | None:
+        """Read agent owner + URI from the Avalanche IdentityRegistry."""
+        try:
+            owner = self._avax._identity_registry.functions.ownerOf(agent_id).call()
+            uri = self._avax._identity_registry.functions.tokenURI(agent_id).call()
+            return {"owner_address": owner, "agent_uri": uri}
+        except Exception as e:
+            logger.warning(f"Failed to read agent {agent_id} from chain: {e}")
+            return None
+
+
+def ensure_oracle_agent_indexed() -> bool:
+    """
+    Verify the oracle's own agent_id exists in Supabase.
+    If missing (indexer hasn't picked it up yet), insert it from on-chain data.
+    Returns True if the agent is confirmed present.
+    """
+    settings = get_settings()
+    if not settings.oracle_agent_id:
+        return False
+
+    agent_id = settings.oracle_agent_id
+
+    try:
+        from database import get_supabase
+        db = get_supabase()
+
+        result = (
+            db.table("agents")
+            .select("agent_id")
+            .eq("agent_id", agent_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            logger.info(f"Oracle agent #{agent_id} already in Supabase")
+            return True
+
+        # Not in DB — read from chain and insert
+        chain = get_chain_service()
+        if chain is None:
+            logger.warning("No ChainService — cannot backfill oracle agent")
+            return False
+
+        onchain = chain.get_agent_onchain_data(agent_id)
+        if onchain is None:
+            logger.error(f"Oracle agent #{agent_id} not found on-chain either")
+            return False
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        db.table("agents").insert({
+            "agent_id": agent_id,
+            "owner_address": onchain["owner_address"],
+            "agent_uri": onchain["agent_uri"],
+            "name": settings.oracle_agent_name,
+            "description": settings.oracle_agent_description,
+            "category": "data",
+            "registered_at": now,
+            "updated_at": now,
+        }).execute()
+
+        logger.info(
+            f"Oracle agent #{agent_id} backfilled into Supabase from on-chain data "
+            f"(owner={onchain['owner_address'][:10]}...)"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"ensure_oracle_agent_indexed failed: {e}")
+        return False
 
 
 # Singleton — lazily initialized, None if PRIVATE_KEY not set

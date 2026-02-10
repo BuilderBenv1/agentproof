@@ -56,6 +56,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Self-registration failed: {e}")
 
+    # Ensure oracle agent is indexed in Supabase (backfill from chain if needed)
+    if settings.oracle_agent_id:
+        try:
+            from services.chain import ensure_oracle_agent_indexed
+            indexed = await asyncio.wait_for(
+                asyncio.to_thread(ensure_oracle_agent_indexed),
+                timeout=15,
+            )
+            if indexed:
+                logger.info(f"Oracle agent #{settings.oracle_agent_id} confirmed in database")
+        except asyncio.TimeoutError:
+            logger.error("Oracle agent indexing check timed out")
+        except Exception as e:
+            logger.error(f"Oracle agent indexing check failed: {e}")
+
     # Start autonomous scheduler
     from services.autonomous import get_screener
     screener = get_screener()
