@@ -44,15 +44,11 @@ IDENTITY_REGISTRY_ABI = json.loads("""[
         "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
         "stateMutability": "view",
         "type": "function"
-    },
-    {
-        "inputs": [{"internalType": "address", "name": "owner", "type": "address"}, {"internalType": "uint256", "name": "index", "type": "uint256"}],
-        "name": "tokenOfOwnerByIndex",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
     }
 ]""")
+
+# ERC-721 Transfer(address,address,uint256) event topic for scanning mints
+TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)")
 
 # Minimum seconds between successive transactions
 TX_RATE_LIMIT_SECONDS = 30
@@ -90,23 +86,55 @@ class ChainService:
         if self._cached_oracle_agent_id is not None:
             return self._cached_oracle_agent_id
 
+        settings = get_settings()
+
+        # Fast path: use explicit config if set
+        if settings.oracle_agent_id:
+            self._cached_oracle_agent_id = settings.oracle_agent_id
+            logger.info(f"Oracle agent ID from config: {settings.oracle_agent_id}")
+            return settings.oracle_agent_id
+
         try:
             balance = self._identity_registry.functions.balanceOf(
                 self._account.address
             ).call()
 
             if balance == 0:
-                logger.warning("Oracle wallet has no registered agent — cannot submit on-chain feedback")
+                logger.warning("Oracle wallet has no registered agent")
                 return None
 
-            # Get the first token owned by the oracle wallet
-            agent_id = self._identity_registry.functions.tokenOfOwnerByIndex(
-                self._account.address, 0
-            ).call()
+            # No tokenOfOwnerByIndex on this contract — scan Transfer events
+            # for mints (from=0x0) to the oracle wallet
+            registry_addr = Web3.to_checksum_address(settings.erc8004_identity_registry)
+            wallet_topic = "0x" + self._account.address.lower()[2:].zfill(64)
+            zero_topic = "0x" + "0" * 64
 
-            self._cached_oracle_agent_id = agent_id
-            logger.info(f"Oracle agent ID resolved: {agent_id}")
-            return agent_id
+            latest = self._w3.eth.block_number
+            # Scan last 500k blocks (~1 week on C-Chain) in chunks
+            from_block = max(0, latest - 500_000)
+            chunk = 100_000
+
+            for start in range(from_block, latest + 1, chunk):
+                end = min(start + chunk - 1, latest)
+                logs = self._w3.eth.get_logs({
+                    "address": registry_addr,
+                    "fromBlock": start,
+                    "toBlock": end,
+                    "topics": [
+                        TRANSFER_EVENT_TOPIC,
+                        zero_topic,      # from = address(0) (mint)
+                        wallet_topic,    # to = oracle wallet
+                    ],
+                })
+                if logs:
+                    # Use the most recent mint
+                    agent_id = int(logs[-1].topics[3].hex(), 16)
+                    self._cached_oracle_agent_id = agent_id
+                    logger.info(f"Oracle agent ID resolved from Transfer events: {agent_id}")
+                    return agent_id
+
+            logger.warning("balanceOf > 0 but no Transfer mint events found for oracle wallet")
+            return None
         except Exception as e:
             logger.error(f"Failed to look up oracle agent ID: {e}")
             return None

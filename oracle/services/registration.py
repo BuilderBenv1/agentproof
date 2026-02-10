@@ -12,9 +12,12 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 ERC8004_REGISTER_ABI = json.loads("""[
-    {"inputs":[{"name":"agentURI","type":"string"}],"name":"registerAgent","outputs":[{"type":"uint256"}],"stateMutability":"payable","type":"function"},
+    {"inputs":[{"name":"agentURI","type":"string"}],"name":"register","outputs":[{"type":"uint256"}],"stateMutability":"payable","type":"function"},
     {"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"}
 ]""")
+
+# ERC-721 Transfer event topic for parsing minted token ID from receipt
+TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex()
 
 
 def register_oracle_agent() -> int | None:
@@ -73,10 +76,10 @@ def register_oracle_agent() -> int | None:
     agent_uri = f"data:application/json;base64,{__import__('base64').b64encode(metadata_json.encode()).decode()}"
 
     try:
-        tx = registry.functions.registerAgent(agent_uri).build_transaction(
+        tx = registry.functions.register(agent_uri).build_transaction(
             {
                 "from": account.address,
-                "value": w3.to_wei(0.1, "ether"),  # Registration bond
+                "value": 0,  # No bond required on this contract
                 "nonce": w3.eth.get_transaction_count(account.address),
                 "gas": 300_000,
                 "gasPrice": w3.eth.gas_price,
@@ -88,10 +91,16 @@ def register_oracle_agent() -> int | None:
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
 
         if receipt.status == 1:
+            # Parse token ID from the ERC-721 Transfer event in the receipt
+            agent_id = None
+            for log in receipt.logs:
+                if len(log.topics) >= 4 and log.topics[0].hex() == TRANSFER_EVENT_TOPIC:
+                    agent_id = int(log.topics[3].hex(), 16)
+                    break
             logger.info(
-                f"Oracle agent registered successfully! tx={tx_hash.hex()}"
+                f"Oracle agent registered! agent_id={agent_id} tx={tx_hash.hex()}"
             )
-            return receipt.status
+            return agent_id
         else:
             logger.error(f"Registration tx reverted: {tx_hash.hex()}")
             return None

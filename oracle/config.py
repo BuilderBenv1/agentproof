@@ -40,6 +40,9 @@ class OracleSettings(BaseSettings):
     # Self-registration (opt-in)
     self_register: bool = False
 
+    # Oracle's own agent token ID (set after registration to skip event scanning)
+    oracle_agent_id: int = 0
+
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
