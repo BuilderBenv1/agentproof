@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Shield, ArrowRight, Activity, Users, TrendingUp,
   Zap, Lock, Eye, BarChart3, GitBranch, ExternalLink,
+  Globe, Cpu, CreditCard,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import AgentCard from "@/components/agents/AgentCard";
@@ -13,12 +14,15 @@ import SearchBar from "@/components/ui/SearchBar";
 import { CATEGORIES } from "@/lib/constants";
 import { apiFetch } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { formatNumber, getTierColor } from "@/lib/utils";
 
 interface OverviewData {
   total_agents: number;
   total_feedback: number;
   total_validations: number;
   average_score: number;
+  protocol_breakdown?: Record<string, number>;
+  tier_distribution?: Record<string, number>;
 }
 
 interface AgentData {
@@ -58,6 +62,9 @@ export default function HomePage() {
     }
     fetchData();
   }, []);
+
+  const protocols = overview?.protocol_breakdown || {};
+  const tierDist = overview?.tier_distribution || {};
 
   return (
     <div className="space-y-16">
@@ -109,26 +116,110 @@ export default function HomePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             label="Total Agents"
-            value={overview?.total_agents ?? "—"}
-            sublabel="registered"
+            value={overview?.total_agents ? formatNumber(overview.total_agents) : "\u2014"}
+            sublabel="registered on-chain"
           />
           <StatCard
-            label="Total Feedback"
-            value={overview?.total_feedback ?? "—"}
+            label="Evaluations"
+            value={overview?.total_feedback ? formatNumber(overview.total_feedback) : "\u2014"}
             sublabel="on-chain reviews"
           />
           <StatCard
             label="Avg Score"
-            value={overview?.average_score ? overview.average_score.toFixed(1) : "—"}
-            sublabel="composite"
+            value={overview?.average_score ? overview.average_score.toFixed(1) : "\u2014"}
+            sublabel="composite score"
           />
           <StatCard
             label="Screenings"
-            value={overview?.total_validations ?? "—"}
-            sublabel="oracle screenings"
+            value={overview?.total_validations ? formatNumber(overview.total_validations) : "\u2014"}
+            sublabel="oracle evaluations"
           />
         </div>
       </section>
+
+      {/* Protocol Breakdown */}
+      {(protocols.mcp || protocols.a2a || protocols.x402 || (overview?.total_agents || 0) > 0) ? (
+        <section>
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-emerald-400" />
+            Protocol Coverage
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gray-900/50 border border-cyan-500/20 rounded-xl p-5 hover:border-cyan-500/40 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                </div>
+                <span className="text-xs font-mono text-gray-400 uppercase">MCP</span>
+              </div>
+              <p className="text-2xl font-bold font-mono text-white">{formatNumber(protocols.mcp || 0)}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">Model Context Protocol</p>
+            </div>
+            <div className="bg-gray-900/50 border border-purple-500/20 rounded-xl p-5 hover:border-purple-500/40 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <Users className="w-4 h-4 text-purple-400" />
+                </div>
+                <span className="text-xs font-mono text-gray-400 uppercase">A2A</span>
+              </div>
+              <p className="text-2xl font-bold font-mono text-white">{formatNumber(protocols.a2a || 0)}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">Agent-to-Agent</p>
+            </div>
+            <div className="bg-gray-900/50 border border-emerald-500/20 rounded-xl p-5 hover:border-emerald-500/40 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <CreditCard className="w-4 h-4 text-emerald-400" />
+                </div>
+                <span className="text-xs font-mono text-gray-400 uppercase">x402</span>
+              </div>
+              <p className="text-2xl font-bold font-mono text-white">{formatNumber(protocols.x402 || 0)}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">Payment Protocol</p>
+            </div>
+            <div className="bg-gray-900/50 border border-gray-700/50 rounded-xl p-5 hover:border-gray-600 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-gray-400" />
+                </div>
+                <span className="text-xs font-mono text-gray-400 uppercase">General</span>
+              </div>
+              <p className="text-2xl font-bold font-mono text-white">{formatNumber(protocols.general || 0)}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">Other Protocols</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Tier Overview */}
+      {overview && Object.keys(tierDist).length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-emerald-400" />
+            Reputation Tiers
+          </h2>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            {(["diamond", "platinum", "gold", "silver", "bronze", "unranked"] as const).map((tier) => {
+              const count = tierDist[tier] || 0;
+              const color = getTierColor(tier);
+              return (
+                <Link
+                  key={tier}
+                  href={`/leaderboard?tier=${tier}`}
+                  className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center hover:border-gray-700 transition-all group"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full mx-auto mb-2"
+                    style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}40` }}
+                  />
+                  <p className="text-lg font-bold font-mono text-white">{formatNumber(count)}</p>
+                  <p className="text-xs font-mono capitalize mt-0.5" style={{ color }}>
+                    {tier}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* How It Works */}
       <section>
@@ -208,10 +299,10 @@ export default function HomePage() {
           {[
             { icon: <Eye className="w-5 h-5" />, title: "Fully Transparent", desc: "Every rating, validation, and score is stored on-chain. No hidden algorithms. Anyone can audit the data." },
             { icon: <Lock className="w-5 h-5" />, title: "Sybil Resistant", desc: "0.1 AVAX registration bond, self-rating prevention, and 24h cooldowns protect score integrity." },
-            { icon: <BarChart3 className="w-5 h-5" />, title: "Composite Scoring", desc: "Bayesian-smoothed scores blend 5 signals: avg rating, volume, consistency, validation rate, and age." },
+            { icon: <BarChart3 className="w-5 h-5" />, title: "Composite Scoring", desc: "Bayesian-smoothed scores blend 6 signals: rating, volume, consistency, validation, age, and uptime." },
             { icon: <Zap className="w-5 h-5" />, title: "Built on Avalanche", desc: "Fast finality, low gas costs on C-Chain. Sub-second confirmations for real-time reputation updates." },
             { icon: <GitBranch className="w-5 h-5" />, title: "Open Standard", desc: "Built on ERC-8004 agent reputation pattern. Interoperable with any protocol that reads on-chain scores." },
-            { icon: <Activity className="w-5 h-5" />, title: "Task Validation", desc: "Third-party validators verify agent task outputs. Validation success rate feeds into composite score." },
+            { icon: <Activity className="w-5 h-5" />, title: "Oracle Evaluation", desc: "Autonomous oracle continuously screens agents for metadata quality, liveness, identity, and risk factors." },
           ].map((feature) => (
             <div key={feature.title} className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-emerald-500/20 transition-colors">
               <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-3">

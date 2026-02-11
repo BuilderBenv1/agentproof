@@ -7,23 +7,64 @@ import ReputationHistory from "@/components/reputation/ReputationHistory";
 import FeedbackForm from "@/components/reputation/FeedbackForm";
 import { truncateAddress, formatDate, getTierColor } from "@/lib/utils";
 import { useFeedback, useScoreHistory } from "@/hooks/useReputation";
-import { ExternalLink, Copy, Calendar, Shield } from "lucide-react";
+import {
+  ExternalLink, Copy, Calendar, Shield, Star, BarChart3,
+  CheckCircle, MessageSquare, Activity,
+} from "lucide-react";
 import type { Agent } from "@/hooks/useAgents";
 
 interface AgentProfileProps {
   agent: Agent;
 }
 
+function ScoreBreakdownBar({
+  label,
+  value,
+  maxValue,
+  color,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  maxValue: number;
+  color: string;
+  icon: React.ElementType;
+}) {
+  const pct = Math.min(100, (value / maxValue) * 100);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-mono text-gray-400">
+          <Icon className="w-3 h-3" style={{ color }} />
+          {label}
+        </span>
+        <span className="text-xs font-mono font-bold text-white">{value.toFixed(1)}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-gray-800">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{
+            width: `${pct}%`,
+            backgroundColor: color,
+            boxShadow: `0 0 4px ${color}30`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AgentProfile({ agent }: AgentProfileProps) {
   const { feedback, loading: feedbackLoading } = useFeedback(agent.agent_id);
   const { history } = useScoreHistory(agent.agent_id);
+  const tierColor = getTierColor(agent.tier);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <div className="flex flex-col md:flex-row items-start gap-6">
-          <div className="w-20 h-20 rounded-xl bg-gray-800 flex items-center justify-center text-3xl font-bold font-mono text-emerald-400 flex-shrink-0">
+          <div className="w-20 h-20 rounded-xl bg-gray-800 flex items-center justify-center text-3xl font-bold font-mono text-emerald-400 flex-shrink-0 overflow-hidden">
             {agent.image_url ? (
               <img src={agent.image_url} alt={agent.name || "Agent"} className="w-full h-full rounded-xl object-cover" />
             ) : (
@@ -32,16 +73,17 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
           </div>
 
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
               <h1 className="text-2xl font-bold text-white">
                 {agent.name || `Agent #${agent.agent_id}`}
               </h1>
               <CategoryBadge category={agent.category} />
               <span
-                className="px-2 py-0.5 rounded text-xs font-mono font-bold uppercase"
+                className="px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
                 style={{
-                  color: getTierColor(agent.tier),
-                  backgroundColor: `${getTierColor(agent.tier)}15`,
+                  color: tierColor,
+                  backgroundColor: `${tierColor}12`,
+                  border: `1px solid ${tierColor}25`,
                 }}
               >
                 {agent.tier}
@@ -67,6 +109,10 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 <Calendar className="w-3 h-3" />
                 Registered: {formatDate(agent.registered_at)}
               </span>
+              <span className="flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" />
+                {agent.total_feedback} reviews
+              </span>
               {agent.agent_uri && (
                 <a
                   href={agent.agent_uri}
@@ -81,28 +127,80 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
           </div>
 
           <div className="flex-shrink-0">
-            <ScoreGauge score={agent.composite_score} tier={agent.tier} size="lg" />
+            <ScoreGauge score={agent.composite_score} tier={agent.tier} size="lg" showTier />
           </div>
         </div>
       </div>
 
       {/* Score Breakdown */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase mb-1">Avg Rating</p>
-          <p className="text-xl font-bold font-mono text-white">{agent.average_rating.toFixed(1)}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Star className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-xs font-mono text-gray-500 uppercase">Avg Rating</span>
+            </div>
+            <p className="text-xl font-bold font-mono text-white">{agent.average_rating.toFixed(1)}</p>
+            <p className="text-xs text-gray-600 font-mono">out of 100</p>
+          </div>
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-xs font-mono text-gray-500 uppercase">Reviews</span>
+            </div>
+            <p className="text-xl font-bold font-mono text-white">{agent.total_feedback}</p>
+            <p className="text-xs text-gray-600 font-mono">total feedback</p>
+          </div>
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-mono text-gray-500 uppercase">Validation</span>
+            </div>
+            <p className="text-xl font-bold font-mono text-white">{agent.validation_success_rate.toFixed(0)}%</p>
+            <p className="text-xs text-gray-600 font-mono">success rate</p>
+          </div>
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Activity className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-xs font-mono text-gray-500 uppercase">Rank</span>
+            </div>
+            <p className="text-xl font-bold font-mono text-white">#{agent.rank || "\u2014"}</p>
+            <p className="text-xs text-gray-600 font-mono">global position</p>
+          </div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase mb-1">Feedback</p>
-          <p className="text-xl font-bold font-mono text-white">{agent.total_feedback}</p>
-        </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase mb-1">Validation Rate</p>
-          <p className="text-xl font-bold font-mono text-white">{agent.validation_success_rate.toFixed(0)}%</p>
-        </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase mb-1">Global Rank</p>
-          <p className="text-xl font-bold font-mono text-white">#{agent.rank || "—"}</p>
+
+        {/* Score Component Bars */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+          <h3 className="text-xs font-mono text-gray-500 uppercase mb-3">Score Breakdown</h3>
+          <ScoreBreakdownBar
+            label="Rating Score"
+            value={agent.average_rating}
+            maxValue={100}
+            color="#facc15"
+            icon={Star}
+          />
+          <ScoreBreakdownBar
+            label="Feedback Volume"
+            value={Math.min(100, agent.total_feedback > 0 ? Math.log10(agent.total_feedback + 1) / Math.log10(101) * 100 : 0)}
+            maxValue={100}
+            color="#22d3ee"
+            icon={BarChart3}
+          />
+          <ScoreBreakdownBar
+            label="Validation Rate"
+            value={agent.validation_success_rate}
+            maxValue={100}
+            color="#34d399"
+            icon={CheckCircle}
+          />
+          <ScoreBreakdownBar
+            label="Composite Score"
+            value={agent.composite_score}
+            maxValue={100}
+            color={tierColor}
+            icon={Activity}
+          />
         </div>
       </div>
 
@@ -115,13 +213,19 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
 
       {/* Score History Chart */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Score History</h2>
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-emerald-400" />
+          Score History
+        </h2>
         <ReputationChart data={history} />
       </div>
 
       {/* Recent Feedback */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Recent Feedback</h2>
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-cyan-400" />
+          Recent Feedback
+        </h2>
         <ReputationHistory feedback={feedback} loading={feedbackLoading} />
       </div>
     </div>

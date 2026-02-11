@@ -19,8 +19,8 @@ from services.chain import get_chain_service
 
 logger = logging.getLogger(__name__)
 
-SCREEN_BATCH_SIZE = 50
-ONCHAIN_FEEDBACK_LIMIT_PER_CYCLE = 5
+SCREEN_BATCH_SIZE = 200
+ONCHAIN_FEEDBACK_LIMIT_PER_CYCLE = 20
 
 # Map risk_level → on-chain score (1-100)
 RISK_LEVEL_SCORES = {
@@ -31,8 +31,8 @@ RISK_LEVEL_SCORES = {
 }
 LIVENESS_BATCH_SIZE = 20
 LIVENESS_TIMEOUT = 10
-RESCREEN_STALE_DAYS = 7
-RESCREEN_BATCH_SIZE = 10
+RESCREEN_STALE_DAYS = 3
+RESCREEN_BATCH_SIZE = 50
 
 
 class AgentScreener:

@@ -7,11 +7,12 @@ router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 @router.get("")
 async def get_leaderboard(
     category: str | None = None,
+    tier: str | None = None,
     time_range: str = Query("all", pattern="^(all|30d|7d)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ):
-    """Get the global leaderboard, filterable by category and time range."""
+    """Get the global leaderboard, filterable by category, tier, and time range."""
     db = get_supabase()
 
     query = db.table("agents").select(
@@ -22,6 +23,9 @@ async def get_leaderboard(
 
     if category:
         query = query.eq("category", category)
+
+    if tier:
+        query = query.eq("tier", tier)
 
     # For time range, filter by registration date (agents registered within range)
     if time_range == "7d":

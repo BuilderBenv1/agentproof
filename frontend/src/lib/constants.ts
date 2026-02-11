@@ -23,11 +23,11 @@ export const PROTOCOL_FEE = BigInt("50000000000000000"); // 0.05 ether in wei
 export const TREASURY_ADDRESS = "0x16f057E27189735B424dBA8559e9670103677F35" as const;
 
 export const TIERS = {
-  diamond: { label: "Diamond", color: "#B9F2FF", minScore: 90, minFeedback: 50 },
-  platinum: { label: "Platinum", color: "#E5E4E2", minScore: 80, minFeedback: 30 },
-  gold: { label: "Gold", color: "#FFD700", minScore: 70, minFeedback: 20 },
-  silver: { label: "Silver", color: "#C0C0C0", minScore: 60, minFeedback: 10 },
-  bronze: { label: "Bronze", color: "#CD7F32", minScore: 50, minFeedback: 5 },
+  diamond: { label: "Diamond", color: "#B9F2FF", minScore: 85, minFeedback: 20 },
+  platinum: { label: "Platinum", color: "#E5E4E2", minScore: 72, minFeedback: 10 },
+  gold: { label: "Gold", color: "#FFD700", minScore: 58, minFeedback: 5 },
+  silver: { label: "Silver", color: "#C0C0C0", minScore: 42, minFeedback: 3 },
+  bronze: { label: "Bronze", color: "#CD7F32", minScore: 30, minFeedback: 1 },
   unranked: { label: "Unranked", color: "#666666", minScore: 0, minFeedback: 0 },
 } as const;
 

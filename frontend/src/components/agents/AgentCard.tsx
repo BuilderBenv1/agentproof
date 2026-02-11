@@ -27,6 +27,8 @@ export default function AgentCard({
   rank,
   imageUrl,
 }: AgentCardProps) {
+  const tierColor = getTierColor(tier);
+
   return (
     <Link href={`/agents/${agentId}`}>
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200 cursor-pointer group">
@@ -60,12 +62,17 @@ export default function AgentCard({
               {formatNumber(feedbackCount)}
             </div>
             <span
-              className="inline-block px-2 py-0.5 rounded text-xs font-mono font-semibold uppercase"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-bold uppercase"
               style={{
-                color: getTierColor(tier),
-                backgroundColor: `${getTierColor(tier)}15`,
+                color: tierColor,
+                backgroundColor: `${tierColor}12`,
+                border: `1px solid ${tierColor}25`,
               }}
             >
+              <div
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: tierColor }}
+              />
               {tier}
             </span>
           </div>

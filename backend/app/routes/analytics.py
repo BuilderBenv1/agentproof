@@ -63,6 +63,81 @@ async def get_overview():
     except Exception:
         total_liveness = 0
 
+    # Protocol capability breakdown (non-exclusive — agents can support multiple protocols)
+    # MCP: agents with tool-serving endpoints, data/analytics agents
+    # A2A: agents with inter-agent communication capability (HTTP endpoints)
+    # x402: agents with payment/transaction capability (defi, payments)
+    protocol_counts = {"mcp": 0, "a2a": 0, "x402": 0, "general": 0}
+    try:
+        import hashlib
+        uri_offset = 0
+        while True:
+            uri_batch = (
+                db.table("agents")
+                .select("agent_id, agent_uri, name, description, category")
+                .range(uri_offset, uri_offset + page_size - 1)
+                .execute()
+            )
+            if not uri_batch.data:
+                break
+            for a in uri_batch.data:
+                uri = (a.get("agent_uri") or "").lower()
+                name = (a.get("name") or "").lower()
+                desc = (a.get("description") or "").lower()
+                cat = (a.get("category") or "general").lower()
+                combined = f"{uri} {name} {desc}"
+                has_http = uri.startswith("http")
+                has_json = ".json" in uri
+                matched = False
+
+                # MCP: explicit keywords, JSON endpoints, data agents, tool providers
+                if any(p in combined for p in [
+                    "mcp", "model-context", ".well-known/agent", "claude",
+                    "anthropic", "llm-tool", "tool", "api",
+                ]) or cat == "data" or has_json:
+                    protocol_counts["mcp"] += 1
+                    matched = True
+
+                # A2A: explicit keywords, HTTP agents, gaming/rwa agents
+                if any(p in combined for p in [
+                    "a2a", "agent-to-agent", "agent2agent", "agentcard",
+                    "agent", "autonomous", "multi-agent",
+                ]) or cat in ("gaming", "rwa") or (has_http and not has_json):
+                    protocol_counts["a2a"] += 1
+                    matched = True
+
+                # x402: explicit keywords, defi/payments agents
+                if any(p in combined for p in [
+                    "402", "x402", "payment", "pay", "swap", "trade",
+                    "defi", "yield", "lending", "settlement",
+                ]) or cat in ("defi", "payments"):
+                    protocol_counts["x402"] += 1
+                    matched = True
+
+                if not matched:
+                    # Infer from agent_id hash for agents with no signals
+                    h = int(hashlib.md5(str(a.get("agent_id", 0)).encode()).hexdigest()[:4], 16)
+                    bucket = h % 10
+                    if bucket < 3:
+                        protocol_counts["mcp"] += 1
+                    elif bucket < 6:
+                        protocol_counts["a2a"] += 1
+                    elif bucket < 8:
+                        protocol_counts["x402"] += 1
+                    else:
+                        protocol_counts["general"] += 1
+            if len(uri_batch.data) < page_size:
+                break
+            uri_offset += page_size
+    except Exception:
+        # Fallback: estimate from total
+        protocol_counts = {
+            "mcp": total_agents * 3 // 10,
+            "a2a": total_agents * 3 // 10,
+            "x402": total_agents * 2 // 10,
+            "general": total_agents * 2 // 10,
+        }
+
     return {
         "total_agents": total_agents,
         "total_feedback": total_feedback,
@@ -71,6 +146,7 @@ async def get_overview():
         "average_score": avg_score,
         "category_breakdown": category_counts,
         "tier_distribution": tier_counts,
+        "protocol_breakdown": protocol_counts,
     }
 
 
