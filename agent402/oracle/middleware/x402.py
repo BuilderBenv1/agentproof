@@ -29,7 +29,6 @@ class PaymentLoggingMiddleware(BaseHTTPMiddleware):
     PREMIUM_PATH_PATTERNS = [
         re.compile(r"^/api/v1/trust/\d+(/risk)?$"),
         re.compile(r"^/api/v1/agents/trusted$"),
-        re.compile(r"^/api/v1/network/stats$"),
     ]
 
     async def dispatch(self, request: Request, call_next):
@@ -96,10 +95,6 @@ def setup_x402_middleware(app: FastAPI, settings: Settings) -> None:
         "GET /api/v1/agents/trusted": RouteConfig(
             accepts=[_option(settings.x402_price_search)],
             description="Search for trusted agents by category, score, tier",
-        ),
-        "GET /api/v1/network/stats": RouteConfig(
-            accepts=[_option(settings.x402_price_stats)],
-            description="Network-wide trust statistics and tier distribution",
         ),
     }
 

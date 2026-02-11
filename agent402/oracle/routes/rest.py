@@ -64,12 +64,33 @@ async def find_trusted_agents(
 
 @router.get("/network/stats", response_model=NetworkStats)
 async def network_stats():
-    """Network-wide statistics. [x402: $0.005]"""
+    """Network-wide statistics (free)."""
     try:
         result = await asyncio.to_thread(get_trust_service().network_stats)
         return result
     except Exception as e:
         logger.error(f"network_stats failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal error")
+
+
+@router.get("/agents/top", response_model=list[TrustedAgent])
+async def top_agents(
+    category: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Top agents by score — free, for website leaderboard."""
+    try:
+        result = await asyncio.to_thread(
+            get_trust_service().find_trusted_agents,
+            category=category,
+            min_score=0,
+            min_feedback=0,
+            tier=None,
+            limit=limit,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"top_agents failed: {e}")
         raise HTTPException(status_code=500, detail="Internal error")
 
 

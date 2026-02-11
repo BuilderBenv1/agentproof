@@ -217,12 +217,13 @@ async def pricing():
             "GET /api/v1/trust/{agent_id}": {"price": settings.x402_price_eval, "description": "Trust evaluation"},
             "GET /api/v1/trust/{agent_id}/risk": {"price": settings.x402_price_eval, "description": "Risk assessment"},
             "GET /api/v1/agents/trusted": {"price": settings.x402_price_search, "description": "Search trusted agents"},
-            "GET /api/v1/network/stats": {"price": settings.x402_price_stats, "description": "Network statistics"},
         },
         "free_endpoints": [
             "GET /api/v1/health",
             "GET /api/v1/pricing",
             "GET /api/v1/payments/stats",
+            "GET /api/v1/network/stats",
+            "GET /api/v1/agents/top",
             "GET /.well-known/agent.json",
         ],
     }

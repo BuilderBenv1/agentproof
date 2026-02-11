@@ -28,7 +28,7 @@ export default function LeaderboardPage() {
     const params = new URLSearchParams({ limit: "50" });
     if (category) params.set("category", category);
 
-    fetch(`${API}/api/v1/agents/trusted?${params}`)
+    fetch(`${API}/api/v1/agents/top?${params}`)
       .then((r) => {
         if (r.status === 402) {
           setError("Paid endpoint — use x402 SDK");
