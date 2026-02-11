@@ -354,8 +354,8 @@ def generate_evaluations(agent: dict) -> list[dict]:
 
 def run_bulk_evaluation():
     """Main entry point: evaluate all agents and insert oracle reputation events."""
-    supabase_url = os.environ.get("SUPABASE_URL", "https://oztrefgbigvtzncodcys.supabase.co")
-    supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dHJlZmdiaWd2dHpuY29kY3lzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDQyMzEzMSwiZXhwIjoyMDg1OTk5MTMxfQ.6d31ozweP62Yy1M-tld-At8Hgj6Nauz-rfRRCEqyGKM")
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY", "")
 
     if not supabase_url or not supabase_key:
         logger.error("SUPABASE_URL and SUPABASE_KEY must be set")
