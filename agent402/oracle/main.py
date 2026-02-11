@@ -48,17 +48,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
 settings = get_settings()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# x402 payment middleware
+# x402 payment middleware (added first = inner)
 try:
     from middleware.x402 import setup_x402_middleware
     setup_x402_middleware(app, settings)
@@ -69,6 +61,15 @@ except ImportError:
     )
 except Exception as e:
     logger.error(f"x402 middleware setup failed: {e}")
+
+# CORS (added last = outermost, so 402 responses also get CORS headers)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include routers
 from routes import rest, a2a

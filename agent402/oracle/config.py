@@ -34,13 +34,16 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8402
-    base_url: str = "https://agent402.sh"
+    base_url: str = "https://agent402.io"
     cors_origins: str = "http://localhost:3000"
 
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
         for prod in [
+            "https://agent402.io",
+            "https://www.agent402.io",
+            "https://api.agent402.io",
             "https://agent402.sh",
             "https://www.agent402.sh",
             "https://api.agent402.sh",
