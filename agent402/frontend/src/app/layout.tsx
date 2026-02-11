@@ -75,7 +75,7 @@ function Footer() {
           <a href="/api/v1/pricing" className="hover:text-muted transition-colors">
             API Pricing
           </a>
-          <a href="https://agentproof.xyz" className="hover:text-muted transition-colors">
+          <a href="https://agentproof.sh" className="hover:text-muted transition-colors">
             AgentProof
           </a>
         </div>
