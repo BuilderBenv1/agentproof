@@ -61,6 +61,25 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("No contract addresses configured — indexer disabled")
 
+    # Pre-warm analytics overview cache in background
+    try:
+        import threading
+        from app.routes.analytics import _compute_overview, _OVERVIEW_TTL
+        import app.routes.analytics as _analytics_mod
+
+        def _warm_cache():
+            try:
+                result = _compute_overview()
+                _analytics_mod._overview_cache = result
+                _analytics_mod._overview_cache_ts = __import__("time").time()
+                logger.info("Analytics overview cache warmed")
+            except Exception as e:
+                logger.warning(f"Cache warm-up failed: {e}")
+
+        threading.Thread(target=_warm_cache, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"Could not start cache warm-up: {e}")
+
     yield
 
     logger.info("AgentProof API shutting down...")
