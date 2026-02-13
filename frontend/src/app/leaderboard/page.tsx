@@ -33,6 +33,7 @@ const TIER_ORDER = ["diamond", "platinum", "gold", "silver", "bronze", "unranked
 
 export default function LeaderboardPage() {
   const [category, setCategory] = useState("");
+  const [chain, setChain] = useState("");
   const [timeRange, setTimeRange] = useState("all");
   const [tierFilter, setTierFilter] = useState("");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -57,6 +58,7 @@ export default function LeaderboardPage() {
         }>("/leaderboard", {
           params: {
             category: category || undefined,
+            chain: chain || undefined,
             time_range: timeRange,
             tier: tierFilter || undefined,
             page,
@@ -72,7 +74,7 @@ export default function LeaderboardPage() {
       }
     }
     fetchLeaderboard();
-  }, [category, timeRange, tierFilter, page]);
+  }, [category, chain, timeRange, tierFilter, page]);
 
   const tierDist = overview?.tier_distribution || {};
   const totalAgents = overview?.total_agents || 0;
@@ -193,6 +195,11 @@ export default function LeaderboardPage() {
         selectedTimeRange={timeRange}
         onTimeRangeChange={(r) => {
           setTimeRange(r);
+          setPage(1);
+        }}
+        selectedChain={chain}
+        onChainChange={(c) => {
+          setChain(c);
           setPage(1);
         }}
       />

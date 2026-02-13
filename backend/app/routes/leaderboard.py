@@ -7,22 +7,26 @@ router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 @router.get("")
 async def get_leaderboard(
     category: str | None = None,
+    chain: str | None = None,
     tier: str | None = None,
     time_range: str = Query("all", pattern="^(all|30d|7d)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ):
-    """Get the global leaderboard, filterable by category, tier, and time range."""
+    """Get the global leaderboard, filterable by category, chain, tier, and time range."""
     db = get_supabase()
 
     query = db.table("agents").select(
         "agent_id, name, category, composite_score, average_rating, total_feedback, "
-        "validation_success_rate, tier, rank, image_url, registered_at",
+        "validation_success_rate, tier, rank, image_url, registered_at, source_chain",
         count="exact",
     )
 
     if category:
         query = query.eq("category", category)
+
+    if chain:
+        query = query.eq("source_chain", chain)
 
     if tier:
         query = query.eq("tier", tier)

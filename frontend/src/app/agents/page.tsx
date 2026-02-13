@@ -14,12 +14,14 @@ export default function AgentsPage() {
   const initialSearch = searchParams.get("search") || "";
 
   const [category, setCategory] = useState(initialCategory);
+  const [chain, setChain] = useState("");
   const [search, setSearch] = useState(initialSearch);
   const [sortBy, setSortBy] = useState("composite_score");
   const [page, setPage] = useState(1);
 
   const { data, loading, error } = useAgents({
     category: category || undefined,
+    chain: chain || undefined,
     search: search || undefined,
     sortBy,
     order: "desc",
@@ -58,6 +60,11 @@ export default function AgentsPage() {
           }}
           selectedTimeRange="all"
           onTimeRangeChange={() => {}}
+          selectedChain={chain}
+          onChainChange={(c) => {
+            setChain(c);
+            setPage(1);
+          }}
         />
 
         <div className="flex items-center gap-1 bg-gray-900/50 border border-gray-800 rounded-lg p-1 ml-auto">

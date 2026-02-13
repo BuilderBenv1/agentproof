@@ -17,6 +17,7 @@ interface LeaderboardEntry {
   rank: number | null;
   leaderboard_rank: number;
   image_url: string | null;
+  source_chain?: string;
 }
 
 interface LeaderboardTableProps {
@@ -158,7 +159,12 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                       <span className="text-sm font-medium text-white group-hover:text-emerald-400 transition-colors block">
                         {entry.name || `Agent #${entry.agent_id}`}
                       </span>
-                      <span className="text-xs text-gray-600 font-mono">
+                      <span className="text-xs text-gray-600 font-mono flex items-center gap-1">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: entry.source_chain === "avalanche" ? "#E84142" : "#627EEA" }}
+                          title={entry.source_chain === "avalanche" ? "Avalanche" : "Ethereum"}
+                        />
                         ID: {entry.agent_id}
                       </span>
                     </div>

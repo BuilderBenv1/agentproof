@@ -21,6 +21,7 @@ export interface Agent {
   validation_success_rate: number;
   rank: number | null;
   tier: string;
+  source_chain?: string;
 }
 
 interface AgentListResult {
@@ -32,6 +33,7 @@ interface AgentListResult {
 
 interface UseAgentsOptions {
   category?: string;
+  chain?: string;
   search?: string;
   tier?: string;
   sortBy?: string;
@@ -52,6 +54,7 @@ export function useAgents(options: UseAgentsOptions = {}) {
       const result = await apiFetch<AgentListResult>("/agents", {
         params: {
           category: options.category,
+          chain: options.chain,
           search: options.search,
           tier: options.tier,
           sort_by: options.sortBy,
@@ -66,7 +69,7 @@ export function useAgents(options: UseAgentsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [options.category, options.search, options.tier, options.sortBy, options.order, options.page, options.pageSize]);
+  }, [options.category, options.chain, options.search, options.tier, options.sortBy, options.order, options.page, options.pageSize]);
 
   useEffect(() => {
     fetchAgents();

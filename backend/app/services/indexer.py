@@ -91,6 +91,7 @@ def process_agent_registered_events(from_block: int, to_block: int):
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
+            "source_chain": "avalanche",
             "registered_at": block_ts_cache[block].isoformat(),
             "updated_at": now,
         })
@@ -98,7 +99,7 @@ def process_agent_registered_events(from_block: int, to_block: int):
     # Batch upsert
     try:
         db.table("agents").upsert(rows, on_conflict="agent_id").execute()
-        logger.info(f"Batch upserted {len(rows)} custom agents")
+        logger.info(f"Batch upserted {len(rows)} custom agents (avalanche)")
     except Exception as e:
         logger.error(f"Batch upsert failed ({len(rows)} custom agents): {e}")
         for i in range(0, len(rows), 50):
@@ -112,13 +113,13 @@ def process_agent_registered_events(from_block: int, to_block: int):
 
 
 def process_erc8004_identity_events(from_block: int, to_block: int):
-    """Process Registered events from the official ERC-8004 Identity Registry."""
+    """Process Registered events from the official ERC-8004 Identity Registry on Avalanche."""
     blockchain = get_blockchain_service()
-    logger.info(f"[ERC-8004] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
+    logger.info(f"[ERC-8004-AVAX] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
     events = blockchain.get_erc8004_registered_events(from_block, to_block)
     if not events:
         return 0
-    logger.info(f"[ERC-8004] Found {len(events)} Registered events in {from_block}-{to_block}")
+    logger.info(f"[ERC-8004-AVAX] Found {len(events)} Registered events in {from_block}-{to_block}")
 
     db = get_supabase()
     block_ts_cache: dict[int, datetime] = {}
@@ -135,6 +136,7 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
+            "source_chain": "avalanche",
             "registered_at": block_ts_cache[block].isoformat(),
             "updated_at": now,
         })
@@ -142,15 +144,15 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
     # Batch upsert
     try:
         db.table("agents").upsert(rows, on_conflict="agent_id").execute()
-        logger.info(f"[ERC-8004] Batch upserted {len(rows)} agents")
+        logger.info(f"[ERC-8004-AVAX] Batch upserted {len(rows)} agents")
     except Exception as e:
-        logger.error(f"[ERC-8004] Batch upsert failed ({len(rows)} rows): {e}")
+        logger.error(f"[ERC-8004-AVAX] Batch upsert failed ({len(rows)} rows): {e}")
         for i in range(0, len(rows), 50):
             batch = rows[i:i + 50]
             try:
                 db.table("agents").upsert(batch, on_conflict="agent_id").execute()
             except Exception as e2:
-                logger.error(f"[ERC-8004] Sub-batch upsert failed: {e2}")
+                logger.error(f"[ERC-8004-AVAX] Sub-batch upsert failed: {e2}")
 
     return len(events)
 

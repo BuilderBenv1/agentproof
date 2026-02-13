@@ -8,6 +8,7 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 @router.get("", response_model=AgentListResponse)
 async def list_agents(
     category: str | None = None,
+    chain: str | None = None,
     search: str | None = None,
     tier: str | None = None,
     sort_by: str = Query("composite_score", pattern="^(composite_score|registered_at|total_feedback)$"),
@@ -22,6 +23,8 @@ async def list_agents(
 
     if category:
         query = query.eq("category", category)
+    if chain:
+        query = query.eq("source_chain", chain)
     if tier:
         query = query.eq("tier", tier)
     if search:
