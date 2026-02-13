@@ -10,9 +10,11 @@ interface YieldOpp {
   id: number;
   protocol: string;
   pool_name: string;
-  token_pair: string;
+  pool_type: string;
+  token_a: string;
+  token_b: string | null;
   apy: number;
-  tvl: number;
+  tvl_usd: number;
   risk_score: number;
   risk_adjusted_apy: number;
   recommendation: string;
@@ -43,7 +45,8 @@ function recColor(rec: string) {
   return "text-red-400 bg-red-500/10";
 }
 
-function formatTVL(tvl: number) {
+function formatTVL(tvl: number | null | undefined) {
+  if (!tvl && tvl !== 0) return "—";
   if (tvl >= 1e9) return `$${(tvl / 1e9).toFixed(1)}B`;
   if (tvl >= 1e6) return `$${(tvl / 1e6).toFixed(1)}M`;
   if (tvl >= 1e3) return `$${(tvl / 1e3).toFixed(0)}K`;
@@ -53,7 +56,7 @@ function formatTVL(tvl: number) {
 export default function YieldPage() {
   const [opportunities, setOpportunities] = useState<YieldOpp[]>([]);
   const [health, setHealth] = useState<YieldHealth | null>(null);
-  const [sortBy, setSortBy] = useState<"risk_adjusted_apy" | "apy" | "tvl" | "risk_score">("risk_adjusted_apy");
+  const [sortBy, setSortBy] = useState<"risk_adjusted_apy" | "apy" | "tvl_usd" | "risk_score">("risk_adjusted_apy");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export default function YieldPage() {
   const sorted = [...opportunities].sort((a, b) => {
     if (sortBy === "risk_adjusted_apy") return b.risk_adjusted_apy - a.risk_adjusted_apy;
     if (sortBy === "apy") return b.apy - a.apy;
-    if (sortBy === "tvl") return b.tvl - a.tvl;
+    if (sortBy === "tvl_usd") return b.tvl_usd - a.tvl_usd;
     return a.risk_score - b.risk_score;
   });
 
@@ -128,7 +131,7 @@ export default function YieldPage() {
       {/* Sort Controls */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-mono text-gray-500 uppercase">Sort by:</span>
-        {(["risk_adjusted_apy", "apy", "tvl", "risk_score"] as const).map((key) => (
+        {(["risk_adjusted_apy", "apy", "tvl_usd", "risk_score"] as const).map((key) => (
           <button
             key={key}
             onClick={() => setSortBy(key)}
@@ -138,7 +141,7 @@ export default function YieldPage() {
                 : "border-gray-800 text-gray-500 hover:text-white hover:border-gray-700"
             }`}
           >
-            {key === "risk_adjusted_apy" ? "RISK-ADJ APY" : key.toUpperCase().replace("_", " ")}
+            {key === "risk_adjusted_apy" ? "RISK-ADJ APY" : key === "tvl_usd" ? "TVL" : key.toUpperCase().replace("_", " ")}
           </button>
         ))}
       </div>
@@ -183,7 +186,7 @@ export default function YieldPage() {
                       <span className="text-xs font-mono text-gray-300 uppercase">{opp.protocol}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm text-white font-medium">{opp.pool_name || opp.token_pair}</span>
+                      <span className="text-sm text-white font-medium">{opp.pool_name || [opp.token_a, opp.token_b].filter(Boolean).join("/") || "—"}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-mono text-emerald-400 font-bold">{opp.apy.toFixed(2)}%</span>
@@ -192,7 +195,7 @@ export default function YieldPage() {
                       <span className="font-mono text-white font-bold">{opp.risk_adjusted_apy.toFixed(2)}%</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className="font-mono text-gray-400">{formatTVL(opp.tvl)}</span>
+                      <span className="font-mono text-gray-400">{formatTVL(opp.tvl_usd)}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`font-mono text-xs font-bold ${riskColor(opp.risk_score)}`}>
