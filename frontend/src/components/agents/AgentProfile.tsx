@@ -5,13 +5,39 @@ import CategoryBadge from "@/components/reputation/CategoryBadge";
 import ReputationChart from "@/components/reputation/ReputationChart";
 import ReputationHistory from "@/components/reputation/ReputationHistory";
 import FeedbackForm from "@/components/reputation/FeedbackForm";
-import { truncateAddress, formatDate, getTierColor } from "@/lib/utils";
+import { truncateAddress, formatDate, getTierColor, isNavigableUri, decodeDataUri } from "@/lib/utils";
 import { useFeedback, useScoreHistory } from "@/hooks/useReputation";
 import {
   ExternalLink, Copy, Calendar, Shield, Star, BarChart3,
-  CheckCircle, MessageSquare, Activity,
+  CheckCircle, MessageSquare, Activity, FileText,
 } from "lucide-react";
+import { useState } from "react";
 import type { Agent } from "@/hooks/useAgents";
+
+function MetadataPopover({ data }: { data: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+      >
+        <FileText className="w-3 h-3" /> Metadata
+      </button>
+      {open && (
+        <div className="absolute z-50 top-6 left-0 w-72 max-h-60 overflow-auto bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono text-gray-500 uppercase">Decoded Metadata</span>
+            <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white text-xs">&times;</button>
+          </div>
+          <pre className="text-[10px] font-mono text-gray-300 whitespace-pre-wrap break-all">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        </div>
+      )}
+    </span>
+  );
+}
 
 interface AgentProfileProps {
   agent: Agent;
@@ -78,6 +104,21 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 {agent.name || `Agent #${agent.agent_id}`}
               </h1>
               <CategoryBadge category={agent.category} />
+              {agent.source_chain && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
+                  style={{
+                    color: agent.source_chain === "avalanche" ? "#E84142" : "#627EEA",
+                    backgroundColor: agent.source_chain === "avalanche" ? "#E8414212" : "#627EEA12",
+                    border: `1px solid ${agent.source_chain === "avalanche" ? "#E8414225" : "#627EEA25"}`,
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: agent.source_chain === "avalanche" ? "#E84142" : "#627EEA" }}
+                  />
+                  {agent.source_chain === "avalanche" ? "Avalanche" : "Ethereum"}
+                </span>
+              )}
               <span
                 className="px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
                 style={{
@@ -114,14 +155,18 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 {agent.total_feedback} reviews
               </span>
               {agent.agent_uri && (
-                <a
-                  href={agent.agent_uri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" /> Metadata
-                </a>
+                isNavigableUri(agent.agent_uri) ? (
+                  <a
+                    href={agent.agent_uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Metadata
+                  </a>
+                ) : decodeDataUri(agent.agent_uri) ? (
+                  <MetadataPopover data={decodeDataUri(agent.agent_uri)!} />
+                ) : null
               )}
             </div>
           </div>
@@ -157,8 +202,8 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-xs font-mono text-gray-500 uppercase">Validation</span>
             </div>
-            <p className="text-xl font-bold font-mono text-white">{agent.validation_success_rate.toFixed(0)}%</p>
-            <p className="text-xs text-gray-600 font-mono">success rate</p>
+            <p className="text-xl font-bold font-mono text-white">{agent.validation_success_rate > 0 ? `${agent.validation_success_rate.toFixed(0)}%` : "N/A"}</p>
+            <p className="text-xs text-gray-600 font-mono">{agent.validation_success_rate > 0 ? "success rate" : "no validations yet"}</p>
           </div>
           <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-1.5 mb-1">

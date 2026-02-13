@@ -1,5 +1,6 @@
 "use client";
 
+import { explorerTxUrl } from "@/lib/utils";
 import { AuditLog } from "@/hooks/useAudit";
 import {
   UserPlus,
@@ -81,7 +82,7 @@ export default function AuditTimeline({ logs }: AuditTimelineProps) {
               </p>
               {log.tx_hash && (
                 <a
-                  href={`https://snowtrace.io/tx/${log.tx_hash}`}
+                  href={explorerTxUrl(log.tx_hash)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] font-mono text-gray-600 hover:text-emerald-400 mt-0.5 inline-block"

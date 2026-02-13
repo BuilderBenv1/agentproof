@@ -4,9 +4,10 @@ import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/supabase";
 import { Listing } from "@/hooks/useMarketplace";
+import { MonitoringOverview } from "@/hooks/useMonitoring";
 import SkillTag from "@/components/marketplace/SkillTag";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { ArrowLeft, DollarSign, Clock, Shield, Zap } from "lucide-react";
+import { ArrowLeft, DollarSign, Clock, Shield, Zap, Globe, Copy, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function ListingDetailPage() {
@@ -15,7 +16,9 @@ export default function ListingDetailPage() {
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [agent, setAgent] = useState<Record<string, unknown> | null>(null);
+  const [monitoring, setMonitoring] = useState<MonitoringOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetch() {
@@ -25,6 +28,18 @@ export default function ListingDetailPage() {
         );
         setListing(result.listing);
         setAgent(result.agent);
+
+        // Fetch monitoring endpoints for this agent
+        if (result.agent?.agent_id) {
+          try {
+            const mon = await apiFetch<MonitoringOverview>(
+              `/monitoring/agent/${result.agent.agent_id}`
+            );
+            setMonitoring(mon);
+          } catch {
+            // monitoring data is optional
+          }
+        }
       } catch {
         // silently fail
       } finally {
@@ -33,6 +48,12 @@ export default function ListingDetailPage() {
     }
     fetch();
   }, [listingId]);
+
+  function copyEndpoint(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  }
 
   if (loading) {
     return (
@@ -124,6 +145,75 @@ export default function ListingDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Agent Endpoints */}
+        {monitoring && monitoring.endpoints.length > 0 && (
+          <div className="pt-2 border-t border-gray-800">
+            <p className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+              <Globe className="w-3 h-3" />
+              Call This Agent
+            </p>
+            <div className="space-y-2">
+              {monitoring.endpoints.filter((ep) => ep.is_active).map((ep) => (
+                <div
+                  key={ep.id}
+                  className="flex items-center gap-3 bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-3"
+                >
+                  <span className="text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                    {ep.endpoint_type}
+                  </span>
+                  <code className="text-sm font-mono text-gray-300 truncate flex-1">
+                    {ep.url}
+                  </code>
+                  <button
+                    onClick={() => copyEndpoint(ep.url)}
+                    className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"
+                    title="Copy endpoint URL"
+                  >
+                    {copiedUrl === ep.url ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fallback: show raw endpoints from agent record when no monitoring data */}
+        {(!monitoring || monitoring.endpoints.length === 0) && agent && Array.isArray(agent.endpoints) && (agent.endpoints as string[]).length > 0 && (
+          <div className="pt-2 border-t border-gray-800">
+            <p className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+              <Globe className="w-3 h-3" />
+              Call This Agent
+            </p>
+            <div className="space-y-2">
+              {(agent.endpoints as string[]).map((url, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 bg-gray-800/50 border border-gray-700/50 rounded-lg px-4 py-3"
+                >
+                  <code className="text-sm font-mono text-gray-300 truncate flex-1">
+                    {url}
+                  </code>
+                  <button
+                    onClick={() => copyEndpoint(url)}
+                    className="text-gray-500 hover:text-emerald-400 transition-colors shrink-0"
+                    title="Copy endpoint URL"
+                  >
+                    {copiedUrl === url ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

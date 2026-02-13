@@ -729,7 +729,7 @@ export default function DocsPage() {
                     )}
                   </div>
                   <a
-                    href={`https://snowtrace.io/address/${contract.address}`}
+                    href={`https://snowscan.xyz/address/${contract.address}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-emerald-400 hover:underline font-mono"

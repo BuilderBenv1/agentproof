@@ -41,7 +41,8 @@ def calculate_composite_score(
         max_std = 50.0
         consistency_score = max(0.0, 100.0 * (1 - rating_std_dev / max_std))
 
-    validation_score = validation_success_rate
+    # If no validations exist, use neutral score (don't penalize for missing data)
+    validation_score = validation_success_rate if validation_success_rate > 0 else 50.0
 
     if account_age_days <= 0:
         age_score = 0.0

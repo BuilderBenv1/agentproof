@@ -6,6 +6,7 @@ import { useSubmitFeedback } from "@/hooks/useContract";
 import WalletButton from "@/components/ui/WalletButton";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { Star, CheckCircle, AlertCircle, MessageSquare } from "lucide-react";
+import { explorerTxUrl } from "@/lib/utils";
 
 interface FeedbackFormProps {
   agentId: number;
@@ -60,7 +61,7 @@ export default function FeedbackForm({ agentId, agentName, ownerAddress }: Feedb
         </p>
         <div className="flex items-center gap-3">
           <a
-            href={`https://snowtrace.io/tx/${hash}`}
+            href={explorerTxUrl(hash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-emerald-400 text-xs font-mono hover:underline"

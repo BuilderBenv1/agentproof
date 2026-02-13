@@ -9,6 +9,7 @@ import { CATEGORIES, PROTOCOL_FEE } from "@/lib/constants";
 import WalletButton from "@/components/ui/WalletButton";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { CheckCircle, AlertCircle, Plus, X, Zap, Shield, Globe } from "lucide-react";
+import { explorerTxUrl } from "@/lib/utils";
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -130,7 +131,7 @@ export default function RegisterForm() {
         <div className="flex flex-col items-center gap-3">
           {registerHash && (
             <a
-              href={`https://snowtrace.io/tx/${registerHash}`}
+              href={explorerTxUrl(registerHash)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-emerald-400 text-xs font-mono hover:underline"

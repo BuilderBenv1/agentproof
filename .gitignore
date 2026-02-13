@@ -39,3 +39,6 @@ contracts/deployments/
 # Misc
 *.log
 .claude/
+
+.vercel
+.env*.local
