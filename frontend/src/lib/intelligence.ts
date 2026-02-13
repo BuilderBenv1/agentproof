@@ -1,9 +1,8 @@
 const INTELLIGENCE_API =
-  process.env.NEXT_PUBLIC_INTELLIGENCE_API_URL ||
-  "https://agent-eco-system-production.up.railway.app";
+  (process.env.NEXT_PUBLIC_INTELLIGENCE_API_URL || "https://agent-eco-system-production.up.railway.app").trim();
 
 const INTELLIGENCE_API_KEY =
-  process.env.NEXT_PUBLIC_INTELLIGENCE_API_KEY || "";
+  (process.env.NEXT_PUBLIC_INTELLIGENCE_API_KEY || "7pFq9wCbWAswNKPKFuieXsosVBGnwm-hNqYHBYZ6VZs").trim();
 
 interface FetchOptions {
   params?: Record<string, string | number | undefined>;
