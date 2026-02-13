@@ -8,11 +8,10 @@ import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
+  { href: "/intelligence", label: "Intelligence" },
   { href: "/discover", label: "Discover" },
   { href: "/marketplace", label: "Marketplace" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/insurance", label: "Insurance" },
-  { href: "/payments", label: "Payments" },
   { href: "/register", label: "Register" },
   { href: "/docs", label: "Docs" },
 ];
@@ -43,7 +42,7 @@ export default function Header() {
                 key={link.href}
                 href={link.href}
                 className={`px-3 py-2 rounded-lg text-sm font-mono transition-colors ${
-                  pathname === link.href
+                  pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
                     ? "text-emerald-400 bg-emerald-500/10"
                     : "text-gray-400 hover:text-white hover:bg-gray-800/50"
                 }`}

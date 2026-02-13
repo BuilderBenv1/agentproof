@@ -43,6 +43,39 @@ export function timeAgo(date: string | Date): string {
   return formatDate(date);
 }
 
+export function explorerTxUrl(txHash: string): string {
+  return `https://snowscan.xyz/tx/${txHash}`;
+}
+
+export function explorerAddressUrl(address: string): string {
+  return `https://snowscan.xyz/address/${address}`;
+}
+
+/**
+ * Decode a base64 data URI to its JSON content.
+ * Returns the parsed object if valid, or null otherwise.
+ */
+export function decodeDataUri(uri: string): Record<string, unknown> | null {
+  if (!uri || !uri.startsWith("data:")) return null;
+  try {
+    // data:application/json;base64,<payload>
+    const base64 = uri.split(",")[1];
+    if (!base64) return null;
+    const json = atob(base64);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns true if the URI is a navigable URL (http/https/ipfs).
+ */
+export function isNavigableUri(uri: string): boolean {
+  if (!uri) return false;
+  return /^https?:\/\//i.test(uri) || /^ipfs:\/\//i.test(uri);
+}
+
 export function getTierColor(tier: string): string {
   const colors: Record<string, string> = {
     diamond: "#B9F2FF",
