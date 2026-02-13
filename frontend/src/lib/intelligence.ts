@@ -2,6 +2,9 @@ const INTELLIGENCE_API =
   process.env.NEXT_PUBLIC_INTELLIGENCE_API_URL ||
   "https://agent-eco-system-production.up.railway.app";
 
+const INTELLIGENCE_API_KEY =
+  process.env.NEXT_PUBLIC_INTELLIGENCE_API_KEY || "";
+
 interface FetchOptions {
   params?: Record<string, string | number | undefined>;
 }
@@ -23,7 +26,12 @@ export async function intelligenceFetch<T>(
     if (qs) url += `?${qs}`;
   }
 
-  const res = await fetch(url, { next: { revalidate: 30 } });
+  const headers: Record<string, string> = {};
+  if (INTELLIGENCE_API_KEY) {
+    headers["x-api-key"] = INTELLIGENCE_API_KEY;
+  }
+
+  const res = await fetch(url, { headers, next: { revalidate: 30 } });
   if (!res.ok) throw new Error(`Intelligence API ${res.status}`);
   return res.json();
 }
