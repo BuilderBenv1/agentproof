@@ -487,6 +487,46 @@ def recalculate_agent_scores():
 
     logger.info(f"Scored {len(update_rows)} agents")
 
+    # Snapshot scores to score_history (once per day)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        # Check if we already snapshotted today (sample first agent)
+        if update_rows:
+            existing = (
+                db.table("score_history")
+                .select("id")
+                .eq("agent_id", update_rows[0]["agent_id"])
+                .eq("snapshot_date", today)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                logger.info(f"Writing daily score snapshot for {len(update_rows)} agents")
+                snapshot_rows = []
+                for row in update_rows:
+                    snapshot_rows.append({
+                        "agent_id": row["agent_id"],
+                        "composite_score": row["composite_score"],
+                        "average_rating": row["average_rating"],
+                        "total_feedback": row["total_feedback"],
+                        "validation_success_rate": row["validation_success_rate"],
+                        "snapshot_date": today,
+                    })
+                # Batch upsert in chunks of 500
+                for i in range(0, len(snapshot_rows), batch_size):
+                    batch = snapshot_rows[i:i + batch_size]
+                    try:
+                        db.table("score_history").upsert(
+                            batch, on_conflict="agent_id,snapshot_date"
+                        ).execute()
+                    except Exception as e:
+                        logger.error(f"Error writing score snapshot batch {i // batch_size}: {e}")
+                logger.info("Daily score snapshot complete")
+            else:
+                logger.debug("Score snapshot already exists for today, skipping")
+    except Exception as e:
+        logger.error(f"Error in score history snapshot: {e}")
+
 
 def update_leaderboard():
     """Update the leaderboard_cache table with current rankings (batched)."""

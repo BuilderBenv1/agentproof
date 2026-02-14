@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Activity, TrendingUp, Shield, Eye, Zap, BarChart3,
   AlertTriangle, DollarSign, ArrowRight, Target,
+  RefreshCw, Grid3X3, ShieldAlert, Crosshair,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import { intelligenceFetch } from "@/lib/intelligence";
@@ -88,6 +89,38 @@ const AGENTS = [
     href: "/intelligence/convergence",
     endpoint: "/health",
   },
+  {
+    name: "DCA Bot",
+    desc: "Automated dollar-cost averaging with dip detection and TP/SL management",
+    icon: <RefreshCw className="w-5 h-5" />,
+    color: "blue",
+    href: "/intelligence/dca",
+    endpoint: "/api/v1/dca/health",
+  },
+  {
+    name: "Grid Trading",
+    desc: "Range-bound grid orders that profit from price oscillations on Trader Joe",
+    icon: <Grid3X3 className="w-5 h-5" />,
+    color: "violet",
+    href: "/intelligence/grid",
+    endpoint: "/api/v1/grid/health",
+  },
+  {
+    name: "SOS Emergency",
+    desc: "Automated crash protection — exits positions on market drops, hacks, or low HF",
+    icon: <ShieldAlert className="w-5 h-5" />,
+    color: "red",
+    href: "/intelligence/sos",
+    endpoint: "/api/v1/sos/health",
+  },
+  {
+    name: "Sniper Bot",
+    desc: "Scans new token launches on Trader Joe, runs safety filters, and executes fast buys",
+    icon: <Crosshair className="w-5 h-5" />,
+    color: "amber",
+    href: "/intelligence/sniper",
+    endpoint: "/api/v1/sniper/health",
+  },
 ];
 
 const colorMap: Record<string, string> = {
@@ -97,6 +130,9 @@ const colorMap: Record<string, string> = {
   red: "border-red-500/30 hover:border-red-500/50",
   yellow: "border-yellow-500/30 hover:border-yellow-500/50",
   orange: "border-orange-500/30 hover:border-orange-500/50",
+  blue: "border-blue-500/30 hover:border-blue-500/50",
+  violet: "border-violet-500/30 hover:border-violet-500/50",
+  amber: "border-amber-500/30 hover:border-amber-500/50",
 };
 
 const iconColorMap: Record<string, string> = {
@@ -106,6 +142,9 @@ const iconColorMap: Record<string, string> = {
   red: "text-red-400 bg-red-500/10",
   yellow: "text-yellow-400 bg-yellow-500/10",
   orange: "text-orange-400 bg-orange-500/10",
+  blue: "text-blue-400 bg-blue-500/10",
+  violet: "text-violet-400 bg-violet-500/10",
+  amber: "text-amber-400 bg-amber-500/10",
 };
 
 export default function IntelligencePage() {
@@ -165,8 +204,8 @@ export default function IntelligencePage() {
           Intelligence <span className="text-emerald-400">Network</span>
         </h1>
         <p className="text-gray-400 max-w-xl mx-auto">
-          7 autonomous AI agents monitoring Avalanche DeFi in real-time.
-          Every prediction is scored and proven on-chain via ERC-8004.
+          11 autonomous AI agents monitoring and trading Avalanche DeFi in real-time.
+          Every action is scored and proven on-chain via ERC-8004.
         </p>
       </section>
 

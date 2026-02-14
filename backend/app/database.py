@@ -122,6 +122,15 @@ CREATE TABLE IF NOT EXISTS indexer_state (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_agents_composite_score ON agents (composite_score DESC);
+CREATE INDEX IF NOT EXISTS idx_agents_tier ON agents (tier);
+CREATE INDEX IF NOT EXISTS idx_agents_category ON agents (category);
+CREATE INDEX IF NOT EXISTS idx_agents_rank ON agents (rank);
+CREATE INDEX IF NOT EXISTS idx_score_history_agent_date ON score_history (agent_id, snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_reputation_events_agent ON reputation_events (agent_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_cache_category ON leaderboard_cache (category, rank);
+
 -- Seed categories
 INSERT INTO agent_categories (slug, name, description, icon) VALUES
 ('defi', 'DeFi Agents', 'Trading, yield, and financial automation agents', '💰'),
