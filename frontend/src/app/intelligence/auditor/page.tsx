@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Shield, ArrowLeft, ExternalLink } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  PieChart, Pie,
+} from "recharts";
 import StatCard from "@/components/ui/StatCard";
+import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import { intelligenceFetch } from "@/lib/intelligence";
 import { timeAgo } from "@/lib/utils";
 
@@ -20,6 +25,13 @@ interface ContractScan {
   analysis_summary: string | null;
   scanned_at: string;
 }
+
+const RISK_COLORS: Record<string, string> = {
+  safe: "#10b981",
+  caution: "#eab308",
+  danger: "#f97316",
+  rug: "#ef4444",
+};
 
 function riskColor(label: string) {
   const map: Record<string, string> = {
@@ -45,31 +57,66 @@ function scoreBar(score: number, label: string) {
 }
 
 function truncAddr(addr: string) {
-  return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "—";
+  return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "\u2014";
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.[0]) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono">
+      <p className="text-white font-bold">{d.name || d.token_symbol}</p>
+      {d.overall_risk_score !== undefined && <p className="text-gray-400">Risk: {d.overall_risk_score}/100</p>}
+      {d.value !== undefined && <p className="text-gray-400">Count: {d.value}</p>}
+    </div>
+  );
+};
 
 export default function AuditorPage() {
   const [scans, setScans] = useState<ContractScan[]>([]);
+  const [since, setSince] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const data = await intelligenceFetch<ContractScan[]>("/api/v1/auditor/scans", {
-          params: { limit: 30 },
-        });
+        const params: Record<string, string | number> = { limit: 30 };
+        if (since) params.since = since;
+        const data = await intelligenceFetch<ContractScan[]>("/api/v1/auditor/scans", { params });
         setScans(data);
       } catch {}
       setLoading(false);
     }
     load();
-  }, []);
+  }, [since]);
 
   const dangerous = scans.filter((s) => s.risk_label === "danger" || s.risk_label === "rug").length;
   const safe = scans.filter((s) => s.risk_label === "safe").length;
   const avgRisk = scans.length > 0
     ? (scans.reduce((s, x) => s + x.overall_risk_score, 0) / scans.length).toFixed(0)
-    : "—";
+    : "\u2014";
+
+  // Risk distribution pie chart
+  const riskDist: Record<string, number> = {};
+  scans.forEach((s) => { riskDist[s.risk_label] = (riskDist[s.risk_label] || 0) + 1; });
+  const pieData = Object.entries(riskDist).map(([name, value]) => ({
+    name,
+    value,
+    fill: RISK_COLORS[name] || "#6b7280",
+  }));
+
+  // Top 10 riskiest contracts
+  const riskBarData = [...scans]
+    .sort((a, b) => b.overall_risk_score - a.overall_risk_score)
+    .slice(0, 8)
+    .map((s) => ({
+      token_symbol: s.token_symbol || truncAddr(s.contract_address),
+      overall_risk_score: s.overall_risk_score,
+      honeypot_score: s.honeypot_score,
+      ownership_concentration_score: s.ownership_concentration_score,
+    }));
 
   return (
     <div className="space-y-8">
@@ -88,12 +135,65 @@ export default function AuditorPage() {
         </div>
       </div>
 
+      <div className="flex items-center justify-between">
+        <DateRangeFilter value={since} onChange={setSince} />
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Contracts Scanned" value={scans.length} sublabel="total" />
         <StatCard label="Flagged Dangerous" value={dangerous} sublabel="danger + rug" />
         <StatCard label="Verified Safe" value={safe} sublabel="clean contracts" />
         <StatCard label="Avg Risk Score" value={avgRisk} sublabel="out of 100" />
       </div>
+
+      {/* Charts */}
+      {scans.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {pieData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Risk Distribution</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {riskBarData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Riskiest Contracts</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={riskBarData} layout="vertical" margin={{ left: 60, right: 20, top: 5, bottom: 5 }}>
+                  <XAxis type="number" domain={[0, 100]} tick={{ fill: "#6b7280", fontSize: 11, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="token_symbol" tick={{ fill: "#9ca3af", fontSize: 10, fontFamily: "monospace" }} width={55} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="overall_risk_score" radius={[0, 4, 4, 0]}>
+                    {riskBarData.map((entry, i) => (
+                      <Cell key={i} fill={entry.overall_risk_score > 60 ? "#ef4444" : entry.overall_risk_score > 30 ? "#eab308" : "#10b981"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-4">
         {loading ? (

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BarChart3, ArrowLeft, Zap } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  PieChart, Pie,
+} from "recharts";
 import StatCard from "@/components/ui/StatCard";
+import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import { intelligenceFetch } from "@/lib/intelligence";
 import { timeAgo } from "@/lib/utils";
 
@@ -21,34 +26,93 @@ interface ConvergenceSignal {
   created_at: string;
 }
 
+interface TokenCorrelation {
+  tokens: { token: string; agent_mentions: number; agents: string[]; convergence_count: number }[];
+  total_signals: number;
+}
+
+const DIR_COLORS: Record<string, string> = {
+  bullish: "#10b981",
+  bearish: "#ef4444",
+  mixed: "#eab308",
+};
+
 function dirColor(dir: string) {
   if (dir === "bullish") return "text-emerald-400 bg-emerald-500/10";
   if (dir === "bearish") return "text-red-400 bg-red-500/10";
   return "text-yellow-400 bg-yellow-500/10";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.[0]) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono">
+      <p className="text-white font-bold">{d.token || d.name}</p>
+      {d.convergence_score !== undefined && <p className="text-orange-400">Score: {d.convergence_score.toFixed(1)}</p>}
+      {d.convergence_count !== undefined && <p className="text-gray-400">{d.convergence_count} signals</p>}
+      {d.agent_mentions !== undefined && <p className="text-gray-400">{d.agent_mentions} agent mentions</p>}
+      {d.value !== undefined && <p className="text-gray-400">Count: {d.value}</p>}
+    </div>
+  );
+};
+
 export default function ConvergencePage() {
   const [signals, setSignals] = useState<ConvergenceSignal[]>([]);
+  const [correlation, setCorrelation] = useState<TokenCorrelation | null>(null);
+  const [since, setSince] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const data = await intelligenceFetch<ConvergenceSignal[]>("/api/v1/convergence/signals", {
-          params: { limit: 30 },
-        });
+        const params: Record<string, string | number> = { limit: 30 };
+        if (since) params.since = since;
+        const [data, corr] = await Promise.all([
+          intelligenceFetch<ConvergenceSignal[]>("/api/v1/convergence/signals", { params }),
+          intelligenceFetch<TokenCorrelation>("/api/v1/analytics/correlation").catch(() => null),
+        ]);
         setSignals(data);
+        setCorrelation(corr);
       } catch {}
       setLoading(false);
     }
     load();
-  }, []);
+  }, [since]);
 
   const threeAgent = signals.filter((s) => s.agent_count >= 3).length;
   const avgScore = signals.length > 0
     ? (signals.reduce((s, x) => s + x.convergence_score, 0) / signals.length).toFixed(1)
-    : "—";
+    : "\u2014";
   const bullish = signals.filter((s) => s.signal_direction === "bullish").length;
+
+  // Direction distribution pie
+  const dirDist: Record<string, number> = {};
+  signals.forEach((s) => { dirDist[s.signal_direction] = (dirDist[s.signal_direction] || 0) + 1; });
+  const pieData = Object.entries(dirDist).map(([name, value]) => ({
+    name,
+    value,
+    fill: DIR_COLORS[name] || "#6b7280",
+  }));
+
+  // Top tokens by convergence score
+  const tokenScores: Record<string, { score: number; count: number }> = {};
+  signals.forEach((s) => {
+    if (!tokenScores[s.token_symbol]) tokenScores[s.token_symbol] = { score: 0, count: 0 };
+    tokenScores[s.token_symbol].score += s.convergence_score;
+    tokenScores[s.token_symbol].count++;
+  });
+  const tokenBarData = Object.entries(tokenScores)
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, 8)
+    .map(([token, d]) => ({
+      token,
+      convergence_score: d.score / d.count,
+      convergence_count: d.count,
+      name: token,
+    }));
 
   return (
     <div className="space-y-8">
@@ -65,6 +129,10 @@ export default function ConvergencePage() {
             <p className="text-xs text-gray-500 font-mono">When 2+ agents independently flag the same token</p>
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <DateRangeFilter value={since} onChange={setSince} />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -86,6 +154,86 @@ export default function ConvergencePage() {
           </p>
         </div>
       </div>
+
+      {/* Charts */}
+      {signals.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {pieData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Signal Direction</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {tokenBarData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Top Tokens by Avg Score</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={tokenBarData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                  <XAxis dataKey="token" tick={{ fill: "#9ca3af", fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#6b7280", fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="convergence_score" radius={[4, 4, 0, 0]} fill="#f97316" fillOpacity={0.7} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Token Correlation Matrix */}
+      {correlation && correlation.tokens.length > 0 && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+          <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Token-Agent Correlation</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left px-3 py-2 text-xs font-mono text-gray-500">Token</th>
+                  <th className="text-center px-3 py-2 text-xs font-mono text-gray-500">Signals</th>
+                  <th className="text-center px-3 py-2 text-xs font-mono text-gray-500">Agent Mentions</th>
+                  <th className="text-left px-3 py-2 text-xs font-mono text-gray-500">Agents</th>
+                </tr>
+              </thead>
+              <tbody>
+                {correlation.tokens.slice(0, 10).map((t) => (
+                  <tr key={t.token} className="border-b border-gray-800/50">
+                    <td className="px-3 py-2 font-mono text-white font-bold">{t.token}</td>
+                    <td className="px-3 py-2 text-center font-mono text-orange-400">{t.convergence_count}</td>
+                    <td className="px-3 py-2 text-center font-mono text-gray-400">{t.agent_mentions}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1 flex-wrap">
+                        {t.agents.map((a) => (
+                          <span key={a} className="px-1.5 py-0.5 rounded bg-gray-800 text-xs font-mono text-gray-300">{a}</span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {loading ? (

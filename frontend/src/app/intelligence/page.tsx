@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Activity, TrendingUp, Shield, Eye, Zap, BarChart3,
-  AlertTriangle, DollarSign, ArrowRight,
+  AlertTriangle, DollarSign, ArrowRight, Target,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import { intelligenceFetch } from "@/lib/intelligence";
@@ -255,7 +255,7 @@ export default function IntelligencePage() {
       </section>
 
       {/* Quick Links */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link
           href="/intelligence/yield"
           className="bg-gray-900/50 border border-emerald-500/20 rounded-xl p-6 hover:border-emerald-500/40 transition-all group"
@@ -284,6 +284,16 @@ export default function IntelligencePage() {
           <h3 className="font-bold text-white mb-1">Whale Movements</h3>
           <p className="text-xs text-gray-500">
             {whaleData?.wallets_tracked ?? "—"} wallets monitored for significant trades
+          </p>
+        </Link>
+        <Link
+          href="/intelligence/analytics"
+          className="bg-gray-900/50 border border-purple-500/20 rounded-xl p-6 hover:border-purple-500/40 transition-all group"
+        >
+          <Target className="w-6 h-6 text-purple-400 mb-3" />
+          <h3 className="font-bold text-white mb-1">Agent Accuracy</h3>
+          <p className="text-xs text-gray-500">
+            Prediction accuracy and performance metrics across all agents
           </p>
         </Link>
       </section>

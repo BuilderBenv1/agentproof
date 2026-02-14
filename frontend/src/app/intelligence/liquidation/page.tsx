@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  PieChart, Pie,
+} from "recharts";
 import StatCard from "@/components/ui/StatCard";
+import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import { intelligenceFetch } from "@/lib/intelligence";
 import { timeAgo } from "@/lib/utils";
 
@@ -20,6 +25,13 @@ interface Position {
   last_checked: string;
 }
 
+const RISK_COLORS: Record<string, string> = {
+  critical: "#ef4444",
+  high: "#f97316",
+  medium: "#eab308",
+  low: "#10b981",
+};
+
 function riskBadge(level: string) {
   const map: Record<string, string> = {
     critical: "text-red-400 bg-red-500/10",
@@ -31,7 +43,7 @@ function riskBadge(level: string) {
 }
 
 function truncAddr(addr: string) {
-  return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "—";
+  return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "\u2014";
 }
 
 function formatUSD(n: number) {
@@ -40,26 +52,67 @@ function formatUSD(n: number) {
   return `$${n.toFixed(0)}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.[0]) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs font-mono">
+      <p className="text-white font-bold">{d.name || d.protocol}</p>
+      {d.debt !== undefined && <p className="text-red-400">Debt: {formatUSD(d.debt)}</p>}
+      {d.collateral !== undefined && <p className="text-emerald-400">Collateral: {formatUSD(d.collateral)}</p>}
+      {d.value !== undefined && <p className="text-gray-400">Count: {d.value}</p>}
+      {d.health_factor !== undefined && <p className="text-gray-400">HF: {d.health_factor.toFixed(3)}</p>}
+    </div>
+  );
+};
+
 export default function LiquidationPage() {
   const [positions, setPositions] = useState<Position[]>([]);
+  const [since, setSince] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const data = await intelligenceFetch<Position[]>("/api/v1/liquidation/positions", {
-          params: { limit: 50 },
-        });
+        const params: Record<string, string | number> = { limit: 50 };
+        if (since) params.since = since;
+        const data = await intelligenceFetch<Position[]>("/api/v1/liquidation/positions", { params });
         setPositions(data);
       } catch {}
       setLoading(false);
     }
     load();
-  }, []);
+  }, [since]);
 
   const critical = positions.filter((p) => p.risk_level === "critical").length;
   const high = positions.filter((p) => p.risk_level === "high").length;
   const totalDebt = positions.reduce((s, p) => s + (p.debt_usd || 0), 0);
+
+  // Risk distribution pie
+  const riskDist: Record<string, number> = {};
+  positions.forEach((p) => { riskDist[p.risk_level] = (riskDist[p.risk_level] || 0) + 1; });
+  const pieData = Object.entries(riskDist).map(([name, value]) => ({
+    name,
+    value,
+    fill: RISK_COLORS[name] || "#6b7280",
+  }));
+
+  // Protocol debt bar chart
+  const protocolDebt: Record<string, { debt: number; collateral: number; count: number }> = {};
+  positions.forEach((p) => {
+    if (!protocolDebt[p.protocol]) protocolDebt[p.protocol] = { debt: 0, collateral: 0, count: 0 };
+    protocolDebt[p.protocol].debt += p.debt_usd || 0;
+    protocolDebt[p.protocol].collateral += p.collateral_usd || 0;
+    protocolDebt[p.protocol].count++;
+  });
+  const debtBarData = Object.entries(protocolDebt).map(([protocol, d]) => ({
+    protocol,
+    debt: d.debt,
+    collateral: d.collateral,
+    name: protocol,
+  }));
 
   return (
     <div className="space-y-8">
@@ -78,12 +131,62 @@ export default function LiquidationPage() {
         </div>
       </div>
 
+      <div className="flex items-center justify-between">
+        <DateRangeFilter value={since} onChange={setSince} />
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Positions" value={positions.length} sublabel="monitored" />
         <StatCard label="Critical" value={critical} sublabel="immediate risk" />
         <StatCard label="High Risk" value={high} sublabel="approaching threshold" />
         <StatCard label="Total Debt" value={formatUSD(totalDebt)} sublabel="at-risk value" />
       </div>
+
+      {/* Charts */}
+      {positions.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {pieData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Risk Level Distribution</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={3}
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {debtBarData.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-sm font-mono text-gray-400 uppercase mb-4">Debt by Protocol</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={debtBarData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                  <XAxis dataKey="protocol" tick={{ fill: "#9ca3af", fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#6b7280", fontSize: 10, fontFamily: "monospace" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatUSD(v)} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="debt" fill="#ef4444" fillOpacity={0.7} radius={[4, 4, 0, 0]} name="Debt" />
+                  <Bar dataKey="collateral" fill="#10b981" fillOpacity={0.5} radius={[4, 4, 0, 0]} name="Collateral" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
