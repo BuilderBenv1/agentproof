@@ -37,7 +37,7 @@ const AGENTS = [
     desc: "Parses Telegram alpha channels for trade signals, tracks accuracy on-chain",
     icon: <Zap className="w-5 h-5" />,
     color: "emerald",
-    href: "/intelligence",
+    href: "/intelligence/tipster",
     endpoint: "/api/v1/tipster/health",
   },
   {
@@ -53,7 +53,7 @@ const AGENTS = [
     desc: "Analyzes social sentiment and trend momentum across crypto media",
     icon: <TrendingUp className="w-5 h-5" />,
     color: "purple",
-    href: "/intelligence",
+    href: "/intelligence/narrative",
     endpoint: "/api/v1/narrative/health",
   },
   {
