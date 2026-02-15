@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/register", label: "Register" },
+  { href: "/whitepaper", label: "Whitepaper" },
   { href: "/docs", label: "Docs" },
 ];
 
