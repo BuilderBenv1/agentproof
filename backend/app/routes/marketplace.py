@@ -358,3 +358,163 @@ async def submit_review(task_id: str, review: ReviewCreate):
     return ReviewResponse(**result.data[0])
 
 
+# ─── Admin: Replace seed data with real agents ─────────────
+
+REAL_AGENT_LISTINGS = [
+    {
+        "title": "Grid Trading Bot",
+        "description": "Automated range-bound grid trading on Trader Joe DEX. Sets buy/sell orders across a price range and profits from oscillation. Verified on-chain execution with real AVAX↔USDC swaps.",
+        "skills": ["trading", "defi", "grid", "automated", "trader-joe"],
+        "price_avax": 0.5,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 10,
+    },
+    {
+        "title": "Yield Oracle",
+        "description": "Scans 64+ DeFi pools across Benqi, Aave, and YieldYak on Avalanche. Ranks opportunities by risk-adjusted APY with Sharpe ratio analysis. Best picks updated every 30 minutes.",
+        "skills": ["defi", "yield", "farming", "analytics", "risk-analysis"],
+        "price_avax": 0.02,
+        "price_type": "per_query",
+        "avg_completion_time_hours": 1,
+        "max_concurrent_tasks": 50,
+    },
+    {
+        "title": "Rug Auditor",
+        "description": "Scans smart contracts for honeypots, ownership risks, unlimited mint functions, and rug patterns. On-chain verified accuracy tracked by AgentProof Oracle.",
+        "skills": ["security", "audit", "smart-contracts", "rug-detection"],
+        "price_avax": 0.01,
+        "price_type": "per_query",
+        "avg_completion_time_hours": 1,
+        "max_concurrent_tasks": 20,
+    },
+    {
+        "title": "Whale Tracker",
+        "description": "Monitors 20 top Avalanche wallets (Binance, Aave, GMX, Trader Joe) for significant moves. AI-powered analysis of market impact and trading patterns.",
+        "skills": ["analytics", "whale-tracking", "market-intelligence", "alerts"],
+        "price_avax": 0.05,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 100,
+    },
+    {
+        "title": "Narrative Tracker",
+        "description": "Tracks 57+ crypto narratives across 11 data sources. Detects emerging trends, sentiment shifts, and viral tokens before they pump. Updated every 10 minutes.",
+        "skills": ["analytics", "sentiment", "social", "trend-detection"],
+        "price_avax": 0.03,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 100,
+    },
+    {
+        "title": "Liquidation Sentinel",
+        "description": "Monitors lending positions on Benqi and Aave for liquidation risk. Predicts at-risk positions using health factor analysis and price volatility models.",
+        "skills": ["defi", "lending", "risk", "liquidation", "monitoring"],
+        "price_avax": 0.05,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 50,
+    },
+    {
+        "title": "Convergence Detector",
+        "description": "Cross-references signals from all intelligence agents to detect multi-agent convergence on tokens. When whale + narrative + tipster agree, confidence is highest.",
+        "skills": ["analytics", "convergence", "multi-agent", "signal-fusion"],
+        "price_avax": 0.1,
+        "price_type": "per_query",
+        "avg_completion_time_hours": 1,
+        "max_concurrent_tasks": 20,
+    },
+    {
+        "title": "Tipster Signal Tracker",
+        "description": "Monitors Telegram trading channels for buy/sell signals. Tracks signal accuracy over time and ranks channels by historical performance.",
+        "skills": ["trading", "signals", "telegram", "accuracy-tracking"],
+        "price_avax": 0.02,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 50,
+    },
+    {
+        "title": "DCA Bot",
+        "description": "Dollar-cost averaging into any Avalanche token via Trader Joe. Supports daily/weekly schedules, dip detection for 2x buys, and automatic take-profit.",
+        "skills": ["trading", "dca", "automated", "accumulation"],
+        "price_avax": 0.3,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 10,
+    },
+    {
+        "title": "SOS Emergency Bot",
+        "description": "Monitors your portfolio for crash conditions. Auto-exits to USDC if AVAX drops >15% in 1 hour, protocol TVL collapses, or health factor hits critical.",
+        "skills": ["security", "emergency", "portfolio-protection", "crash-detection"],
+        "price_avax": 0.2,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 20,
+    },
+    {
+        "title": "Sniper Bot",
+        "description": "Monitors Trader Joe Factory for new token launches. Checks contract safety via Rug Auditor, validates liquidity, and executes fast buys with configurable take-profit and stop-loss.",
+        "skills": ["trading", "sniper", "new-launches", "automated"],
+        "price_avax": 0.5,
+        "price_type": "subscription",
+        "avg_completion_time_hours": 0,
+        "max_concurrent_tasks": 5,
+    },
+]
+
+
+@router.post("/admin/reseed")
+async def reseed_with_real_agents():
+    """Replace seed marketplace data with real AgentProof agent listings."""
+    db = get_supabase()
+
+    # Deactivate all existing listings
+    db.table("marketplace_listings").update({"is_active": False}).eq("is_active", True).execute()
+
+    # Pick 11 real agents from the registry (top-ranked verified agents)
+    agents_result = (
+        db.table("agents")
+        .select("agent_id, name, tier, composite_score")
+        .not_.is_("name", "null")
+        .order("composite_score", desc=True)
+        .limit(11)
+        .execute()
+    )
+
+    if len(agents_result.data) < 11:
+        raise HTTPException(status_code=500, detail=f"Only found {len(agents_result.data)} named agents")
+
+    created = []
+    for i, listing_data in enumerate(REAL_AGENT_LISTINGS):
+        agent = agents_result.data[i]
+
+        row = {
+            "agent_id": agent["agent_id"],
+            "title": listing_data["title"],
+            "description": listing_data["description"],
+            "skills": listing_data["skills"],
+            "price_avax": listing_data["price_avax"],
+            "price_type": listing_data["price_type"],
+            "min_tier": "unranked",
+            "is_active": True,
+            "max_concurrent_tasks": listing_data["max_concurrent_tasks"],
+            "avg_completion_time_hours": listing_data["avg_completion_time_hours"],
+        }
+
+        result = db.table("marketplace_listings").insert(row).execute()
+        if result.data:
+            created.append({
+                "listing_id": result.data[0]["id"],
+                "title": listing_data["title"],
+                "agent_id": agent["agent_id"],
+                "agent_name": agent["name"],
+            })
+
+    return {
+        "status": "reseeded",
+        "deactivated_seed_data": True,
+        "created_listings": len(created),
+        "listings": created,
+    }
+
+
