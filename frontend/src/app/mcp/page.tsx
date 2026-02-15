@@ -19,7 +19,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 
-const MCP_URL = "https://mcp-server-production-6d5d.up.railway.app/sse";
+const MCP_URL = "https://mcp.agentproof.sh/sse";
 
 const TOOLS = [
   {
