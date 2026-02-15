@@ -101,6 +101,110 @@ export const REPUTATION_REGISTRY_ABI = [
   },
 ] as const;
 
+// ─── AgentProof Payments ABI (escrow-based agent hiring) ────────────
+export const AGENT_PAYMENTS_ABI = [
+  {
+    inputs: [
+      { name: "fromAgentId", type: "uint256" },
+      { name: "toAgentId", type: "uint256" },
+      { name: "amount", type: "uint256" },
+      { name: "token", type: "address" },
+      { name: "taskHash", type: "bytes32" },
+      { name: "requiresValidation", type: "bool" },
+    ],
+    name: "createPayment",
+    outputs: [{ type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "paymentId", type: "uint256" }],
+    name: "releasePayment",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "paymentId", type: "uint256" }],
+    name: "refundPayment",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "paymentId", type: "uint256" }],
+    name: "getPayment",
+    outputs: [
+      {
+        components: [
+          { name: "paymentId", type: "uint256" },
+          { name: "fromAgentId", type: "uint256" },
+          { name: "toAgentId", type: "uint256" },
+          { name: "amount", type: "uint256" },
+          { name: "token", type: "address" },
+          { name: "taskHash", type: "bytes32" },
+          { name: "requiresValidation", type: "bool" },
+          { name: "status", type: "uint8" },
+          { name: "cancelRequestedByFrom", type: "bool" },
+          { name: "cancelRequestedByTo", type: "bool" },
+          { name: "createdAt", type: "uint256" },
+          { name: "resolvedAt", type: "uint256" },
+        ],
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "agentId", type: "uint256" }],
+    name: "getAgentPayments",
+    outputs: [{ type: "uint256[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "agentId", type: "uint256" }],
+    name: "getAgentEarnings",
+    outputs: [
+      { name: "totalEarned", type: "uint256" },
+      { name: "totalPaid", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "paymentId", type: "uint256" },
+      { indexed: true, name: "fromAgentId", type: "uint256" },
+      { indexed: true, name: "toAgentId", type: "uint256" },
+      { indexed: false, name: "amount", type: "uint256" },
+      { indexed: false, name: "token", type: "address" },
+    ],
+    name: "PaymentCreated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "paymentId", type: "uint256" },
+      { indexed: false, name: "amount", type: "uint256" },
+    ],
+    name: "PaymentReleased",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "paymentId", type: "uint256" },
+      { indexed: false, name: "amount", type: "uint256" },
+    ],
+    name: "PaymentRefunded",
+    type: "event",
+  },
+] as const;
+
 // ─── AgentProof Validation Registry ABI (custom) ───────────────────
 export const VALIDATION_REGISTRY_ABI = [
   {

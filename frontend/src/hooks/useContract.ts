@@ -8,7 +8,7 @@ import {
   useSendTransaction,
 } from "wagmi";
 import { keccak256, toHex, decodeEventLog } from "viem";
-import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI } from "@/lib/contracts";
+import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI, AGENT_PAYMENTS_ABI } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES, PROTOCOL_FEE, TREASURY_ADDRESS } from "@/lib/constants";
 
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
@@ -232,4 +232,122 @@ export function useTotalAgents() {
   });
 
   return { totalAgents: data ? Number(data) : 0, isLoading };
+}
+
+// ─── Hire Agent via AgentPayments escrow ──────────────────────────────
+
+type HireStep = "idle" | "sending" | "confirming" | "done";
+
+export function useHireAgent() {
+  const [step, setStep] = useState<HireStep>("idle");
+  const [paymentId, setPaymentId] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const {
+    writeContract,
+    data: txHash,
+    isPending: isSending,
+    error: writeError,
+    reset: resetWrite,
+  } = useWriteContract();
+
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess,
+  } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // Hire an agent: escrow AVAX into AgentPayments
+  const hire = useCallback(
+    (toAgentId: number, amountAvax: number, taskDescription: string) => {
+      if (!CONTRACT_ADDRESSES.agentPayments) {
+        setErrorMsg("AgentPayments contract not configured");
+        return;
+      }
+
+      setErrorMsg(null);
+      setStep("sending");
+
+      const amountWei = BigInt(Math.floor(amountAvax * 1e18));
+      const taskHash = keccak256(toHex(taskDescription));
+
+      // fromAgentId = 0 means "user hire" (no agent identity needed)
+      writeContract({
+        address: CONTRACT_ADDRESSES.agentPayments as `0x${string}`,
+        abi: AGENT_PAYMENTS_ABI,
+        functionName: "createPayment",
+        args: [
+          BigInt(0),          // fromAgentId (0 = user)
+          BigInt(toAgentId),  // toAgentId
+          amountWei,          // amount
+          "0x0000000000000000000000000000000000000000" as `0x${string}`, // token (address(0) = AVAX)
+          taskHash,           // taskHash
+          false,              // requiresValidation
+        ],
+        value: amountWei,     // Send AVAX with the transaction
+      });
+    },
+    [writeContract]
+  );
+
+  // Extract paymentId from receipt
+  useEffect(() => {
+    if (isSuccess && receipt && step === "sending") {
+      setStep("done");
+      for (const log of receipt.logs) {
+        try {
+          const event = decodeEventLog({
+            abi: AGENT_PAYMENTS_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (event.eventName === "PaymentCreated") {
+            const id = Number((event.args as { paymentId: bigint }).paymentId);
+            setPaymentId(id);
+            break;
+          }
+        } catch {
+          // Not a PaymentCreated event, skip
+        }
+      }
+    }
+  }, [isSuccess, receipt, step]);
+
+  // Track errors
+  useEffect(() => {
+    if (writeError) {
+      setErrorMsg(
+        writeError.message?.includes("User rejected")
+          ? "Transaction rejected in wallet"
+          : writeError.message || "Payment failed"
+      );
+      setStep("idle");
+    }
+  }, [writeError]);
+
+  const statusText = (() => {
+    if (step === "sending" && isSending) return "Confirm payment in wallet...";
+    if (step === "sending" && isConfirming) return "Escrowing funds on-chain...";
+    if (step === "done") return "Payment escrowed successfully!";
+    return null;
+  })();
+
+  function reset() {
+    setStep("idle");
+    setPaymentId(null);
+    setErrorMsg(null);
+    resetWrite();
+  }
+
+  return {
+    hire,
+    txHash,
+    paymentId,
+    isPending: step === "sending" && isSending,
+    isConfirming: step === "sending" && isConfirming,
+    isSuccess: step === "done",
+    statusText,
+    error: errorMsg ? { message: errorMsg } : null,
+    reset,
+  };
 }

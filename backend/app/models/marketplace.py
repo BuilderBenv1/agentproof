@@ -72,6 +72,9 @@ class TaskCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=5000)
     price_avax: float = Field(..., gt=0)
     deadline: Optional[datetime] = None
+    payment_id: Optional[int] = None
+    task_hash: Optional[str] = None
+    tx_hash: Optional[str] = None
 
 
 class ReviewResponse(BaseModel):

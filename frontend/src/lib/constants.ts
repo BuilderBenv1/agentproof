@@ -14,6 +14,7 @@ export const CONTRACT_ADDRESSES = {
   reputationRegistry: ERC8004_ADDRESSES.reputationRegistry,
   validationRegistry: process.env.NEXT_PUBLIC_VALIDATION_REGISTRY || "",
   agentProofCore: process.env.NEXT_PUBLIC_AGENTPROOF_CORE || "",
+  agentPayments: process.env.NEXT_PUBLIC_AGENT_PAYMENTS || "0x4E3092E46233c32F3A0E4b782230cA67E359f35f",
 };
 
 // Protocol fee for agent registration (0.05 AVAX)

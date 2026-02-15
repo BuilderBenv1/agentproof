@@ -5,20 +5,27 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/supabase";
 import { Listing } from "@/hooks/useMarketplace";
 import { MonitoringOverview } from "@/hooks/useMonitoring";
+import { useHireAgent } from "@/hooks/useContract";
+import { useAccount } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import SkillTag from "@/components/marketplace/SkillTag";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { ArrowLeft, DollarSign, Clock, Shield, Zap, Globe, Copy, CheckCircle } from "lucide-react";
+import { ArrowLeft, DollarSign, Clock, Shield, Zap, Globe, Copy, CheckCircle, Loader2, AlertCircle, Lock } from "lucide-react";
 import Link from "next/link";
 
 export default function ListingDetailPage() {
   const params = useParams();
   const listingId = params.listingId as string;
+  const { address, isConnected } = useAccount();
+  const { hire, txHash, paymentId, isPending, isConfirming, isSuccess, statusText, error: hireError, reset: resetHire } = useHireAgent();
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [agent, setAgent] = useState<Record<string, unknown> | null>(null);
   const [monitoring, setMonitoring] = useState<MonitoringOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [taskDesc, setTaskDesc] = useState("");
+  const [showHireForm, setShowHireForm] = useState(false);
 
   useEffect(() => {
     async function fetch() {
@@ -48,6 +55,27 @@ export default function ListingDetailPage() {
     }
     fetch();
   }, [listingId]);
+
+  // When on-chain payment succeeds, create the task in the backend
+  useEffect(() => {
+    if (isSuccess && listing && address && taskDesc) {
+      apiFetch("/marketplace/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          listing_id: listing.id,
+          agent_id: listing.agent_id,
+          client_address: address,
+          title: `Hire: ${listing.title}`,
+          description: taskDesc,
+          price_avax: listing.price_avax || 0,
+          payment_id: paymentId,
+          tx_hash: txHash,
+        }),
+      }).catch(() => {
+        // Task creation is best-effort — the on-chain escrow is the source of truth
+      });
+    }
+  }, [isSuccess, listing, address, taskDesc, paymentId, txHash]);
 
   function copyEndpoint(url: string) {
     navigator.clipboard.writeText(url);
@@ -214,6 +242,125 @@ export default function ListingDetailPage() {
             </div>
           </div>
         )}
+
+        {/* ─── Hire Agent Section ─── */}
+        <div className="pt-4 border-t border-gray-800">
+          {!isConnected ? (
+            <div className="text-center space-y-3">
+              <p className="text-xs font-mono text-gray-500">Connect wallet to hire this agent</p>
+              <ConnectButton />
+            </div>
+          ) : !showHireForm && !isSuccess ? (
+            <button
+              onClick={() => setShowHireForm(true)}
+              className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <DollarSign className="w-4 h-4" />
+              Hire Agent — {listing.price_avax} AVAX
+            </button>
+          ) : isSuccess ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-400" />
+                <p className="text-sm font-bold text-emerald-400">Payment Escrowed</p>
+              </div>
+              <p className="text-xs text-gray-400">
+                {listing.price_avax} AVAX locked in escrow. The agent will complete your task, then funds are released (0.5% protocol fee).
+              </p>
+              {paymentId !== null && (
+                <p className="text-xs font-mono text-gray-500">Payment ID: #{paymentId}</p>
+              )}
+              {txHash && (
+                <a
+                  href={`https://snowtrace.io/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-emerald-400 hover:underline inline-block"
+                >
+                  View on Snowtrace
+                </a>
+              )}
+              <button
+                onClick={() => { resetHire(); setShowHireForm(false); setTaskDesc(""); }}
+                className="text-xs text-gray-500 hover:text-white mt-2 block"
+              >
+                Hire again
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-mono text-gray-500 uppercase block mb-1.5">
+                  Task Description
+                </label>
+                <textarea
+                  value={taskDesc}
+                  onChange={(e) => setTaskDesc(e.target.value)}
+                  placeholder="Describe what you need this agent to do..."
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-emerald-500 focus:outline-none resize-none"
+                  rows={3}
+                  disabled={isPending || isConfirming}
+                />
+              </div>
+
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Price</span>
+                  <span className="text-white">{listing.price_avax} AVAX</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Protocol fee</span>
+                  <span className="text-gray-400">0.5%</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Protection</span>
+                  <span className="text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> 7-day escrow refund
+                  </span>
+                </div>
+              </div>
+
+              {hireError && (
+                <div className="flex items-center gap-2 text-xs text-red-400">
+                  <AlertCircle className="w-3 h-3" />
+                  {hireError.message}
+                </div>
+              )}
+
+              {statusText && (
+                <div className="flex items-center gap-2 text-xs text-emerald-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {statusText}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowHireForm(false); setTaskDesc(""); resetHire(); }}
+                  className="px-4 py-2 text-xs font-mono text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
+                  disabled={isPending || isConfirming}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!taskDesc.trim()) return;
+                    hire(listing.agent_id, listing.price_avax || 0, taskDesc);
+                  }}
+                  disabled={!taskDesc.trim() || isPending || isConfirming}
+                  className="flex-1 py-2 px-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {isPending || isConfirming ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <DollarSign className="w-4 h-4" />
+                  )}
+                  {isPending ? "Confirm in Wallet" : isConfirming ? "Escrowing..." : `Pay ${listing.price_avax} AVAX`}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
