@@ -471,18 +471,17 @@ async def reseed_with_real_agents():
     # Deactivate all existing listings
     db.table("marketplace_listings").update({"is_active": False}).eq("is_active", True).execute()
 
-    # Pick 11 real agents from the registry (top-ranked verified agents)
+    # Pick 11 top-ranked agents from the Oracle registry
     agents_result = (
         db.table("agents")
         .select("agent_id, name, tier, composite_score")
-        .not_.is_("name", "null")
         .order("composite_score", desc=True)
         .limit(11)
         .execute()
     )
 
     if len(agents_result.data) < 11:
-        raise HTTPException(status_code=500, detail=f"Only found {len(agents_result.data)} named agents")
+        raise HTTPException(status_code=500, detail=f"Only found {len(agents_result.data)} agents")
 
     created = []
     for i, listing_data in enumerate(REAL_AGENT_LISTINGS):
