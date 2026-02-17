@@ -26,6 +26,7 @@ export default function DiscoverPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [tier, setTier] = useState("");
+  const [chain, setChain] = useState("");
   const [minScore, setMinScore] = useState("");
   const [sort, setSort] = useState("score");
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -44,6 +45,7 @@ export default function DiscoverPage() {
           q: query || undefined,
           category: category || undefined,
           tier: tier || undefined,
+          chain: chain || undefined,
           min_score: minScore || undefined,
           sort,
           page,
@@ -57,7 +59,7 @@ export default function DiscoverPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, category, tier, minScore, sort, page]);
+  }, [query, category, tier, chain, minScore, sort, page]);
 
   useEffect(() => {
     fetchAgents();
@@ -120,7 +122,21 @@ export default function DiscoverPage() {
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="text-xs font-mono text-gray-500 block mb-1">Chain</label>
+            <select
+              value={chain}
+              onChange={(e) => { setChain(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white font-mono"
+            >
+              <option value="">All Chains</option>
+              <option value="avalanche">Avalanche</option>
+              <option value="ethereum">Ethereum</option>
+              <option value="base">Base</option>
+              <option value="linea">Linea</option>
+            </select>
+          </div>
           <div>
             <label className="text-xs font-mono text-gray-500 block mb-1">Category</label>
             <select

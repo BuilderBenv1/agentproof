@@ -28,6 +28,28 @@ logger = logging.getLogger(__name__)
 # Pure math functions with zero external dependencies.
 
 
+def _calculate_uri_stability_score(uri_change_count: int) -> float:
+    """URI stability score (0-100). Fewer changes = higher score."""
+    if uri_change_count == 0:
+        return 100.0
+    if uri_change_count <= 2:
+        return 80.0
+    if uri_change_count <= 5:
+        return 50.0
+    return max(0.0, 100.0 - uri_change_count * 10)
+
+
+def _calculate_freshness_multiplier(account_age_days: int) -> float:
+    """Freshness penalty: new identities get a score multiplier < 1.0."""
+    if account_age_days < 7:
+        return 0.70
+    if account_age_days < 30:
+        return 0.85
+    if account_age_days < 90:
+        return 0.95
+    return 1.0
+
+
 def calculate_composite_score(
     average_rating: float,
     feedback_count: int,
@@ -35,9 +57,11 @@ def calculate_composite_score(
     validation_success_rate: float,
     account_age_days: int,
     uptime_pct: float = -1.0,
+    deployer_score: float = 50.0,
+    uri_change_count: int = 0,
 ) -> tuple[float, ScoreBreakdown]:
     """
-    Composite score (0-100) with 6 signals.
+    Composite score (0-100) with 8 signals.
     Returns (score, breakdown) so the oracle can expose component scores.
     """
     prior_rating = 50.0
@@ -75,14 +99,22 @@ def calculate_composite_score(
     else:
         uptime_score = uptime_pct
 
+    uri_stability = _calculate_uri_stability_score(uri_change_count)
+    freshness = _calculate_freshness_multiplier(account_age_days)
+
     composite = (
-        rating_score * 0.35
-        + volume_score * 0.12
-        + consistency_score * 0.13
-        + validation_score * 0.18
-        + age_score * 0.07
-        + uptime_score * 0.15
+        rating_score * 0.30
+        + volume_score * 0.10
+        + consistency_score * 0.10
+        + validation_score * 0.15
+        + age_score * 0.12
+        + uptime_score * 0.10
+        + deployer_score * 0.08
+        + uri_stability * 0.05
     )
+
+    # Apply freshness penalty
+    composite *= freshness
 
     breakdown = ScoreBreakdown(
         rating_score=round(rating_score, 2),
@@ -91,6 +123,8 @@ def calculate_composite_score(
         validation_score=round(validation_score, 2),
         age_score=round(age_score, 2),
         uptime_score=round(uptime_score, 2),
+        deployer_score=round(deployer_score, 2),
+        uri_stability_score=round(uri_stability, 2),
     )
 
     return round(max(0.0, min(100.0, composite)), 2), breakdown
@@ -152,8 +186,11 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
     severity = {
         RiskFlag.HIGH_RISK_SCORE: 3,
         RiskFlag.CONCENTRATED_FEEDBACK: 3,
+        RiskFlag.SERIAL_DEPLOYER: 3,
         RiskFlag.SUSPICIOUS_VOLATILITY: 2,
         RiskFlag.LOW_UPTIME: 2,
+        RiskFlag.FREQUENT_URI_CHANGES: 2,
+        RiskFlag.NEW_IDENTITY: 2,
         RiskFlag.LOW_FEEDBACK: 1,
         RiskFlag.UNVERIFIED: 1,
     }
@@ -232,6 +269,24 @@ class TrustService:
         except Exception:
             pass
 
+        # Deployer reputation lookup
+        dep_score = 50.0
+        try:
+            dep_result = (
+                db.table("deployer_reputation")
+                .select("deployer_score")
+                .eq("owner_address", agent.get("owner_address", ""))
+                .limit(1)
+                .execute()
+            )
+            if dep_result.data:
+                dep_score = float(dep_result.data[0].get("deployer_score", 50))
+        except Exception:
+            pass
+
+        # URI change count
+        uri_changes = int(agent.get("uri_change_count", 0) or 0)
+
         # Compute score
         composite, breakdown = calculate_composite_score(
             average_rating=avg_rating,
@@ -240,6 +295,8 @@ class TrustService:
             validation_success_rate=success_rate,
             account_age_days=age_days,
             uptime_pct=uptime_pct,
+            deployer_score=dep_score,
+            uri_change_count=uri_changes,
         )
         tier = determine_tier(composite, feedback_count)
 
@@ -259,6 +316,13 @@ class TrustService:
             top_count = counts.most_common(1)[0][1]
             if top_count / feedback_count > 0.6:
                 risk_flags.append(RiskFlag.CONCENTRATED_FEEDBACK)
+        # New anti-mutation flags
+        if dep_score < 30:
+            risk_flags.append(RiskFlag.SERIAL_DEPLOYER)
+        if uri_changes >= 3:
+            risk_flags.append(RiskFlag.FREQUENT_URI_CHANGES)
+        if age_days < 7:
+            risk_flags.append(RiskFlag.NEW_IDENTITY)
 
         recommendation = _determine_recommendation(
             composite, feedback_count, risk_flags
@@ -369,6 +433,18 @@ class TrustService:
             )
         if RiskFlag.UNVERIFIED in risk_flags:
             details_parts.append("Agent has no feedback history")
+        if RiskFlag.SERIAL_DEPLOYER in risk_flags:
+            details_parts.append(
+                "Deployer has a low reputation score — high agent abandonment rate"
+            )
+        if RiskFlag.FREQUENT_URI_CHANGES in risk_flags:
+            details_parts.append(
+                "Agent URI has been changed 3+ times — possible identity mutation"
+            )
+        if RiskFlag.NEW_IDENTITY in risk_flags:
+            details_parts.append(
+                "Agent identity is less than 7 days old — freshness penalty applied"
+            )
 
         return RiskAssessment(
             agent_id=agent_id,

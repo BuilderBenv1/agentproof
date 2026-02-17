@@ -5,14 +5,22 @@ import dynamic from "next/dynamic";
 const Providers = dynamic(() => import("./providers"), { ssr: false });
 
 export const metadata: Metadata = {
-  title: "AgentProof — Transparent Reputation for AI Agents",
+  title: "AgentProof — Trust Oracle for the ERC-8004 Agent Economy",
   description:
-    "Transparent reputation infrastructure for autonomous AI agents on Avalanche. Track, rate, and verify AI agent performance with on-chain reputation scores.",
-  keywords: ["AI agents", "reputation", "Avalanche", "blockchain", "ERC-8004", "DeFi"],
+    "Trust oracle for the ERC-8004 agent economy. 25k+ agents scored across Avalanche, Ethereum, Base & Linea.",
+  keywords: ["AI agents", "reputation", "Avalanche", "blockchain", "ERC-8004", "DeFi", "trust oracle", "MCP"],
+  metadataBase: new URL("https://agentproof.sh"),
   openGraph: {
-    title: "AgentProof",
-    description: "Transparent reputation for AI agents on Avalanche",
+    title: "AgentProof — Trust Oracle for the ERC-8004 Agent Economy",
+    description: "Trust oracle for the ERC-8004 agent economy. 25k+ agents scored.",
     type: "website",
+    siteName: "AgentProof",
+    url: "https://agentproof.sh",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AgentProof — Trust Oracle for the ERC-8004 Agent Economy",
+    description: "Trust oracle for the ERC-8004 agent economy. 25k+ agents scored.",
   },
 };
 

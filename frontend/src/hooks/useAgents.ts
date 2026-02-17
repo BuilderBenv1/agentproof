@@ -22,6 +22,29 @@ export interface Agent {
   rank: number | null;
   tier: string;
   source_chain?: string;
+  deployer_score?: number;
+  deployer_agent_count?: number;
+  uri_change_count?: number;
+  freshness_multiplier?: number;
+  deployer_info?: {
+    owner_address: string;
+    total_agents: number;
+    active_agents: number;
+    abandoned_agents: number;
+    avg_agent_score: number;
+    best_agent_score: number;
+    oldest_agent_age_days: number;
+    deployer_score: number;
+  };
+  uri_changes?: {
+    id: number;
+    agent_id: number;
+    old_uri: string;
+    new_uri: string;
+    changed_at: string;
+    tx_hash: string;
+    block_number: number;
+  }[];
 }
 
 interface AgentListResult {

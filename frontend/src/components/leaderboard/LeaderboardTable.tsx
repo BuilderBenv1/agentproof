@@ -3,7 +3,7 @@
 import Link from "next/link";
 import CategoryBadge from "@/components/reputation/CategoryBadge";
 import { formatScore, getTierColor } from "@/lib/utils";
-import { Crown, Medal, Award, MessageSquare } from "lucide-react";
+import { Crown, Medal, Award, MessageSquare, ShieldCheck } from "lucide-react";
 
 interface LeaderboardEntry {
   agent_id: number;
@@ -19,6 +19,13 @@ interface LeaderboardEntry {
   image_url: string | null;
   source_chain?: string;
 }
+
+const CHAIN_COLORS: Record<string, string> = {
+  avalanche: "#E84142",
+  ethereum: "#627EEA",
+  base: "#0052FF",
+  linea: "#61DFFF",
+};
 
 interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
@@ -125,6 +132,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4">Score</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden sm:table-cell">Rating</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden sm:table-cell">Reviews</th>
+            <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden lg:table-cell">Verified</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4">Tier</th>
           </tr>
         </thead>
@@ -162,8 +170,8 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                       <span className="text-xs text-gray-600 font-mono flex items-center gap-1">
                         <span
                           className="w-1.5 h-1.5 rounded-full inline-block"
-                          style={{ backgroundColor: entry.source_chain === "avalanche" ? "#E84142" : "#627EEA" }}
-                          title={entry.source_chain === "avalanche" ? "Avalanche" : "Ethereum"}
+                          style={{ backgroundColor: CHAIN_COLORS[entry.source_chain || "avalanche"] || "#666" }}
+                          title={entry.source_chain || "avalanche"}
                         />
                         ID: {entry.agent_id}
                       </span>
@@ -188,6 +196,16 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                     <MessageSquare className="w-3 h-3 text-gray-600" />
                     {entry.total_feedback}
                   </span>
+                </td>
+                <td className="py-3 px-4 text-right hidden lg:table-cell">
+                  {entry.validation_success_rate > 0 ? (
+                    <span className="font-mono text-sm text-emerald-400 flex items-center justify-end gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {entry.validation_success_rate.toFixed(0)}%
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs text-gray-600">---</span>
+                  )}
                 </td>
                 <td className="py-3 px-4 text-right">
                   <TierBadge tier={entry.tier} />

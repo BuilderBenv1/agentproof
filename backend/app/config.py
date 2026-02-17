@@ -24,6 +24,42 @@ class Settings(BaseSettings):
                     urls.append(url)
         return urls
 
+    # Base
+    base_rpc_url: str = ""
+    base_rpc_fallback_urls: str = ""  # Comma-separated fallback RPCs
+    erc8004_base_identity_registry: str = ""
+
+    @property
+    def base_rpc_urls(self) -> list[str]:
+        """Return all Base RPC URLs (primary + fallbacks) for failover."""
+        urls = []
+        if self.base_rpc_url:
+            urls.append(self.base_rpc_url)
+        if self.base_rpc_fallback_urls:
+            for url in self.base_rpc_fallback_urls.split(","):
+                url = url.strip()
+                if url and url not in urls:
+                    urls.append(url)
+        return urls
+
+    # Linea
+    linea_rpc_url: str = ""
+    linea_rpc_fallback_urls: str = ""  # Comma-separated fallback RPCs
+    erc8004_linea_identity_registry: str = ""
+
+    @property
+    def linea_rpc_urls(self) -> list[str]:
+        """Return all Linea RPC URLs (primary + fallbacks) for failover."""
+        urls = []
+        if self.linea_rpc_url:
+            urls.append(self.linea_rpc_url)
+        if self.linea_rpc_fallback_urls:
+            for url in self.linea_rpc_fallback_urls.split(","):
+                url = url.strip()
+                if url and url not in urls:
+                    urls.append(url)
+        return urls
+
     # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""
     erc8004_reputation_registry: str = ""

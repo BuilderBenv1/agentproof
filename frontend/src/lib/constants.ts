@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.agentproof.sh/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://agentproof-production.up.railway.app";
 
 export const AVALANCHE_CHAIN_ID = 43114;
 

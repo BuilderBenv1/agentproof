@@ -148,6 +148,21 @@ async def risk_check(agent_id: int) -> str:
 
 
 @mcp.tool()
+async def deployer_reputation(owner_address: str) -> str:
+    """Get reputation data for a deployer (wallet that registered agents).
+
+    Returns deployer score (0-100), total/active/abandoned agent counts,
+    average agent score, label (established/new_deployer/serial_deployer_warning),
+    and top 20 agents by score.
+
+    Args:
+        owner_address: The deployer wallet address (0x...).
+    """
+    data = await _oracle_get(f"/api/reputation/deployer/{owner_address}")
+    return _fmt(data)
+
+
+@mcp.tool()
 async def network_stats() -> str:
     """Get aggregate statistics about the ERC-8004 agent network on Avalanche.
 

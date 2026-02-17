@@ -40,6 +40,10 @@ class AgentResponse(AgentBase):
     validation_success_rate: float = 0
     rank: Optional[int] = None
     tier: str = "unranked"
+    deployer_score: Optional[float] = None
+    deployer_agent_count: Optional[int] = None
+    uri_change_count: Optional[int] = None
+    freshness_multiplier: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -55,3 +59,5 @@ class AgentProfileResponse(AgentResponse):
     feedback_count: int = 0
     validation_count: int = 0
     score_breakdown: Optional[dict] = None
+    deployer_info: Optional[dict] = None
+    uri_changes: Optional[list] = None

@@ -6,6 +6,8 @@ const CHAINS = [
   { value: "", label: "All Chains" },
   { value: "avalanche", label: "Avalanche", color: "#E84142" },
   { value: "ethereum", label: "Ethereum", color: "#627EEA" },
+  { value: "base", label: "Base", color: "#0052FF" },
+  { value: "linea", label: "Linea", color: "#61DFFF" },
 ] as const;
 
 interface FilterBarProps {

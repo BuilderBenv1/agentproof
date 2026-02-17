@@ -10,6 +10,7 @@ async def search_agents(
     category: str | None = None,
     tier: str | None = None,
     min_score: float | None = None,
+    chain: str | None = None,
     has_insurance: bool | None = None,
     sort: str = Query("score", pattern="^(score|newest|most_reviewed|most_earned|relevance)$"),
     page: int = Query(1, ge=1),
@@ -30,6 +31,8 @@ async def search_agents(
         query = query.eq("tier", tier)
     if min_score is not None:
         query = query.gte("composite_score", min_score)
+    if chain:
+        query = query.eq("source_chain", chain)
 
     # Sort mapping
     sort_map = {

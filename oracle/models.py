@@ -22,6 +22,9 @@ class RiskFlag(str, Enum):
     LOW_FEEDBACK = "LOW_FEEDBACK"
     CONCENTRATED_FEEDBACK = "CONCENTRATED_FEEDBACK"
     LOW_UPTIME = "LOW_UPTIME"
+    SERIAL_DEPLOYER = "SERIAL_DEPLOYER"
+    FREQUENT_URI_CHANGES = "FREQUENT_URI_CHANGES"
+    NEW_IDENTITY = "NEW_IDENTITY"
 
 
 class RiskLevel(str, Enum):
@@ -41,6 +44,8 @@ class ScoreBreakdown(BaseModel):
     validation_score: float = 0.0
     age_score: float = 0.0
     uptime_score: float = 0.0
+    deployer_score: float = 0.0
+    uri_stability_score: float = 0.0
 
 
 class TrustEvaluation(BaseModel):

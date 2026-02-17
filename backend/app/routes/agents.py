@@ -72,6 +72,37 @@ async def get_agent(agent_id: int):
         .execute()
     )
 
+    # Deployer info
+    deployer_info = None
+    try:
+        dep_result = (
+            db.table("deployer_reputation")
+            .select("*")
+            .eq("owner_address", agent.get("owner_address", ""))
+            .limit(1)
+            .execute()
+        )
+        if dep_result.data:
+            deployer_info = dep_result.data[0]
+    except Exception:
+        pass
+
+    # URI changes (last 10)
+    uri_changes = None
+    try:
+        uri_result = (
+            db.table("agent_uri_changes")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .order("changed_at", desc=True)
+            .limit(10)
+            .execute()
+        )
+        if uri_result.data:
+            uri_changes = uri_result.data
+    except Exception:
+        pass
+
     return AgentProfileResponse(
         **agent,
         feedback_count=feedback_result.count or 0,
@@ -83,6 +114,8 @@ async def get_agent(agent_id: int):
             "validation_success_rate": agent.get("validation_success_rate", 0),
             "tier": agent.get("tier", "unranked"),
         },
+        deployer_info=deployer_info,
+        uri_changes=uri_changes,
     )
 
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Book, Code, Terminal, Globe, ChevronDown, ChevronRight, Copy, CheckCircle } from "lucide-react";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.agentproof.sh/api";
+const BASE_URL = "https://api.agentproof.sh";
 
 type TabId = "api" | "oracle" | "sdk" | "contracts";
 

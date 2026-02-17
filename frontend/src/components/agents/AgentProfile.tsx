@@ -5,11 +5,13 @@ import CategoryBadge from "@/components/reputation/CategoryBadge";
 import ReputationChart from "@/components/reputation/ReputationChart";
 import ReputationHistory from "@/components/reputation/ReputationHistory";
 import FeedbackForm from "@/components/reputation/FeedbackForm";
+import DeployerBadge from "@/components/reputation/DeployerBadge";
+import FreshnessIndicator from "@/components/reputation/FreshnessIndicator";
 import { truncateAddress, formatDate, getTierColor, isNavigableUri, decodeDataUri } from "@/lib/utils";
 import { useFeedback, useScoreHistory } from "@/hooks/useReputation";
 import {
   ExternalLink, Copy, Calendar, Shield, Star, BarChart3,
-  CheckCircle, MessageSquare, Activity, FileText,
+  CheckCircle, MessageSquare, Activity, FileText, RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import type { Agent } from "@/hooks/useAgents";
@@ -104,21 +106,20 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 {agent.name || `Agent #${agent.agent_id}`}
               </h1>
               <CategoryBadge category={agent.category} />
-              {agent.source_chain && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
-                  style={{
-                    color: agent.source_chain === "avalanche" ? "#E84142" : "#627EEA",
-                    backgroundColor: agent.source_chain === "avalanche" ? "#E8414212" : "#627EEA12",
-                    border: `1px solid ${agent.source_chain === "avalanche" ? "#E8414225" : "#627EEA25"}`,
-                  }}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: agent.source_chain === "avalanche" ? "#E84142" : "#627EEA" }}
-                  />
-                  {agent.source_chain === "avalanche" ? "Avalanche" : "Ethereum"}
-                </span>
-              )}
+              {agent.source_chain && (() => {
+                const chainColors: Record<string, string> = {
+                  avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
+                };
+                const c = chainColors[agent.source_chain] || "#666";
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
+                    style={{ color: c, backgroundColor: `${c}12`, border: `1px solid ${c}25` }}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                    {agent.source_chain}
+                  </span>
+                );
+              })()}
               <span
                 className="px-2.5 py-1 rounded-md text-xs font-mono font-bold uppercase"
                 style={{
@@ -171,8 +172,11 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
             </div>
           </div>
 
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex flex-col items-center gap-2">
             <ScoreGauge score={agent.composite_score} tier={agent.tier} size="lg" showTier />
+            {agent.freshness_multiplier != null && agent.freshness_multiplier < 1.0 && (
+              <FreshnessIndicator multiplier={agent.freshness_multiplier} />
+            )}
           </div>
         </div>
       </div>
@@ -248,6 +252,34 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
           />
         </div>
       </div>
+
+      {/* Deployer History */}
+      {agent.deployer_info && (
+        <DeployerBadge info={agent.deployer_info} />
+      )}
+
+      {/* URI Changes */}
+      {agent.uri_changes && agent.uri_changes.length > 0 && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+          <h3 className="text-xs font-mono text-gray-500 uppercase flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" />
+            URI Changes ({agent.uri_changes.length})
+          </h3>
+          <div className="space-y-2">
+            {agent.uri_changes.map((change, i) => (
+              <div key={change.id || i} className="flex items-start gap-2 text-[11px] font-mono">
+                <span className="text-gray-600 flex-shrink-0 w-28">
+                  {new Date(change.changed_at).toLocaleDateString()}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-red-400/60 line-through block truncate">{change.old_uri || "—"}</span>
+                  <span className="text-emerald-400/80 block truncate">{change.new_uri}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Rate This Agent */}
       <FeedbackForm

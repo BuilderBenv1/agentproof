@@ -13,6 +13,8 @@ from app.services.scoring import (
     calculate_composite_score,
     calculate_std_dev,
     calculate_account_age_days,
+    calculate_freshness_multiplier,
+    calculate_deployer_score,
     determine_tier,
 )
 
@@ -22,8 +24,12 @@ CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
 ERC8004_ETH_IDENTITY_START_BLOCK = 24_339_900  # First Registered event at block 24,339,925
+ERC8004_BASE_IDENTITY_START_BLOCK = 0  # CREATE2 deploy — start block to be discovered
+ERC8004_LINEA_IDENTITY_START_BLOCK = 0  # CREATE2 deploy — start block to be discovered
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
+BASE_MAX_BLOCK_RANGE = 2000
+LINEA_MAX_BLOCK_RANGE = 2000
 
 
 def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
@@ -217,6 +223,126 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
     return len(events)
 
 
+def process_erc8004_base_identity_events(from_block: int, to_block: int):
+    """Process Registered events from the ERC-8004 Identity Registry on Base."""
+    blockchain = get_blockchain_service()
+    logger.info(f"[ERC-8004-BASE] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
+    events = blockchain.get_erc8004_base_registered_events(from_block, to_block)
+    if not events:
+        return 0
+    logger.info(f"[ERC-8004-BASE] Found {len(events)} Registered events in {from_block}-{to_block}")
+
+    db = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Collect unique block numbers and fetch timestamps in one pass
+    unique_blocks = set(e.blockNumber for e in events)
+    block_ts_cache: dict[int, datetime] = {}
+    for blk in sorted(unique_blocks):
+        try:
+            block_data = blockchain.w3_base.eth.get_block(blk)
+            block_ts_cache[blk] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        except Exception as e:
+            logger.warning(f"[ERC-8004-BASE] Failed to get block {blk} timestamp: {e}")
+            block_ts_cache[blk] = datetime.now(timezone.utc)
+    logger.info(f"[ERC-8004-BASE] Fetched timestamps for {len(unique_blocks)} unique blocks")
+
+    rows = []
+    for event in events:
+        rows.append({
+            "agent_id": event.args.agentId,
+            "owner_address": event.args.owner,
+            "agent_uri": event.args.agentURI,
+            "source_chain": "base",
+            "registered_at": block_ts_cache[event.blockNumber].isoformat(),
+            "updated_at": now,
+        })
+
+    # Batch upsert in chunks of 500 (Supabase has payload size limits)
+    saved = 0
+    batch_size = 500
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            saved += len(batch)
+        except Exception as e:
+            logger.error(f"[ERC-8004-BASE] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
+            # Fallback: try smaller sub-batches of 50
+            for j in range(0, len(batch), 50):
+                sub = batch[j:j + 50]
+                try:
+                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    saved += len(sub)
+                except Exception as e2:
+                    logger.error(f"[ERC-8004-BASE] Sub-batch upsert also failed: {e2}")
+
+    logger.info(f"[ERC-8004-BASE] Saved {saved}/{len(rows)} agents")
+    if saved == 0 and len(rows) > 0:
+        raise Exception(f"All upserts failed for {len(rows)} agents — not advancing block pointer")
+    return len(events)
+
+
+def process_erc8004_linea_identity_events(from_block: int, to_block: int):
+    """Process Registered events from the ERC-8004 Identity Registry on Linea."""
+    blockchain = get_blockchain_service()
+    logger.info(f"[ERC-8004-LINEA] Scanning blocks {from_block}-{to_block} (range={to_block - from_block + 1})")
+    events = blockchain.get_erc8004_linea_registered_events(from_block, to_block)
+    if not events:
+        return 0
+    logger.info(f"[ERC-8004-LINEA] Found {len(events)} Registered events in {from_block}-{to_block}")
+
+    db = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Collect unique block numbers and fetch timestamps in one pass
+    unique_blocks = set(e.blockNumber for e in events)
+    block_ts_cache: dict[int, datetime] = {}
+    for blk in sorted(unique_blocks):
+        try:
+            block_data = blockchain.w3_linea.eth.get_block(blk)
+            block_ts_cache[blk] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        except Exception as e:
+            logger.warning(f"[ERC-8004-LINEA] Failed to get block {blk} timestamp: {e}")
+            block_ts_cache[blk] = datetime.now(timezone.utc)
+    logger.info(f"[ERC-8004-LINEA] Fetched timestamps for {len(unique_blocks)} unique blocks")
+
+    rows = []
+    for event in events:
+        rows.append({
+            "agent_id": event.args.agentId,
+            "owner_address": event.args.owner,
+            "agent_uri": event.args.agentURI,
+            "source_chain": "linea",
+            "registered_at": block_ts_cache[event.blockNumber].isoformat(),
+            "updated_at": now,
+        })
+
+    # Batch upsert in chunks of 500 (Supabase has payload size limits)
+    saved = 0
+    batch_size = 500
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            saved += len(batch)
+        except Exception as e:
+            logger.error(f"[ERC-8004-LINEA] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
+            # Fallback: try smaller sub-batches of 50
+            for j in range(0, len(batch), 50):
+                sub = batch[j:j + 50]
+                try:
+                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    saved += len(sub)
+                except Exception as e2:
+                    logger.error(f"[ERC-8004-LINEA] Sub-batch upsert also failed: {e2}")
+
+    logger.info(f"[ERC-8004-LINEA] Saved {saved}/{len(rows)} agents")
+    if saved == 0 and len(rows) > 0:
+        raise Exception(f"All upserts failed for {len(rows)} agents — not advancing block pointer")
+    return len(events)
+
+
 def process_feedback_events(from_block: int, to_block: int):
     """Process NewFeedback (ERC-8004) or FeedbackSubmitted (legacy) events."""
     blockchain = get_blockchain_service()
@@ -348,6 +474,97 @@ def process_validation_events(from_block: int, to_block: int):
     return len(req_events) + len(sub_events)
 
 
+def recalculate_deployer_scores():
+    """Group agents by owner_address and compute deployer reputation scores."""
+    db = get_supabase()
+
+    # Fetch all agents with relevant fields (paginated)
+    all_agents: list[dict] = []
+    offset = 0
+    while True:
+        batch = (
+            db.table("agents")
+            .select("agent_id, owner_address, registered_at, composite_score, total_feedback")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        if not batch.data:
+            break
+        all_agents.extend(batch.data)
+        if len(batch.data) < 1000:
+            break
+        offset += 1000
+
+    if not all_agents:
+        return
+
+    # Group by owner_address
+    from collections import defaultdict
+    deployers: dict[str, list[dict]] = defaultdict(list)
+    for a in all_agents:
+        owner = a.get("owner_address", "")
+        if owner:
+            deployers[owner].append(a)
+
+    now_str = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for owner, agents in deployers.items():
+        total = len(agents)
+        scores = [float(a.get("composite_score", 0) or 0) for a in agents]
+        feedbacks = [int(a.get("total_feedback", 0) or 0) for a in agents]
+
+        # Active = has any feedback; Abandoned = no feedback AND age > 30 days
+        active = 0
+        abandoned = 0
+        oldest_days = 0
+        for a in agents:
+            fb = int(a.get("total_feedback", 0) or 0)
+            try:
+                reg = datetime.fromisoformat(a["registered_at"].replace("Z", "+00:00"))
+                age = calculate_account_age_days(reg)
+            except Exception:
+                age = 0
+            oldest_days = max(oldest_days, age)
+            if fb > 0:
+                active += 1
+            elif age > 30:
+                abandoned += 1
+
+        avg_score = sum(scores) / len(scores) if scores else 0
+        best_score = max(scores) if scores else 0
+
+        dep_score = calculate_deployer_score(
+            total_agents=total,
+            active_agents=active,
+            abandoned_agents=abandoned,
+            avg_agent_score=avg_score,
+            oldest_age_days=oldest_days,
+        )
+
+        rows.append({
+            "owner_address": owner,
+            "total_agents": total,
+            "active_agents": active,
+            "abandoned_agents": abandoned,
+            "avg_agent_score": round(avg_score, 2),
+            "best_agent_score": round(best_score, 2),
+            "oldest_agent_age_days": oldest_days,
+            "deployer_score": dep_score,
+            "updated_at": now_str,
+        })
+
+    # Batch upsert deployer_reputation
+    batch_size = 500
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            db.table("deployer_reputation").upsert(batch, on_conflict="owner_address").execute()
+        except Exception as e:
+            logger.error(f"Error upserting deployer_reputation batch {i // batch_size}: {e}")
+
+    logger.info(f"Scored {len(rows)} deployers")
+
+
 def recalculate_agent_scores():
     """Recalculate composite scores and tiers for all agents (batched)."""
     db = get_supabase()
@@ -359,7 +576,7 @@ def recalculate_agent_scores():
         while True:
             batch = (
                 db.table("agents")
-                .select("agent_id, registered_at, owner_address, agent_uri")
+                .select("agent_id, registered_at, owner_address, agent_uri, uri_change_count")
                 .range(offset, offset + 999)
                 .execute()
             )
@@ -433,6 +650,28 @@ def recalculate_agent_scores():
     except Exception as e:
         logger.error(f"Error bulk-fetching validations: {e}")
 
+    # Bulk-fetch deployer scores
+    deployer_scores: dict[str, float] = {}
+    try:
+        offset = 0
+        while True:
+            result = (
+                db.table("deployer_reputation")
+                .select("owner_address, deployer_score, total_agents")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            for d in result.data:
+                deployer_scores[d["owner_address"]] = {
+                    "score": float(d.get("deployer_score", 50) or 50),
+                    "count": int(d.get("total_agents", 0) or 0),
+                }
+            if len(result.data) < page_size:
+                break
+            offset += page_size
+    except Exception as e:
+        logger.error(f"Error bulk-fetching deployer scores: {e}")
+
     # Calculate scores for all agents
     now = datetime.now(timezone.utc).isoformat()
     update_rows = []
@@ -454,18 +693,27 @@ def recalculate_agent_scores():
         )
         age_days = calculate_account_age_days(registered_at)
 
+        owner = agent.get("owner_address", "")
+        dep_data = deployer_scores.get(owner, {"score": 50.0, "count": 0})
+        dep_score = dep_data["score"]
+        dep_count = dep_data["count"]
+        uri_changes = int(agent.get("uri_change_count", 0) or 0)
+        freshness = calculate_freshness_multiplier(age_days)
+
         composite = calculate_composite_score(
             average_rating=avg_rating,
             feedback_count=feedback_count,
             rating_std_dev=std_dev,
             validation_success_rate=success_rate,
             account_age_days=age_days,
+            deployer_score=dep_score,
+            uri_change_count=uri_changes,
         )
         tier = determine_tier(composite, feedback_count)
 
         update_rows.append({
             "agent_id": agent_id,
-            "owner_address": agent.get("owner_address", ""),
+            "owner_address": owner,
             "agent_uri": agent.get("agent_uri", ""),
             "registered_at": agent["registered_at"],
             "total_feedback": feedback_count,
@@ -473,6 +721,10 @@ def recalculate_agent_scores():
             "composite_score": composite,
             "validation_success_rate": round(success_rate, 2),
             "tier": tier,
+            "deployer_score": dep_score,
+            "deployer_agent_count": dep_count,
+            "uri_change_count": uri_changes,
+            "freshness_multiplier": freshness,
             "updated_at": now,
         })
 
@@ -694,6 +946,42 @@ def run_indexer_cycle():
         except Exception as e:
             logger.error(f"Error processing Ethereum ERC-8004 events: {e}")
 
+    # --- Base ---
+    if blockchain.w3_base:
+        try:
+            base_current = blockchain.get_base_current_block()
+            base_safe = base_current - CONFIRMATION_BLOCKS
+            if base_safe > 0:
+                count = _process_chunked(
+                    "erc8004_base_identity",
+                    process_erc8004_base_identity_events,
+                    base_safe,
+                    start_block=ERC8004_BASE_IDENTITY_START_BLOCK,
+                    chunk_size=BASE_MAX_BLOCK_RANGE,
+                )
+                if count > 0:
+                    logger.info(f"Processed {count} ERC-8004 Base agent registration events")
+        except Exception as e:
+            logger.error(f"Error processing Base ERC-8004 events: {e}")
+
+    # --- Linea ---
+    if blockchain.w3_linea:
+        try:
+            linea_current = blockchain.get_linea_current_block()
+            linea_safe = linea_current - CONFIRMATION_BLOCKS
+            if linea_safe > 0:
+                count = _process_chunked(
+                    "erc8004_linea_identity",
+                    process_erc8004_linea_identity_events,
+                    linea_safe,
+                    start_block=ERC8004_LINEA_IDENTITY_START_BLOCK,
+                    chunk_size=LINEA_MAX_BLOCK_RANGE,
+                )
+                if count > 0:
+                    logger.info(f"Processed {count} ERC-8004 Linea agent registration events")
+        except Exception as e:
+            logger.error(f"Error processing Linea ERC-8004 events: {e}")
+
     # --- Avalanche ---
     try:
         current_block = blockchain.get_current_block()
@@ -762,6 +1050,7 @@ def run_scoring_cycle():
         )
     logger.info("Starting scoring cycle")
     try:
+        recalculate_deployer_scores()
         recalculate_agent_scores()
         update_leaderboard()
         logger.info("Scoring cycle complete")

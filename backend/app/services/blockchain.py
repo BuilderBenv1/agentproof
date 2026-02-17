@@ -150,6 +150,64 @@ class BlockchainService:
             )
             logger.info(f"ERC-8004 Ethereum Identity Registry: {eth_identity_addr}")
 
+        # Base web3 instance (for cross-chain ERC-8004 indexing)
+        self.w3_base = None
+        self._base_rpc_url = ""
+        self._base_rpc_urls = settings.base_rpc_urls
+        self._base_rpc_index = 0
+        for i, rpc_url in enumerate(self._base_rpc_urls):
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_base = candidate
+                    self._base_rpc_url = rpc_url
+                    self._base_rpc_index = i
+                    logger.info(f"Base RPC connected: {rpc_url[:50]}...")
+                    break
+                else:
+                    logger.warning(f"Base RPC not reachable: {rpc_url[:50]}...")
+            except Exception as e:
+                logger.warning(f"Base RPC failed: {rpc_url[:50]}... — {e}")
+
+        # ERC-8004 Identity Registry on Base
+        self.erc8004_base_identity = None
+        base_identity_addr = settings.erc8004_base_identity_registry
+        if base_identity_addr and self.w3_base:
+            self.erc8004_base_identity = self.w3_base.eth.contract(
+                address=Web3.to_checksum_address(base_identity_addr),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            logger.info(f"ERC-8004 Base Identity Registry: {base_identity_addr}")
+
+        # Linea web3 instance (for cross-chain ERC-8004 indexing)
+        self.w3_linea = None
+        self._linea_rpc_url = ""
+        self._linea_rpc_urls = settings.linea_rpc_urls
+        self._linea_rpc_index = 0
+        for i, rpc_url in enumerate(self._linea_rpc_urls):
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_linea = candidate
+                    self._linea_rpc_url = rpc_url
+                    self._linea_rpc_index = i
+                    logger.info(f"Linea RPC connected: {rpc_url[:50]}...")
+                    break
+                else:
+                    logger.warning(f"Linea RPC not reachable: {rpc_url[:50]}...")
+            except Exception as e:
+                logger.warning(f"Linea RPC failed: {rpc_url[:50]}... — {e}")
+
+        # ERC-8004 Identity Registry on Linea
+        self.erc8004_linea_identity = None
+        linea_identity_addr = settings.erc8004_linea_identity_registry
+        if linea_identity_addr and self.w3_linea:
+            self.erc8004_linea_identity = self.w3_linea.eth.contract(
+                address=Web3.to_checksum_address(linea_identity_addr),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            logger.info(f"ERC-8004 Linea Identity Registry: {linea_identity_addr}")
+
         # Validation: always custom
         if settings.validation_registry_address:
             self.validation_registry = self.w3.eth.contract(
@@ -184,6 +242,64 @@ class BlockchainService:
             except Exception:
                 continue
         logger.error("All Ethereum RPC fallbacks exhausted")
+        return False
+
+    def reconnect_base(self) -> bool:
+        """Cycle to the next Base RPC fallback. Returns True if reconnected."""
+        if not self._base_rpc_urls:
+            return False
+        start = self._base_rpc_index
+        for offset in range(1, len(self._base_rpc_urls) + 1):
+            idx = (start + offset) % len(self._base_rpc_urls)
+            rpc_url = self._base_rpc_urls[idx]
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_base = candidate
+                    self._base_rpc_url = rpc_url
+                    self._base_rpc_index = idx
+                    # Re-bind the Base identity contract
+                    settings = get_settings()
+                    base_addr = settings.erc8004_base_identity_registry
+                    if base_addr:
+                        self.erc8004_base_identity = self.w3_base.eth.contract(
+                            address=Web3.to_checksum_address(base_addr),
+                            abi=ERC8004_IDENTITY_ABI,
+                        )
+                    logger.info(f"Base RPC reconnected via fallback: {rpc_url[:50]}...")
+                    return True
+            except Exception:
+                continue
+        logger.error("All Base RPC fallbacks exhausted")
+        return False
+
+    def reconnect_linea(self) -> bool:
+        """Cycle to the next Linea RPC fallback. Returns True if reconnected."""
+        if not self._linea_rpc_urls:
+            return False
+        start = self._linea_rpc_index
+        for offset in range(1, len(self._linea_rpc_urls) + 1):
+            idx = (start + offset) % len(self._linea_rpc_urls)
+            rpc_url = self._linea_rpc_urls[idx]
+            try:
+                candidate = Web3(Web3.HTTPProvider(rpc_url))
+                if candidate.is_connected():
+                    self.w3_linea = candidate
+                    self._linea_rpc_url = rpc_url
+                    self._linea_rpc_index = idx
+                    # Re-bind the Linea identity contract
+                    settings = get_settings()
+                    linea_addr = settings.erc8004_linea_identity_registry
+                    if linea_addr:
+                        self.erc8004_linea_identity = self.w3_linea.eth.contract(
+                            address=Web3.to_checksum_address(linea_addr),
+                            abi=ERC8004_IDENTITY_ABI,
+                        )
+                    logger.info(f"Linea RPC reconnected via fallback: {rpc_url[:50]}...")
+                    return True
+            except Exception:
+                continue
+        logger.error("All Linea RPC fallbacks exhausted")
         return False
 
     def probe_eth_block_range_limit(self) -> int:
@@ -337,6 +453,176 @@ class BlockchainService:
                 except Exception as e:
                     logger.warning(f"Failed to decode ETH log: {e}")
             logger.info(f"ERC-8004 ETH get_logs({from_block}-{to_block}): {len(events)} events")
+            return events
+
+        return []  # unreachable
+
+    def get_base_current_block(self) -> int:
+        """Get current block number on Base."""
+        if not self.w3_base:
+            return 0
+        return self.w3_base.eth.block_number
+
+    def get_linea_current_block(self) -> int:
+        """Get current block number on Linea."""
+        if not self.w3_linea:
+            return 0
+        return self.w3_linea.eth.block_number
+
+    def get_erc8004_base_registered_events(self, from_block: int, to_block: int):
+        """Get Registered events from the ERC-8004 Identity Registry on Base.
+
+        Uses raw httpx JSON-RPC calls instead of web3.py's get_logs to:
+        - Bypass web3.py v7 middleware that wraps address in an array
+        - Capture the full RPC error body for debugging
+        - Work with any RPC provider without middleware quirks
+        """
+        settings = get_settings()
+        addr = settings.erc8004_base_identity_registry
+        if not addr or not self._base_rpc_url:
+            logger.warning("ERC-8004 Base identity not configured (addr=%s, rpc=%s)", bool(addr), bool(self._base_rpc_url))
+            return []
+        topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
+
+        payload = {
+            "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+            "params": [{
+                "address": addr,
+                "fromBlock": hex(from_block),
+                "toBlock": hex(to_block),
+                "topics": [topic0],
+            }],
+        }
+
+        for attempt in range(2):  # try current RPC, then fallback
+            rpc_url = self._base_rpc_url
+            try:
+                r = httpx.post(rpc_url, json=payload, timeout=30)
+            except httpx.RequestError as e:
+                logger.error(f"ERC-8004 Base HTTP error ({rpc_url[:50]}): {e}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise
+
+            if r.status_code != 200:
+                body = r.text[:500]
+                logger.error(
+                    f"ERC-8004 Base get_logs({from_block}-{to_block}) HTTP {r.status_code} "
+                    f"from {rpc_url[:50]}: {body}"
+                )
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"eth_getLogs HTTP {r.status_code}: {body}")
+
+            resp = r.json()
+            if "error" in resp:
+                err_msg = resp["error"].get("message", str(resp["error"]))
+                logger.error(
+                    f"ERC-8004 Base get_logs({from_block}-{to_block}) RPC error "
+                    f"from {rpc_url[:50]}: {err_msg}"
+                )
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"eth_getLogs RPC error: {err_msg}")
+
+            # Decode raw logs into event-like objects
+            raw_logs = resp["result"]
+            events = []
+            for log in raw_logs:
+                try:
+                    agent_id = int(log["topics"][1], 16)
+                    owner = "0x" + log["topics"][2][-40:]
+                    data_bytes = bytes.fromhex(log["data"][2:])
+                    agent_uri = abi_decode(["string"], data_bytes)[0] if data_bytes else ""
+                    events.append(_RawEvent(
+                        agentId=agent_id,
+                        owner=Web3.to_checksum_address(owner),
+                        agentURI=agent_uri,
+                        blockNumber=int(log["blockNumber"], 16),
+                        transactionHash=bytes.fromhex(log["transactionHash"][2:]),
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to decode Base log: {e}")
+            logger.info(f"ERC-8004 Base get_logs({from_block}-{to_block}): {len(events)} events")
+            return events
+
+        return []  # unreachable
+
+    def get_erc8004_linea_registered_events(self, from_block: int, to_block: int):
+        """Get Registered events from the ERC-8004 Identity Registry on Linea.
+
+        Uses raw httpx JSON-RPC calls instead of web3.py's get_logs to:
+        - Bypass web3.py v7 middleware that wraps address in an array
+        - Capture the full RPC error body for debugging
+        - Work with any RPC provider without middleware quirks
+        """
+        settings = get_settings()
+        addr = settings.erc8004_linea_identity_registry
+        if not addr or not self._linea_rpc_url:
+            logger.warning("ERC-8004 Linea identity not configured (addr=%s, rpc=%s)", bool(addr), bool(self._linea_rpc_url))
+            return []
+        topic0 = "0x" + Web3.keccak(text="Registered(uint256,string,address)").hex()
+
+        payload = {
+            "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+            "params": [{
+                "address": addr,
+                "fromBlock": hex(from_block),
+                "toBlock": hex(to_block),
+                "topics": [topic0],
+            }],
+        }
+
+        for attempt in range(2):  # try current RPC, then fallback
+            rpc_url = self._linea_rpc_url
+            try:
+                r = httpx.post(rpc_url, json=payload, timeout=30)
+            except httpx.RequestError as e:
+                logger.error(f"ERC-8004 Linea HTTP error ({rpc_url[:50]}): {e}")
+                if attempt == 0 and self.reconnect_linea():
+                    continue
+                raise
+
+            if r.status_code != 200:
+                body = r.text[:500]
+                logger.error(
+                    f"ERC-8004 Linea get_logs({from_block}-{to_block}) HTTP {r.status_code} "
+                    f"from {rpc_url[:50]}: {body}"
+                )
+                if attempt == 0 and self.reconnect_linea():
+                    continue
+                raise Exception(f"eth_getLogs HTTP {r.status_code}: {body}")
+
+            resp = r.json()
+            if "error" in resp:
+                err_msg = resp["error"].get("message", str(resp["error"]))
+                logger.error(
+                    f"ERC-8004 Linea get_logs({from_block}-{to_block}) RPC error "
+                    f"from {rpc_url[:50]}: {err_msg}"
+                )
+                if attempt == 0 and self.reconnect_linea():
+                    continue
+                raise Exception(f"eth_getLogs RPC error: {err_msg}")
+
+            # Decode raw logs into event-like objects
+            raw_logs = resp["result"]
+            events = []
+            for log in raw_logs:
+                try:
+                    agent_id = int(log["topics"][1], 16)
+                    owner = "0x" + log["topics"][2][-40:]
+                    data_bytes = bytes.fromhex(log["data"][2:])
+                    agent_uri = abi_decode(["string"], data_bytes)[0] if data_bytes else ""
+                    events.append(_RawEvent(
+                        agentId=agent_id,
+                        owner=Web3.to_checksum_address(owner),
+                        agentURI=agent_uri,
+                        blockNumber=int(log["blockNumber"], 16),
+                        transactionHash=bytes.fromhex(log["transactionHash"][2:]),
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to decode Linea log: {e}")
+            logger.info(f"ERC-8004 Linea get_logs({from_block}-{to_block}): {len(events)} events")
             return events
 
         return []  # unreachable
