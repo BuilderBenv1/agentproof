@@ -7,8 +7,9 @@ const SECTIONS = [
   { title: "The Trust Gap", description: "Why autonomous AI agents need verifiable reputation before the agent economy can scale." },
   { title: "ERC-8004 Standard", description: "The on-chain identity and reputation standard for AI agents, published by Ava Labs." },
   { title: "Trust Oracle Architecture", description: "How AgentProof indexes, evaluates, and scores ERC-8004 registered agents in real-time." },
-  { title: "Scoring Methodology", description: "Multi-signal composite scoring: on-chain feedback, validation rate, response time, and more." },
-  { title: "Multi-Chain Indexing", description: "Avalanche-native with cross-chain reputation via Teleporter messaging." },
+  { title: "Scoring Methodology", description: "8-signal composite scoring: rating, volume, consistency, validation, age, uptime, deployer reputation, and URI stability." },
+  { title: "Anti-Identity-Mutation", description: "Freshness penalties, deployer lineage tracking, and URI mutation detection to make identity abandonment economically irrational." },
+  { title: "Multi-Chain Indexing", description: "Indexing across Avalanche, Ethereum, Base, and Linea via deterministic CREATE2 deployments." },
   { title: "Sybil Resistance", description: "How the oracle prevents gaming, fake reviews, and reputation manipulation." },
   { title: "Protocol Endpoints", description: "REST API, Agent-to-Agent (A2A), and MCP server for programmatic trust queries." },
   { title: "Roadmap", description: "From trust oracle to the full marketplace for hiring and paying verified AI agents." },
@@ -21,7 +22,7 @@ export default function WhitepaperPage() {
       <div className="text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
           <FileText className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v1.0</span>
+          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v2.0</span>
         </div>
         <h1 className="text-3xl font-bold text-white">
           The Trust Oracle for the ERC-8004 Agent Economy
@@ -79,7 +80,7 @@ export default function WhitepaperPage() {
       {/* Key Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: Shield, label: "Contracts", value: "10", sub: "Avalanche C-Chain" },
+          { icon: Shield, label: "Chains", value: "4", sub: "AVAX · ETH · Base · Linea" },
           { icon: Brain, label: "Live Agents", value: "11", sub: "Intelligence + Trading" },
           { icon: Globe, label: "Indexed", value: "25K+", sub: "Agent identities" },
           { icon: Lock, label: "Escrow", value: "0.5%", sub: "Protocol fee" },
