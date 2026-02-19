@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from config import get_settings
-from routes import rest, a2a, mcp
+from routes import rest, a2a, mcp, webhooks
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,6 +105,7 @@ app.add_middleware(
 app.include_router(rest.router)
 app.include_router(a2a.router)
 app.include_router(mcp.router)
+app.include_router(webhooks.router)
 
 
 LANDING_HTML = """\

@@ -16,6 +16,9 @@ import httpx
 
 from database import get_supabase
 from services.chain import get_chain_service
+from services.trust import get_trust_cache
+from services.feed import get_feed_bus, TrustEvent
+from services.webhooks import deliver_event
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +217,58 @@ class AgentScreener:
             if submitted > 0:
                 logger.info(f"[{label}] Submitted {submitted} on-chain feedbacks")
 
+        # Invalidate cache for screened agents so next request gets fresh data
+        cache = get_trust_cache()
+        for r in screening_rows:
+            cache.invalidate(f"eval:{r['agent_id']}")
+        cache.invalidate("network_stats")
+
+        # Publish to SSE feed
+        self._publish_feed_events(db, screening_rows)
+
+    def _publish_feed_events(self, db, screening_rows: list[dict]):
+        """Publish screening results to the SSE feed bus."""
+        import asyncio
+
+        bus = get_feed_bus()
+        for row in screening_rows:
+            agent_id = row["agent_id"]
+            # Look up agent name and previous score for delta
+            try:
+                agent_data = (
+                    db.table("agents")
+                    .select("name, composite_score")
+                    .eq("agent_id", agent_id)
+                    .limit(1)
+                    .execute()
+                )
+                name = agent_data.data[0].get("name") if agent_data.data else None
+                current_score = float(agent_data.data[0].get("composite_score", 0) or 0) if agent_data.data else 0
+            except Exception:
+                name = None
+                current_score = 0
+
+            event = TrustEvent(
+                event_id=0,  # assigned by bus
+                agent_id=agent_id,
+                agent_name=name,
+                score=current_score,
+                tier="",
+                risk_level=row["risk_level"],
+                delta=0,
+                alert_type="screening",
+                timestamp=0,
+            )
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.run_coroutine_threadsafe(bus.publish(event), loop)
+                else:
+                    loop.run_until_complete(bus.publish(event))
+            except RuntimeError:
+                pass
+
     # ─── Job 1: Screen New Agents (every 5 min) ──────────────────────
 
     def _screen_new_agents(self):
@@ -285,16 +340,27 @@ class AgentScreener:
                         .execute()
                     )
                     if prev.data and prev.data[0]["risk_level"] != row["risk_level"]:
+                        old_risk = prev.data[0]["risk_level"]
+                        new_risk = row["risk_level"]
+                        details = f"Risk changed from {old_risk} to {new_risk} on re-screening"
                         db.table("oracle_alerts").insert({
                             "agent_id": row["agent_id"],
                             "alert_type": "risk_level_change",
                             "severity": "medium",
-                            "details": (
-                                f"Risk changed from {prev.data[0]['risk_level']} "
-                                f"to {row['risk_level']} on re-screening"
-                            ),
+                            "details": details,
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }).execute()
+
+                        # Dispatch webhook
+                        try:
+                            deliver_event("risk_change", row["agent_id"], {
+                                "old_risk": old_risk,
+                                "new_risk": new_risk,
+                                "flags": row["flags"],
+                                "details": details,
+                            })
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
@@ -475,6 +541,16 @@ class AgentScreener:
                     pass
 
                 liveness_results.append((agent_id, reachable, uri))
+
+                # Webhook for unreachable agents
+                if not reachable:
+                    try:
+                        deliver_event("unreachable", agent_id, {
+                            "agent_uri": uri,
+                            "reachable": False,
+                        })
+                    except Exception:
+                        pass
 
         logger.info(f"[verify_agent_liveness] Checked {checked}/{len(agents_to_check)} agents")
 

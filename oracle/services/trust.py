@@ -6,6 +6,8 @@ and network statistics using the same scoring algorithm as the backend indexer.
 
 import math
 import logging
+import time
+import threading
 from datetime import datetime, timezone
 from collections import Counter
 
@@ -22,6 +24,63 @@ from models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ─── In-memory TTL cache ─────────────────────────────────────────────
+
+CACHE_TTL_SECONDS = 300  # 5 minutes — matches screener cycle
+
+
+class TrustCache:
+    """Thread-safe in-memory TTL cache for trust evaluations and network stats."""
+
+    def __init__(self, ttl: int = CACHE_TTL_SECONDS):
+        self._ttl = ttl
+        self._store: dict[str, tuple[float, object]] = {}  # key → (expires_at, value)
+        self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
+
+    def get(self, key: str):
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                self._misses += 1
+                return None
+            expires_at, value = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                self._misses += 1
+                return None
+            self._hits += 1
+            return value
+
+    def set(self, key: str, value: object, ttl: int | None = None):
+        with self._lock:
+            expires_at = time.monotonic() + (ttl or self._ttl)
+            self._store[key] = (expires_at, value)
+
+    def invalidate(self, key: str):
+        with self._lock:
+            self._store.pop(key, None)
+
+    def invalidate_all(self):
+        with self._lock:
+            self._store.clear()
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self._hits + self._misses
+            return {
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": round(self._hits / total * 100, 1) if total > 0 else 0,
+                "cached_entries": len(self._store),
+            }
+
+
+# Module-level cache instance
+_trust_cache = TrustCache()
 
 
 # ─── Scoring functions (copied from backend/app/services/scoring.py) ──
@@ -206,7 +265,85 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
 
 
 class TrustService:
-    def evaluate_agent(self, agent_id: int) -> TrustEvaluation:
+    def evaluate_agent_fast(self, agent_id: int) -> TrustEvaluation:
+        """Fast evaluation using pre-computed columns from the agents table.
+        Single query instead of 5. Used for cached misses when full recompute
+        isn't needed (e.g. data hasn't changed since last screener cycle).
+        """
+        db = get_supabase()
+        result = (
+            db.table("agents")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .execute()
+        )
+        if not result.data:
+            raise ValueError(f"Agent #{agent_id} not found")
+        agent = result.data[0]
+
+        composite = float(agent.get("composite_score") or 0)
+        feedback_count = int(agent.get("total_feedback") or 0)
+        tier = agent.get("tier", "unranked")
+        avg_rating = float(agent.get("average_rating") or 0)
+        success_rate = float(agent.get("validation_success_rate") or 0)
+
+        registered_at = datetime.fromisoformat(
+            agent["registered_at"].replace("Z", "+00:00")
+        )
+        age_days = calculate_account_age_days(registered_at)
+
+        # Minimal risk flags from pre-computed data
+        risk_flags: list[RiskFlag] = []
+        if composite < 50:
+            risk_flags.append(RiskFlag.HIGH_RISK_SCORE)
+        if feedback_count < 5:
+            risk_flags.append(RiskFlag.LOW_FEEDBACK)
+        if feedback_count == 0:
+            risk_flags.append(RiskFlag.UNVERIFIED)
+        if age_days < 7:
+            risk_flags.append(RiskFlag.NEW_IDENTITY)
+
+        recommendation = _determine_recommendation(composite, feedback_count, risk_flags)
+
+        # Reconstruct a minimal breakdown (scores not available from pre-computed)
+        breakdown = ScoreBreakdown(
+            rating_score=round(avg_rating, 2),
+            volume_score=0,
+            consistency_score=0,
+            validation_score=round(success_rate, 2),
+            age_score=0,
+            uptime_score=0,
+            deployer_score=0,
+            uri_stability_score=0,
+        )
+
+        evaluation = TrustEvaluation(
+            agent_id=agent_id,
+            name=agent.get("name"),
+            composite_score=composite,
+            tier=tier,
+            recommendation=recommendation,
+            risk_flags=risk_flags,
+            score_breakdown=breakdown,
+            feedback_count=feedback_count,
+            average_rating=round(avg_rating, 2),
+            validation_success_rate=round(success_rate, 2),
+            account_age_days=age_days,
+            uptime_pct=-1.0,
+            evaluated_at=datetime.now(timezone.utc),
+        )
+
+        # Cache it
+        _trust_cache.set(f"eval:{agent_id}", evaluation)
+        return evaluation
+
+    def evaluate_agent(self, agent_id: int, bypass_cache: bool = False) -> TrustEvaluation:
+        # Check cache first
+        if not bypass_cache:
+            cached = _trust_cache.get(f"eval:{agent_id}")
+            if cached is not None:
+                return cached
+
         db = get_supabase()
 
         # Fetch agent
@@ -328,7 +465,7 @@ class TrustService:
             composite, feedback_count, risk_flags
         )
 
-        return TrustEvaluation(
+        evaluation = TrustEvaluation(
             agent_id=agent_id,
             name=agent.get("name"),
             composite_score=composite,
@@ -343,6 +480,10 @@ class TrustService:
             uptime_pct=round(uptime_pct, 2),
             evaluated_at=datetime.now(timezone.utc),
         )
+
+        # Populate cache
+        _trust_cache.set(f"eval:{agent_id}", evaluation)
+        return evaluation
 
     def find_trusted_agents(
         self,
@@ -454,7 +595,12 @@ class TrustService:
             details=". ".join(details_parts) if details_parts else "No risk flags detected",
         )
 
-    def network_stats(self) -> NetworkStats:
+    def network_stats(self, bypass_cache: bool = False) -> NetworkStats:
+        if not bypass_cache:
+            cached = _trust_cache.get("network_stats")
+            if cached is not None:
+                return cached
+
         db = get_supabase()
 
         # Total agents via exact count (avoids Supabase default 1000-row limit)
@@ -522,7 +668,7 @@ class TrustService:
         except Exception:
             total_liveness = 0
 
-        return NetworkStats(
+        stats = NetworkStats(
             total_agents=total_agents,
             avg_score=avg_score,
             tier_distribution=tier_dist,
@@ -530,6 +676,9 @@ class TrustService:
             total_validations=total_validations,
             total_liveness=total_liveness,
         )
+
+        _trust_cache.set("network_stats", stats)
+        return stats
 
 
 # Singleton
@@ -541,3 +690,8 @@ def get_trust_service() -> TrustService:
     if _trust_service is None:
         _trust_service = TrustService()
     return _trust_service
+
+
+def get_trust_cache() -> TrustCache:
+    """Access the module-level trust cache (for REST headers, stats, warming)."""
+    return _trust_cache
