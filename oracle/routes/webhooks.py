@@ -33,6 +33,17 @@ class WebhookResponse(BaseModel):
     active: bool
 
 
+@router.get("")
+async def list_webhooks():
+    """List all active webhook subscriptions (secrets masked)."""
+    db = get_supabase()
+    result = db.table("webhook_subscriptions").select("*").eq("active", True).execute()
+    subs = result.data or []
+    for sub in subs:
+        sub["secret_token"] = sub["secret_token"][:8] + "..."
+    return {"subscriptions": subs, "total": len(subs)}
+
+
 @router.post("", response_model=WebhookResponse)
 async def register_webhook(body: WebhookCreate):
     """Register a new webhook subscription. Returns the secret token (show once)."""
