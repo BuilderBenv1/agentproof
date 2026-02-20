@@ -118,6 +118,8 @@ class _ChainBackend:
         )
 
         self._last_tx_time: float = 0.0
+        self._low_balance_until: float = 0.0  # circuit breaker for empty wallet
+        self._min_balance_wei: int = 50_000_000_000_000  # 0.00005 ETH (~2 txs buffer)
 
         logger.info(
             f"_ChainBackend initialized — chain={chain_name} chain_id={chain_id} "
@@ -150,6 +152,25 @@ class _ChainBackend:
 
         Returns transaction hash hex string on success, None on failure.
         """
+        # Circuit breaker: skip if wallet was recently found to be broke
+        now_mono = time.monotonic()
+        if now_mono < self._low_balance_until:
+            return None
+
+        # Pre-flight balance check — avoid wasting RPC calls when broke
+        try:
+            balance = self._w3.eth.get_balance(self._account.address)
+            if balance < self._min_balance_wei:
+                logger.warning(
+                    f"[{self.chain_name}] Wallet balance too low "
+                    f"({balance} wei < {self._min_balance_wei} wei) — "
+                    f"pausing on-chain feedback for 5 minutes"
+                )
+                self._low_balance_until = now_mono + 300  # 5 min circuit breaker
+                return None
+        except Exception as e:
+            logger.warning(f"[{self.chain_name}] Balance check failed: {e}")
+
         # Check agent exists on this chain's IdentityRegistry
         owner = self.agent_exists(agent_id)
         if owner is None:
