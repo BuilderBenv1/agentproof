@@ -190,15 +190,15 @@ def calculate_composite_score(
 
 
 def determine_tier(composite_score: float, feedback_count: int) -> str:
-    if composite_score >= 90 and feedback_count >= 50:
+    if composite_score >= 85 and feedback_count >= 20:
         return "diamond"
-    elif composite_score >= 80 and feedback_count >= 30:
+    elif composite_score >= 72 and feedback_count >= 10:
         return "platinum"
-    elif composite_score >= 70 and feedback_count >= 20:
+    elif composite_score >= 58 and feedback_count >= 5:
         return "gold"
-    elif composite_score >= 60 and feedback_count >= 10:
+    elif composite_score >= 42 and feedback_count >= 3:
         return "silver"
-    elif composite_score >= 50 and feedback_count >= 5:
+    elif composite_score >= 30 and feedback_count >= 1:
         return "bronze"
     else:
         return "unranked"
