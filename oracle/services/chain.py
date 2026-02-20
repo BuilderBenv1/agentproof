@@ -170,6 +170,8 @@ class _ChainBackend:
                 return None
         except Exception as e:
             logger.warning(f"[{self.chain_name}] Balance check failed: {e}")
+            self._low_balance_until = now_mono + 300  # trip breaker on RPC failure too
+            return None
 
         # Check agent exists on this chain's IdentityRegistry
         owner = self.agent_exists(agent_id)
@@ -259,6 +261,14 @@ class _ChainBackend:
                 f"Failed to submit on-chain feedback for agent {agent_id} "
                 f"on {self.chain_name}: {e}"
             )
+            # Trip circuit breaker on insufficient funds to stop hammering
+            err_str = str(e).lower()
+            if "insufficient funds" in err_str or "funds for gas" in err_str:
+                self._low_balance_until = time.monotonic() + 300
+                logger.warning(
+                    f"[{self.chain_name}] Insufficient funds detected — "
+                    f"pausing on-chain feedback for 5 minutes"
+                )
             return None
 
 
