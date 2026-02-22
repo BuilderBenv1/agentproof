@@ -28,7 +28,7 @@ ERC8004_BASE_IDENTITY_START_BLOCK = 41_667_100  # CREATE2 deployed at block 41,6
 ERC8004_LINEA_IDENTITY_START_BLOCK = 28_662_500  # CREATE2 deployed at block 28,662,553; first Registered at 28,682,146
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
-BASE_MAX_BLOCK_RANGE = 2000
+BASE_MAX_BLOCK_RANGE = 10000  # CDP RPC supports large ranges; speeds up catchup
 LINEA_MAX_BLOCK_RANGE = 2000
 
 
