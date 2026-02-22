@@ -1,8 +1,8 @@
 """
 On-chain feedback submission via the ReputationRegistry contract.
 
-Supports multiple chains (Avalanche C-Chain + Ethereum mainnet).
-ERC-8004 uses CREATE2 — same contract addresses on both chains.
+Supports multiple chains (Avalanche C-Chain, Base, Ethereum mainnet).
+ERC-8004 uses CREATE2 — same contract addresses on all chains.
 Each chain has independent 30-second rate limiting.
 """
 
@@ -273,7 +273,7 @@ class _ChainBackend:
 
 
 class ChainService:
-    """Multi-chain feedback service. Routes to Avalanche or Ethereum automatically."""
+    """Multi-chain feedback service. Routes to Avalanche, Base, or Ethereum automatically."""
 
     def __init__(self):
         settings = get_settings()
@@ -308,11 +308,31 @@ class ChainService:
         else:
             logger.info("ETHEREUM_RPC_URL not set — Ethereum feedback disabled")
 
+        # Base backend (optional — only if BASE_RPC_URL is set)
+        self._base: _ChainBackend | None = None
+        if settings.base_rpc_url:
+            try:
+                self._base = _ChainBackend(
+                    chain_name="base",
+                    rpc_url=settings.base_rpc_url,
+                    chain_id=8453,
+                    identity_registry_addr=settings.base_identity_registry,
+                    reputation_registry_addr=settings.base_reputation_registry,
+                    private_key=settings.private_key,
+                    poa_middleware=False,
+                )
+            except Exception as e:
+                logger.error(f"Base backend init failed: {e}")
+                self._base = None
+        else:
+            logger.info("BASE_RPC_URL not set — Base feedback disabled")
+
         self._cached_oracle_agent_id: int | None = None
 
         logger.info(
             f"ChainService initialized — avax={settings.reputation_registry}, "
-            f"eth={'enabled' if self._eth else 'disabled'}"
+            f"eth={'enabled' if self._eth else 'disabled'}, "
+            f"base={'enabled' if self._base else 'disabled'}"
         )
 
     def get_oracle_agent_id(self) -> int | None:
@@ -384,10 +404,7 @@ class ChainService:
         """
         Submit reputation feedback, auto-routing to the correct chain.
 
-        Tries Avalanche first (agents 1-1621 live there). If the agent
-        isn't found on Avalanche and the Ethereum backend is available,
-        tries Ethereum.
-
+        Tries Avalanche first, then Base, then Ethereum.
         Returns transaction hash hex string on success, None on failure.
         """
         # Try Avalanche first
@@ -395,24 +412,37 @@ class ChainService:
         if result is not None:
             return result
 
-        # Agent not on Avalanche — try Ethereum if available
+        # Try Base (18,710 agents, cheap gas)
+        if self._base is not None:
+            logger.info(
+                f"Agent {agent_id} not on Avalanche — trying Base"
+            )
+            result = self._base.submit_feedback(agent_id, score, comment, tag1, tag2)
+            if result is not None:
+                return result
+
+        # Try Ethereum last (expensive gas)
         if self._eth is not None:
             logger.info(
-                f"Agent {agent_id} not on Avalanche — trying Ethereum"
+                f"Agent {agent_id} not on Avalanche/Base — trying Ethereum"
             )
             return self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
 
         return None
 
     def get_agent_onchain_data(self, agent_id: int) -> dict | None:
-        """Read agent owner + URI from the Avalanche IdentityRegistry."""
-        try:
-            owner = self._avax._identity_registry.functions.ownerOf(agent_id).call()
-            uri = self._avax._identity_registry.functions.tokenURI(agent_id).call()
-            return {"owner_address": owner, "agent_uri": uri}
-        except Exception as e:
-            logger.warning(f"Failed to read agent {agent_id} from chain: {e}")
-            return None
+        """Read agent owner + URI from chain (tries Avalanche, then Base, then Ethereum)."""
+        for backend in [self._avax, self._base, self._eth]:
+            if backend is None:
+                continue
+            try:
+                owner = backend._identity_registry.functions.ownerOf(agent_id).call()
+                uri = backend._identity_registry.functions.tokenURI(agent_id).call()
+                return {"owner_address": owner, "agent_uri": uri, "chain": backend.chain_name}
+            except Exception:
+                continue
+        logger.warning(f"Agent {agent_id} not found on any chain")
+        return None
 
 
 def ensure_oracle_agent_indexed() -> bool:

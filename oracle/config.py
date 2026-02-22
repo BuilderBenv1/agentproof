@@ -29,6 +29,14 @@ class OracleSettings(BaseSettings):
     eth_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     eth_reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
 
+    # Base mainnet (same CREATE2 addresses)
+    base_rpc_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("BASE_RPC_URL", "BASE_RPC"),
+    )
+    base_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    base_reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
+
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
     oracle_agent_description: str = (
