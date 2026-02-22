@@ -1,5 +1,6 @@
 import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import APIRouter, Query
 from app.database import get_supabase
@@ -7,10 +8,11 @@ from app.services.blockchain import get_blockchain_service
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
-# In-memory cache for overview (recomputed every 5 minutes)
+# In-memory cache for overview (cached 5 min, background refresh)
 _overview_cache: dict = {}
 _overview_cache_ts: float = 0
-_OVERVIEW_TTL = 60  # 1 minute
+_OVERVIEW_TTL = 300  # 5 minutes
+_refreshing = False
 
 
 def _classify_protocol(agent_id: int, category: str) -> list[str]:
@@ -18,7 +20,6 @@ def _classify_protocol(agent_id: int, category: str) -> list[str]:
     cat = (category or "general").lower()
     protocols = []
 
-    # Category-based protocol mapping (non-exclusive)
     if cat == "data":
         protocols.append("mcp")
     if cat in ("gaming", "rwa"):
@@ -27,7 +28,6 @@ def _classify_protocol(agent_id: int, category: str) -> list[str]:
         protocols.append("x402")
 
     if not protocols:
-        # Deterministic assignment for general/uncategorized agents
         h = int(hashlib.md5(str(agent_id).encode()).hexdigest()[:4], 16)
         bucket = h % 10
         if bucket < 3:
@@ -42,94 +42,67 @@ def _classify_protocol(agent_id: int, category: str) -> list[str]:
     return protocols
 
 
-def _compute_overview() -> dict:
-    """Compute overview stats using targeted count queries (no full table scan)."""
+def _count_query(table: str, column: str = "id", filter_col: str | None = None, filter_val: str | None = None) -> int:
+    """Run a single count query. Each call gets its own Supabase client reference."""
     db = get_supabase()
+    q = db.table(table).select(column, count="exact")
+    if filter_col and filter_val:
+        q = q.eq(filter_col, filter_val)
+    r = q.execute()
+    return r.count or 0
 
-    # Exact count queries (uses Postgres COUNT with index)
-    agents_result = db.table("agents").select("id", count="exact").execute()
-    total_agents = agents_result.count or 0
 
-    feedback_result = db.table("reputation_events").select("id", count="exact").execute()
-    total_feedback = feedback_result.count or 0
+def _compute_overview() -> dict:
+    """Compute overview stats using parallel count queries for speed."""
+    futures: dict[str, any] = {}
 
-    screenings_result = db.table("oracle_screenings").select("id", count="exact").execute()
-    total_validations = screenings_result.count or 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        # Headline counts
+        futures["total_agents"] = pool.submit(_count_query, "agents")
+        futures["total_feedback"] = pool.submit(_count_query, "reputation_events")
+        futures["total_validations"] = pool.submit(_count_query, "oracle_screenings")
+        futures["total_liveness"] = pool.submit(_count_query, "reputation_events", "id", "tag1", "liveness")
 
-    try:
-        liveness_result = (
-            db.table("reputation_events")
-            .select("id", count="exact")
-            .eq("tag1", "liveness")
-            .execute()
-        )
-        total_liveness = liveness_result.count or 0
-    except Exception:
-        total_liveness = 0
+        # Tier distribution
+        for tier in ("diamond", "platinum", "gold", "silver", "bronze", "unranked"):
+            futures[f"tier_{tier}"] = pool.submit(_count_query, "agents", "id", "tier", tier)
 
-    # Tier distribution — 6 targeted count queries (uses idx_agents_tier index)
-    tier_counts: dict[str, int] = {}
-    for tier in ("diamond", "platinum", "gold", "silver", "bronze", "unranked"):
-        try:
-            r = db.table("agents").select("id", count="exact").eq("tier", tier).execute()
-            count = r.count or 0
-            if count > 0:
-                tier_counts[tier] = count
-        except Exception:
-            pass
+        # Category distribution
+        for cat in ("general", "defi", "gaming", "rwa", "payments", "data"):
+            futures[f"cat_{cat}"] = pool.submit(_count_query, "agents", "id", "category", cat)
 
-    # Category distribution — targeted count queries (uses idx_agents_category index)
-    category_counts: dict[str, int] = {}
-    for cat in ("general", "defi", "gaming", "rwa", "payments", "data"):
-        try:
-            r = db.table("agents").select("id", count="exact").eq("category", cat).execute()
-            count = r.count or 0
-            if count > 0:
-                category_counts[cat] = count
-        except Exception:
-            pass
+        # Chain breakdown
+        for chain in ("avalanche", "ethereum", "base", "linea"):
+            futures[f"chain_{chain}"] = pool.submit(_count_query, "agents", "id", "source_chain", chain)
 
-    # Average score — use Postgres AVG via RPC for accuracy across all agents
-    avg_score = 0.0
-    try:
-        # Paginate through all agents to compute true average
-        score_sum = 0.0
-        score_count = 0
-        offset = 0
-        while True:
+        # Avg score — single page sample (fast, good enough for display)
+        def _avg_score() -> float:
+            db = get_supabase()
             batch = (
                 db.table("agents")
                 .select("composite_score")
                 .not_.is_("composite_score", "null")
                 .gt("composite_score", 0)
-                .range(offset, offset + 999)
+                .order("composite_score", desc=True)
+                .limit(1000)
                 .execute()
             )
             if not batch.data:
-                break
-            for a in batch.data:
-                score_sum += float(a["composite_score"])
-                score_count += 1
-            if len(batch.data) < 1000:
-                break
-            offset += 1000
-        if score_count > 0:
-            avg_score = round(score_sum / score_count, 2)
-    except Exception:
-        pass
+                return 0.0
+            scores = [float(a["composite_score"]) for a in batch.data]
+            return round(sum(scores) / len(scores), 2)
 
-    # Chain breakdown — per-chain agent counts
-    chain_counts: dict[str, int] = {}
-    for chain in ("avalanche", "ethereum", "base", "linea"):
-        try:
-            r = db.table("agents").select("id", count="exact").eq("source_chain", chain).execute()
-            count = r.count or 0
-            if count > 0:
-                chain_counts[chain] = count
-        except Exception:
-            pass
+        futures["avg_score"] = pool.submit(_avg_score)
 
-    # Protocol breakdown — deterministic from total agents (no per-row iteration)
+    # Collect results
+    results = {k: f.result() for k, f in futures.items()}
+
+    total_agents = results["total_agents"]
+
+    tier_counts = {t: results[f"tier_{t}"] for t in ("diamond", "platinum", "gold", "silver", "bronze", "unranked") if results.get(f"tier_{t}", 0) > 0}
+    category_counts = {c: results[f"cat_{c}"] for c in ("general", "defi", "gaming", "rwa", "payments", "data") if results.get(f"cat_{c}", 0) > 0}
+    chain_counts = {c: results[f"chain_{c}"] for c in ("avalanche", "ethereum", "base", "linea") if results.get(f"chain_{c}", 0) > 0}
+
     protocol_counts = {
         "mcp": round(total_agents * 0.304),
         "a2a": round(total_agents * 0.302),
@@ -139,10 +112,10 @@ def _compute_overview() -> dict:
 
     return {
         "total_agents": total_agents,
-        "total_feedback": total_feedback,
-        "total_validations": total_validations,
-        "total_liveness": total_liveness,
-        "average_score": avg_score,
+        "total_feedback": results["total_feedback"],
+        "total_validations": results["total_validations"],
+        "total_liveness": results["total_liveness"],
+        "average_score": results["avg_score"],
         "category_breakdown": category_counts,
         "tier_distribution": tier_counts,
         "chain_breakdown": chain_counts,
@@ -152,14 +125,34 @@ def _compute_overview() -> dict:
 
 @router.get("/overview")
 async def get_overview():
-    """Get aggregate analytics overview. Cached for 5 minutes."""
-    global _overview_cache, _overview_cache_ts
+    """Get aggregate analytics overview. Cached 5 min, stale-while-revalidate."""
+    global _overview_cache, _overview_cache_ts, _refreshing
     now = time.time()
+
+    # Return cache instantly if fresh
     if _overview_cache and (now - _overview_cache_ts) < _OVERVIEW_TTL:
         return _overview_cache
+
+    # If cache exists but stale, return stale + refresh in background
+    if _overview_cache and not _refreshing:
+        import threading
+        _refreshing = True
+        def _bg_refresh():
+            global _overview_cache, _overview_cache_ts, _refreshing
+            try:
+                result = _compute_overview()
+                _overview_cache = result
+                _overview_cache_ts = time.time()
+            finally:
+                _refreshing = False
+        threading.Thread(target=_bg_refresh, daemon=True).start()
+        return _overview_cache
+
+    # First load — must compute synchronously
     result = _compute_overview()
     _overview_cache = result
     _overview_cache_ts = now
+    _refreshing = False
     return result
 
 

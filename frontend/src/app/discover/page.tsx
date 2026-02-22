@@ -16,6 +16,7 @@ interface Agent {
   tier: string;
   image_url: string | null;
   registered_at: string;
+  source_chain?: string;
 }
 
 interface TrendingAgent extends Agent {
