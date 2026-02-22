@@ -24,8 +24,8 @@ CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
 ERC8004_ETH_IDENTITY_START_BLOCK = 24_339_900  # First Registered event at block 24,339,925
-ERC8004_BASE_IDENTITY_START_BLOCK = 0  # CREATE2 deploy — start block to be discovered
-ERC8004_LINEA_IDENTITY_START_BLOCK = 0  # CREATE2 deploy — start block to be discovered
+ERC8004_BASE_IDENTITY_START_BLOCK = 41_667_100  # CREATE2 deployed at block 41,667,111
+ERC8004_LINEA_IDENTITY_START_BLOCK = 28_662_500  # CREATE2 deployed at block 28,662,553; first Registered at 28,682,146
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
 BASE_MAX_BLOCK_RANGE = 2000
@@ -341,6 +341,83 @@ def process_erc8004_linea_identity_events(from_block: int, to_block: int):
     if saved == 0 and len(rows) > 0:
         raise Exception(f"All upserts failed for {len(rows)} agents — not advancing block pointer")
     return len(events)
+
+
+def _process_cross_chain_feedback(chain_name: str, events, w3_instance) -> int:
+    """Shared logic for indexing NewFeedback events from Base/Linea into Supabase."""
+    if not events:
+        return 0
+    logger.info(f"[ERC-8004-{chain_name.upper()}] Found {len(events)} NewFeedback events")
+
+    db = get_supabase()
+    unique_blocks = set(e.blockNumber for e in events)
+    block_ts_cache: dict[int, datetime] = {}
+    for blk in sorted(unique_blocks):
+        try:
+            block_data = w3_instance.eth.get_block(blk)
+            block_ts_cache[blk] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
+        except Exception as e:
+            logger.warning(f"[{chain_name}] Failed to get block {blk} timestamp: {e}")
+            block_ts_cache[blk] = datetime.now(timezone.utc)
+
+    rows = []
+    for event in events:
+        raw_value = int(event.args.value)
+        rating = max(1, min(100, raw_value))
+        task_hash = event.args.feedbackHash.hex() if hasattr(event.args, 'feedbackHash') else ""
+        reviewer = event.args.clientAddress
+        tag1 = event.args.tag1 if hasattr(event.args, 'tag1') else ""
+        tag2 = event.args.tag2 if hasattr(event.args, 'tag2') else ""
+
+        rows.append({
+            "agent_id": event.args.agentId,
+            "reviewer_address": reviewer,
+            "rating": rating,
+            "task_hash": task_hash,
+            "tag1": tag1,
+            "tag2": tag2,
+            "source_chain": chain_name,
+            "tx_hash": event.transactionHash.hex(),
+            "block_number": event.blockNumber,
+            "created_at": block_ts_cache[event.blockNumber].isoformat(),
+        })
+
+    try:
+        db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
+        logger.info(f"[{chain_name}] Batch upserted {len(rows)} feedback events")
+    except Exception as e:
+        err_str = str(e)
+        if "tag1" in err_str or "tag2" in err_str or "source_chain" in err_str or "column" in err_str.lower():
+            logger.warning(f"[{chain_name}] Column issue — retrying without extra columns")
+            for row in rows:
+                row.pop("tag1", None)
+                row.pop("tag2", None)
+                row.pop("source_chain", None)
+            try:
+                db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
+                logger.info(f"[{chain_name}] Batch upserted {len(rows)} feedback events (without extra cols)")
+            except Exception as e2:
+                logger.error(f"[{chain_name}] Batch upsert also failed: {e2}")
+        else:
+            logger.error(f"[{chain_name}] Batch upsert failed ({len(rows)} feedback events): {e}")
+
+    return len(events)
+
+
+def process_base_feedback_events(from_block: int, to_block: int):
+    """Process NewFeedback events from the ERC-8004 Reputation Registry on Base."""
+    blockchain = get_blockchain_service()
+    logger.info(f"[ERC-8004-BASE] Scanning feedback blocks {from_block}-{to_block}")
+    events = blockchain.get_base_feedback_events(from_block, to_block)
+    return _process_cross_chain_feedback("base", events, blockchain.w3_base)
+
+
+def process_linea_feedback_events(from_block: int, to_block: int):
+    """Process NewFeedback events from the ERC-8004 Reputation Registry on Linea."""
+    blockchain = get_blockchain_service()
+    logger.info(f"[ERC-8004-LINEA] Scanning feedback blocks {from_block}-{to_block}")
+    events = blockchain.get_linea_feedback_events(from_block, to_block)
+    return _process_cross_chain_feedback("linea", events, blockchain.w3_linea)
 
 
 def process_feedback_events(from_block: int, to_block: int):
@@ -961,6 +1038,16 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Base agent registration events")
+                # Base feedback events
+                count = _process_chunked(
+                    "erc8004_base_feedback",
+                    process_base_feedback_events,
+                    base_safe,
+                    start_block=ERC8004_BASE_IDENTITY_START_BLOCK,
+                    chunk_size=BASE_MAX_BLOCK_RANGE,
+                )
+                if count > 0:
+                    logger.info(f"Processed {count} ERC-8004 Base feedback events")
         except Exception as e:
             logger.error(f"Error processing Base ERC-8004 events: {e}")
 
@@ -979,6 +1066,16 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Linea agent registration events")
+                # Linea feedback events
+                count = _process_chunked(
+                    "erc8004_linea_feedback",
+                    process_linea_feedback_events,
+                    linea_safe,
+                    start_block=ERC8004_LINEA_IDENTITY_START_BLOCK,
+                    chunk_size=LINEA_MAX_BLOCK_RANGE,
+                )
+                if count > 0:
+                    logger.info(f"Processed {count} ERC-8004 Linea feedback events")
         except Exception as e:
             logger.error(f"Error processing Linea ERC-8004 events: {e}")
 

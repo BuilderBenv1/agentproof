@@ -327,12 +327,32 @@ class ChainService:
         else:
             logger.info("BASE_RPC_URL not set — Base feedback disabled")
 
+        # Linea backend (optional — only if LINEA_RPC_URL is set)
+        self._linea: _ChainBackend | None = None
+        if settings.linea_rpc_url:
+            try:
+                self._linea = _ChainBackend(
+                    chain_name="linea",
+                    rpc_url=settings.linea_rpc_url,
+                    chain_id=59144,
+                    identity_registry_addr=settings.linea_identity_registry,
+                    reputation_registry_addr=settings.linea_reputation_registry,
+                    private_key=settings.private_key,
+                    poa_middleware=False,
+                )
+            except Exception as e:
+                logger.error(f"Linea backend init failed: {e}")
+                self._linea = None
+        else:
+            logger.info("LINEA_RPC_URL not set — Linea feedback disabled")
+
         self._cached_oracle_agent_id: int | None = None
 
         logger.info(
             f"ChainService initialized — avax={settings.reputation_registry}, "
             f"eth={'enabled' if self._eth else 'disabled'}, "
-            f"base={'enabled' if self._base else 'disabled'}"
+            f"base={'enabled' if self._base else 'disabled'}, "
+            f"linea={'enabled' if self._linea else 'disabled'}"
         )
 
     def get_oracle_agent_id(self) -> int | None:
@@ -421,10 +441,19 @@ class ChainService:
             if result is not None:
                 return result
 
+        # Try Linea (cheap gas)
+        if self._linea is not None:
+            logger.info(
+                f"Agent {agent_id} not on Avalanche/Base — trying Linea"
+            )
+            result = self._linea.submit_feedback(agent_id, score, comment, tag1, tag2)
+            if result is not None:
+                return result
+
         # Try Ethereum last (expensive gas)
         if self._eth is not None:
             logger.info(
-                f"Agent {agent_id} not on Avalanche/Base — trying Ethereum"
+                f"Agent {agent_id} not on Avalanche/Base/Linea — trying Ethereum"
             )
             return self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
 
@@ -432,7 +461,7 @@ class ChainService:
 
     def get_agent_onchain_data(self, agent_id: int) -> dict | None:
         """Read agent owner + URI from chain (tries Avalanche, then Base, then Ethereum)."""
-        for backend in [self._avax, self._base, self._eth]:
+        for backend in [self._avax, self._base, self._linea, self._eth]:
             if backend is None:
                 continue
             try:

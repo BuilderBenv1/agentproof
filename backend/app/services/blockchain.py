@@ -179,6 +179,15 @@ class BlockchainService:
             )
             logger.info(f"ERC-8004 Base Identity Registry: {base_identity_addr}")
 
+        # ERC-8004 Reputation Registry on Base (same CREATE2 address)
+        self.erc8004_base_reputation = None
+        if self.w3_base and settings.active_reputation_address:
+            self.erc8004_base_reputation = self.w3_base.eth.contract(
+                address=Web3.to_checksum_address(settings.active_reputation_address),
+                abi=ERC8004_REPUTATION_ABI,
+            )
+            logger.info(f"ERC-8004 Base Reputation Registry: {settings.active_reputation_address}")
+
         # Linea web3 instance (for cross-chain ERC-8004 indexing)
         self.w3_linea = None
         self._linea_rpc_url = ""
@@ -207,6 +216,15 @@ class BlockchainService:
                 abi=ERC8004_IDENTITY_ABI,
             )
             logger.info(f"ERC-8004 Linea Identity Registry: {linea_identity_addr}")
+
+        # ERC-8004 Reputation Registry on Linea (same CREATE2 address)
+        self.erc8004_linea_reputation = None
+        if self.w3_linea and settings.active_reputation_address:
+            self.erc8004_linea_reputation = self.w3_linea.eth.contract(
+                address=Web3.to_checksum_address(settings.active_reputation_address),
+                abi=ERC8004_REPUTATION_ABI,
+            )
+            logger.info(f"ERC-8004 Linea Reputation Registry: {settings.active_reputation_address}")
 
         # Validation: always custom
         if settings.validation_registry_address:
@@ -626,6 +644,30 @@ class BlockchainService:
             return events
 
         return []  # unreachable
+
+    def get_base_feedback_events(self, from_block: int, to_block: int):
+        """Get NewFeedback events from the ERC-8004 Reputation Registry on Base."""
+        if not self.erc8004_base_reputation:
+            return []
+        try:
+            return self.erc8004_base_reputation.events.NewFeedback().get_logs(
+                from_block=from_block, to_block=to_block
+            )
+        except Exception as e:
+            logger.error(f"Base NewFeedback get_logs({from_block}-{to_block}) FAILED: {e}")
+            raise
+
+    def get_linea_feedback_events(self, from_block: int, to_block: int):
+        """Get NewFeedback events from the ERC-8004 Reputation Registry on Linea."""
+        if not self.erc8004_linea_reputation:
+            return []
+        try:
+            return self.erc8004_linea_reputation.events.NewFeedback().get_logs(
+                from_block=from_block, to_block=to_block
+            )
+        except Exception as e:
+            logger.error(f"Linea NewFeedback get_logs({from_block}-{to_block}) FAILED: {e}")
+            raise
 
     def diagnose_erc8004_identity(self):
         """One-time diagnostic: check contract, compute topic, try raw logs."""
