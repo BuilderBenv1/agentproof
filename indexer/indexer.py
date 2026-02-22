@@ -280,8 +280,9 @@ class AgentProofIndexer:
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "erc8004",
+                        "source_chain": "avalanche",
                     },
-                    on_conflict="agent_id",
+                    on_conflict="agent_id,source_chain",
                 ).execute()
                 logger.info(f"[ERC8004-ID] Agent #{agent_id} registered by {owner}")
                 count += 1
@@ -338,8 +339,9 @@ class AgentProofIndexer:
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "custom",
+                        "source_chain": "avalanche",
                     },
-                    on_conflict="agent_id",
+                    on_conflict="agent_id,source_chain",
                 ).execute()
                 logger.info(f"[CUSTOM-ID] Agent #{agent_id} registered by {owner}")
                 count += 1

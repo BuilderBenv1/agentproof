@@ -46,11 +46,18 @@ async def list_agents(
 
 
 @router.get("/{agent_id}", response_model=AgentProfileResponse)
-async def get_agent(agent_id: int):
-    """Get full agent profile with reputation details."""
+async def get_agent(agent_id: int, chain: str | None = None):
+    """Get full agent profile with reputation details.
+
+    When agents share the same agent_id across chains (ERC-8004 CREATE2),
+    pass ?chain=base to disambiguate. Without chain, returns the first match.
+    """
     db = get_supabase()
 
-    result = db.table("agents").select("*").eq("agent_id", agent_id).execute()
+    query = db.table("agents").select("*").eq("agent_id", agent_id)
+    if chain:
+        query = query.eq("source_chain", chain)
+    result = query.execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Agent not found")
 

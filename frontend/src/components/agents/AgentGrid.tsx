@@ -31,7 +31,7 @@ export default function AgentGrid({ agents, loading }: AgentGridProps) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {agents.map((agent) => (
         <AgentCard
-          key={agent.agent_id}
+          key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
           agentId={agent.agent_id}
           name={agent.name}
           category={agent.category}
@@ -40,6 +40,7 @@ export default function AgentGrid({ agents, loading }: AgentGridProps) {
           feedbackCount={agent.total_feedback}
           rank={agent.rank}
           imageUrl={agent.image_url}
+          sourceChain={agent.source_chain}
         />
       ))}
     </div>

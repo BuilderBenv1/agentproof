@@ -8,7 +8,8 @@
 -- 1. Agents table (synced from onchain)
 CREATE TABLE IF NOT EXISTS agents (
     id SERIAL PRIMARY KEY,
-    agent_id INTEGER UNIQUE NOT NULL,
+    agent_id INTEGER NOT NULL,
+    source_chain TEXT NOT NULL DEFAULT 'avalanche',
     owner_address TEXT NOT NULL,
     agent_uri TEXT NOT NULL,
     name TEXT,
@@ -97,6 +98,8 @@ CREATE TABLE IF NOT EXISTS indexer_state (
 );
 
 -- 8. Indexes for performance
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_agent_id_chain ON agents(agent_id, source_chain);
+CREATE INDEX IF NOT EXISTS idx_agents_source_chain ON agents(source_chain);
 CREATE INDEX IF NOT EXISTS idx_agents_category ON agents(category);
 CREATE INDEX IF NOT EXISTS idx_agents_composite_score ON agents(composite_score DESC);
 CREATE INDEX IF NOT EXISTS idx_agents_tier ON agents(tier);

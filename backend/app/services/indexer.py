@@ -104,14 +104,14 @@ def process_agent_registered_events(from_block: int, to_block: int):
 
     # Batch upsert
     try:
-        db.table("agents").upsert(rows, on_conflict="agent_id").execute()
+        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
         logger.info(f"Batch upserted {len(rows)} custom agents (avalanche)")
     except Exception as e:
         logger.error(f"Batch upsert failed ({len(rows)} custom agents): {e}")
         for i in range(0, len(rows), 50):
             batch = rows[i:i + 50]
             try:
-                db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
             except Exception as e2:
                 logger.error(f"Sub-batch upsert failed: {e2}")
 
@@ -149,14 +149,14 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
 
     # Batch upsert
     try:
-        db.table("agents").upsert(rows, on_conflict="agent_id").execute()
+        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
         logger.info(f"[ERC-8004-AVAX] Batch upserted {len(rows)} agents")
     except Exception as e:
         logger.error(f"[ERC-8004-AVAX] Batch upsert failed ({len(rows)} rows): {e}")
         for i in range(0, len(rows), 50):
             batch = rows[i:i + 50]
             try:
-                db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
             except Exception as e2:
                 logger.error(f"[ERC-8004-AVAX] Sub-batch upsert failed: {e2}")
 
@@ -204,7 +204,7 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
         try:
-            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
             saved += len(batch)
         except Exception as e:
             logger.error(f"[ERC-8004-ETH] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
@@ -212,7 +212,7 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
             for j in range(0, len(batch), 50):
                 sub = batch[j:j + 50]
                 try:
-                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    db.table("agents").upsert(sub, on_conflict="agent_id,source_chain").execute()
                     saved += len(sub)
                 except Exception as e2:
                     logger.error(f"[ERC-8004-ETH] Sub-batch upsert also failed: {e2}")
@@ -264,7 +264,7 @@ def process_erc8004_base_identity_events(from_block: int, to_block: int):
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
         try:
-            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
             saved += len(batch)
         except Exception as e:
             logger.error(f"[ERC-8004-BASE] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
@@ -272,7 +272,7 @@ def process_erc8004_base_identity_events(from_block: int, to_block: int):
             for j in range(0, len(batch), 50):
                 sub = batch[j:j + 50]
                 try:
-                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    db.table("agents").upsert(sub, on_conflict="agent_id,source_chain").execute()
                     saved += len(sub)
                 except Exception as e2:
                     logger.error(f"[ERC-8004-BASE] Sub-batch upsert also failed: {e2}")
@@ -324,7 +324,7 @@ def process_erc8004_linea_identity_events(from_block: int, to_block: int):
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
         try:
-            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
             saved += len(batch)
         except Exception as e:
             logger.error(f"[ERC-8004-LINEA] Batch upsert failed ({len(batch)} rows at offset {i}): {e}")
@@ -332,7 +332,7 @@ def process_erc8004_linea_identity_events(from_block: int, to_block: int):
             for j in range(0, len(batch), 50):
                 sub = batch[j:j + 50]
                 try:
-                    db.table("agents").upsert(sub, on_conflict="agent_id").execute()
+                    db.table("agents").upsert(sub, on_conflict="agent_id,source_chain").execute()
                     saved += len(sub)
                 except Exception as e2:
                     logger.error(f"[ERC-8004-LINEA] Sub-batch upsert also failed: {e2}")
@@ -653,7 +653,7 @@ def recalculate_agent_scores():
         while True:
             batch = (
                 db.table("agents")
-                .select("agent_id, registered_at, owner_address, agent_uri, uri_change_count")
+                .select("agent_id, registered_at, owner_address, agent_uri, uri_change_count, source_chain")
                 .range(offset, offset + 999)
                 .execute()
             )
@@ -790,6 +790,7 @@ def recalculate_agent_scores():
 
         update_rows.append({
             "agent_id": agent_id,
+            "source_chain": agent.get("source_chain", "avalanche"),
             "owner_address": owner,
             "agent_uri": agent.get("agent_uri", ""),
             "registered_at": agent["registered_at"],
@@ -810,7 +811,7 @@ def recalculate_agent_scores():
     for i in range(0, len(update_rows), batch_size):
         batch = update_rows[i:i + batch_size]
         try:
-            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
         except Exception as e:
             logger.error(f"Error batch-updating scores (batch {i // batch_size}): {e}")
 
@@ -868,7 +869,7 @@ def update_leaderboard():
         while True:
             batch = (
                 db.table("agents")
-                .select("agent_id, category, composite_score, owner_address, agent_uri, registered_at")
+                .select("agent_id, category, composite_score, owner_address, agent_uri, registered_at, source_chain")
                 .order("composite_score", desc=True)
                 .range(offset, offset + 999)
                 .execute()
@@ -901,6 +902,7 @@ def update_leaderboard():
         categories[cat].append(agent)
         rank_updates.append({
             "agent_id": agent["agent_id"],
+            "source_chain": agent.get("source_chain", "avalanche"),
             "owner_address": agent.get("owner_address", ""),
             "agent_uri": agent.get("agent_uri", ""),
             "registered_at": agent["registered_at"],
@@ -912,7 +914,7 @@ def update_leaderboard():
     for i in range(0, len(rank_updates), batch_size):
         batch = rank_updates[i:i + batch_size]
         try:
-            db.table("agents").upsert(batch, on_conflict="agent_id").execute()
+            db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
         except Exception as e:
             logger.error(f"Error batch-updating ranks: {e}")
 

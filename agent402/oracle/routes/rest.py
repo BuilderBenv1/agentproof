@@ -13,10 +13,13 @@ router = APIRouter(prefix="/api/v1", tags=["trust"])
 
 
 @router.get("/trust/{agent_id}", response_model=TrustEvaluation)
-async def evaluate_agent(agent_id: int):
-    """Full trust evaluation — score, tier, risk flags, breakdown. [x402: $0.01]"""
+async def evaluate_agent(agent_id: int, chain: str | None = Query(None)):
+    """Full trust evaluation — score, tier, risk flags, breakdown. [x402: $0.01]
+
+    Pass ?chain=base to disambiguate agents with the same ID on different chains.
+    """
     try:
-        result = await asyncio.to_thread(get_trust_service().evaluate_agent, agent_id)
+        result = await asyncio.to_thread(get_trust_service().evaluate_agent, agent_id, chain=chain)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -26,10 +29,13 @@ async def evaluate_agent(agent_id: int):
 
 
 @router.get("/trust/{agent_id}/risk", response_model=RiskAssessment)
-async def risk_check(agent_id: int):
-    """Risk assessment with flags and recommendation. [x402: $0.01]"""
+async def risk_check(agent_id: int, chain: str | None = Query(None)):
+    """Risk assessment with flags and recommendation. [x402: $0.01]
+
+    Pass ?chain=base to disambiguate agents with the same ID on different chains.
+    """
     try:
-        result = await asyncio.to_thread(get_trust_service().risk_check, agent_id)
+        result = await asyncio.to_thread(get_trust_service().risk_check, agent_id, chain=chain)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

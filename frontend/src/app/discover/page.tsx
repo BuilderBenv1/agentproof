@@ -211,8 +211,8 @@ export default function DiscoverPage() {
             <div className="space-y-3">
               {agents.map((agent) => (
                 <Link
-                  key={agent.agent_id}
-                  href={`/agents/${agent.agent_id}`}
+                  key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
+                  href={`/agents/${agent.agent_id}${agent.source_chain ? `?chain=${agent.source_chain}` : ""}`}
                   className="block bg-gray-900/30 border border-gray-800 rounded-xl p-4 hover:border-emerald-500/30 transition-colors group"
                 >
                   <div className="flex items-center justify-between">
@@ -291,8 +291,8 @@ export default function DiscoverPage() {
               <div className="divide-y divide-gray-800">
                 {trending.map((agent) => (
                   <Link
-                    key={agent.agent_id}
-                    href={`/agents/${agent.agent_id}`}
+                    key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
+                    href={`/agents/${agent.agent_id}${agent.source_chain ? `?chain=${agent.source_chain}` : ""}`}
                     className="block p-3 hover:bg-gray-800/30 transition-colors"
                   >
                     <div className="text-xs font-mono text-white">
@@ -319,8 +319,8 @@ export default function DiscoverPage() {
               <div className="divide-y divide-gray-800">
                 {newAgents.map((agent) => (
                   <Link
-                    key={agent.agent_id}
-                    href={`/agents/${agent.agent_id}`}
+                    key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
+                    href={`/agents/${agent.agent_id}${agent.source_chain ? `?chain=${agent.source_chain}` : ""}`}
                     className="block p-3 hover:bg-gray-800/30 transition-colors"
                   >
                     <div className="text-xs font-mono text-white">

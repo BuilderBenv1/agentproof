@@ -15,6 +15,7 @@ interface AgentCardProps {
   feedbackCount: number;
   rank: number | null;
   imageUrl?: string | null;
+  sourceChain?: string;
 }
 
 export default function AgentCard({
@@ -26,11 +27,13 @@ export default function AgentCard({
   feedbackCount,
   rank,
   imageUrl,
+  sourceChain,
 }: AgentCardProps) {
   const tierColor = getTierColor(tier);
+  const chainParam = sourceChain ? `?chain=${sourceChain}` : "";
 
   return (
-    <Link href={`/agents/${agentId}`}>
+    <Link href={`/agents/${agentId}${chainParam}`}>
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200 cursor-pointer group">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -45,7 +48,14 @@ export default function AgentCard({
               <h3 className="font-semibold text-white group-hover:text-emerald-400 transition-colors text-sm">
                 {name || `Agent #${agentId}`}
               </h3>
-              <CategoryBadge category={category} />
+              <div className="flex items-center gap-1.5">
+                <CategoryBadge category={category} />
+                {sourceChain && sourceChain !== "avalanche" && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 uppercase">
+                    {sourceChain}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           {rank && (

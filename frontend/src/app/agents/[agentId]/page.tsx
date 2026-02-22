@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useAgent } from "@/hooks/useAgents";
 import AgentProfile from "@/components/agents/AgentProfile";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -9,8 +9,10 @@ import Link from "next/link";
 
 export default function AgentDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const agentId = Number(params.agentId);
-  const { agent, loading, error } = useAgent(agentId);
+  const chain = searchParams.get("chain") || undefined;
+  const { agent, loading, error } = useAgent(agentId, chain);
 
   if (loading) {
     return (

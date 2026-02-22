@@ -101,7 +101,7 @@ export function useAgents(options: UseAgentsOptions = {}) {
   return { data, loading, error, refetch: fetchAgents };
 }
 
-export function useAgent(agentId: number) {
+export function useAgent(agentId: number, chain?: string) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +110,9 @@ export function useAgent(agentId: number) {
     async function fetch() {
       setLoading(true);
       try {
-        const result = await apiFetch<Agent>(`/agents/${agentId}`);
+        const result = await apiFetch<Agent>(`/agents/${agentId}`, {
+          params: { chain },
+        });
         setAgent(result);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch agent");
@@ -119,7 +121,7 @@ export function useAgent(agentId: number) {
       }
     }
     fetch();
-  }, [agentId]);
+  }, [agentId, chain]);
 
   return { agent, loading, error };
 }

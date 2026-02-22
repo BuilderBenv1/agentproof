@@ -86,7 +86,8 @@ def sync_agents(src: Client, dst: Client) -> int:
     columns = (
         "agent_id, owner_address, agent_uri, name, description, category, "
         "image_url, endpoints, registered_at, updated_at, total_feedback, "
-        "average_rating, composite_score, validation_success_rate, rank, tier"
+        "average_rating, composite_score, validation_success_rate, rank, tier, "
+        "source_chain"
     )
     rows = fetch_all(src, "agents", columns, "agent_id")
     if not rows:
@@ -98,6 +99,7 @@ def sync_agents(src: Client, dst: Client) -> int:
     for r in rows:
         clean.append({
             "agent_id": r["agent_id"],
+            "source_chain": r.get("source_chain", "avalanche"),
             "owner_address": r["owner_address"],
             "agent_uri": r.get("agent_uri", ""),
             "name": r.get("name"),
@@ -115,7 +117,7 @@ def sync_agents(src: Client, dst: Client) -> int:
             "tier": r.get("tier", "unranked"),
         })
 
-    count = upsert_batch(dst, "agents", clean, "agent_id")
+    count = upsert_batch(dst, "agents", clean, "agent_id,source_chain")
     logger.info(f"Synced {count} agents")
     return count
 

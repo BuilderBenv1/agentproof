@@ -31,7 +31,7 @@ class AgentResponse(AgentBase):
     agent_id: int
     owner_address: str
     agent_uri: str
-    source_chain: str = "ethereum"
+    source_chain: str = "avalanche"
     registered_at: datetime
     updated_at: Optional[datetime] = None
     total_feedback: int = 0

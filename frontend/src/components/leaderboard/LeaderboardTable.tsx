@@ -141,7 +141,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
             const isTop3 = entry.leaderboard_rank <= 3;
             return (
               <tr
-                key={entry.agent_id}
+                key={`${entry.agent_id}-${entry.source_chain || "avalanche"}`}
                 className={`border-b border-gray-800/50 transition-colors ${
                   isTop3
                     ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.04]"
@@ -153,7 +153,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                 </td>
                 <td className="py-3 px-4">
                   <Link
-                    href={`/agents/${entry.agent_id}`}
+                    href={`/agents/${entry.agent_id}${entry.source_chain ? `?chain=${entry.source_chain}` : ""}`}
                     className="flex items-center gap-3 hover:text-emerald-400 transition-colors group"
                   >
                     <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-bold font-mono text-emerald-400 flex-shrink-0 overflow-hidden">

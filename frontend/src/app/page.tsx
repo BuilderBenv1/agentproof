@@ -34,6 +34,7 @@ interface AgentData {
   total_feedback: number;
   rank: number | null;
   image_url: string | null;
+  source_chain?: string;
 }
 
 export default function HomePage() {
@@ -264,7 +265,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {topAgents.map((agent) => (
               <AgentCard
-                key={agent.agent_id}
+                key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
                 agentId={agent.agent_id}
                 name={agent.name}
                 category={agent.category}
@@ -273,6 +274,7 @@ export default function HomePage() {
                 feedbackCount={agent.total_feedback}
                 rank={agent.rank}
                 imageUrl={agent.image_url}
+                sourceChain={agent.source_chain}
               />
             ))}
           </div>

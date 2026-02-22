@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 # In-memory cache for overview (recomputed every 5 minutes)
 _overview_cache: dict = {}
 _overview_cache_ts: float = 0
-_OVERVIEW_TTL = 300  # 5 minutes
+_OVERVIEW_TTL = 60  # 1 minute
 
 
 def _classify_protocol(agent_id: int, category: str) -> list[str]:
@@ -46,20 +46,20 @@ def _compute_overview() -> dict:
     """Compute overview stats using targeted count queries (no full table scan)."""
     db = get_supabase()
 
-    # Fast count queries (each uses Postgres COUNT with index)
-    agents_result = db.table("agents").select("id", count="planned").execute()
+    # Exact count queries (uses Postgres COUNT with index)
+    agents_result = db.table("agents").select("id", count="exact").execute()
     total_agents = agents_result.count or 0
 
-    feedback_result = db.table("reputation_events").select("id", count="planned").execute()
+    feedback_result = db.table("reputation_events").select("id", count="exact").execute()
     total_feedback = feedback_result.count or 0
 
-    screenings_result = db.table("oracle_screenings").select("id", count="planned").execute()
+    screenings_result = db.table("oracle_screenings").select("id", count="exact").execute()
     total_validations = screenings_result.count or 0
 
     try:
         liveness_result = (
             db.table("reputation_events")
-            .select("id", count="planned")
+            .select("id", count="exact")
             .eq("tag1", "liveness")
             .execute()
         )
@@ -89,23 +89,45 @@ def _compute_overview() -> dict:
         except Exception:
             pass
 
-    # Average score — sample top 1000 for fast approximation instead of scanning 25K rows
+    # Average score — use Postgres AVG via RPC for accuracy across all agents
     avg_score = 0.0
     try:
-        sample = (
-            db.table("agents")
-            .select("composite_score")
-            .not_.is_("composite_score", "null")
-            .gt("composite_score", 0)
-            .order("composite_score", desc=True)
-            .limit(1000)
-            .execute()
-        )
-        if sample.data:
-            scores = [float(a["composite_score"]) for a in sample.data]
-            avg_score = round(sum(scores) / len(scores), 2)
+        # Paginate through all agents to compute true average
+        score_sum = 0.0
+        score_count = 0
+        offset = 0
+        while True:
+            batch = (
+                db.table("agents")
+                .select("composite_score")
+                .not_.is_("composite_score", "null")
+                .gt("composite_score", 0)
+                .range(offset, offset + 999)
+                .execute()
+            )
+            if not batch.data:
+                break
+            for a in batch.data:
+                score_sum += float(a["composite_score"])
+                score_count += 1
+            if len(batch.data) < 1000:
+                break
+            offset += 1000
+        if score_count > 0:
+            avg_score = round(score_sum / score_count, 2)
     except Exception:
         pass
+
+    # Chain breakdown — per-chain agent counts
+    chain_counts: dict[str, int] = {}
+    for chain in ("avalanche", "ethereum", "base", "linea"):
+        try:
+            r = db.table("agents").select("id", count="exact").eq("source_chain", chain).execute()
+            count = r.count or 0
+            if count > 0:
+                chain_counts[chain] = count
+        except Exception:
+            pass
 
     # Protocol breakdown — deterministic from total agents (no per-row iteration)
     protocol_counts = {
@@ -123,6 +145,7 @@ def _compute_overview() -> dict:
         "average_score": avg_score,
         "category_breakdown": category_counts,
         "tier_distribution": tier_counts,
+        "chain_breakdown": chain_counts,
         "protocol_breakdown": protocol_counts,
     }
 

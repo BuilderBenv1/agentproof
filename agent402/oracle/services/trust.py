@@ -164,10 +164,13 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
 
 
 class TrustService:
-    def evaluate_agent(self, agent_id: int) -> TrustEvaluation:
+    def evaluate_agent(self, agent_id: int, chain: str | None = None) -> TrustEvaluation:
         db = get_supabase()
 
-        result = db.table("agents").select("*").eq("agent_id", agent_id).execute()
+        query = db.table("agents").select("*").eq("agent_id", agent_id)
+        if chain:
+            query = query.eq("source_chain", chain)
+        result = query.execute()
         if not result.data:
             raise ValueError(f"Agent #{agent_id} not found")
         agent = result.data[0]
@@ -308,8 +311,8 @@ class TrustService:
             for a in result.data
         ]
 
-    def risk_check(self, agent_id: int) -> RiskAssessment:
-        evaluation = self.evaluate_agent(agent_id)
+    def risk_check(self, agent_id: int, chain: str | None = None) -> RiskAssessment:
+        evaluation = self.evaluate_agent(agent_id, chain=chain)
         risk_flags = list(evaluation.risk_flags)
 
         # Score volatility from history
