@@ -11,6 +11,7 @@ async def list_agents(
     chain: str | None = None,
     search: str | None = None,
     tier: str | None = None,
+    address: str | None = Query(None, description="Filter by owner address (exact, case-insensitive)"),
     sort_by: str = Query("composite_score", pattern="^(composite_score|registered_at|total_feedback)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -27,6 +28,8 @@ async def list_agents(
         query = query.eq("source_chain", chain)
     if tier:
         query = query.eq("tier", tier)
+    if address:
+        query = query.ilike("owner_address", address)
     if search:
         query = query.or_(f"name.ilike.%{search}%,description.ilike.%{search}%,owner_address.ilike.%{search}%")
 

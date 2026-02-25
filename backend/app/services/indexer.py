@@ -32,6 +32,7 @@ ERC8004_LINEA_IDENTITY_START_BLOCK = 28_662_500  # CREATE2 deployed at block 28,
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
 BASE_MAX_BLOCK_RANGE = 10000  # CDP RPC supports large ranges; speeds up catchup
+BASE_FEEDBACK_BLOCK_RANGE = 1000  # web3.py get_logs limited to 1K by RPC provider
 LINEA_MAX_BLOCK_RANGE = 2000
 
 
@@ -1097,7 +1098,11 @@ def _process_chunked(
     start_block: int = DEFAULT_START_BLOCK,
     chunk_size: int = MAX_BLOCK_RANGE,
 ):
-    """Process events for a contract in chunk_size chunks with retry on failure."""
+    """Process events for a contract in chunk_size chunks with retry on failure.
+
+    Auto-halves chunk_size on "range is too large" RPC errors to recover
+    without manual intervention.
+    """
     last_block = get_last_processed_block(contract_name, default_start=start_block)
     if last_block >= safe_block:
         return 0
@@ -1106,14 +1111,25 @@ def _process_chunked(
     from_block = last_block + 1
     retries = 0
     max_retries = 3
+    current_chunk = chunk_size
 
     while from_block <= safe_block:
-        to_block = min(from_block + chunk_size - 1, safe_block)
+        to_block = min(from_block + current_chunk - 1, safe_block)
         try:
             count = processor(from_block, to_block)
             total_count += count
             retries = 0  # Reset on success
         except Exception as e:
+            err_str = str(e).lower()
+            # Auto-halve chunk size on range-too-large errors
+            if ("range" in err_str and "too large" in err_str) or "max is" in err_str:
+                if current_chunk > 100:
+                    current_chunk = max(100, current_chunk // 2)
+                    logger.warning(
+                        f"[{contract_name}] Range too large — halving chunk to {current_chunk} blocks"
+                    )
+                    retries = 0  # Don't count range errors as retries
+                    continue
             retries += 1
             logger.error(
                 f"Error processing {contract_name} blocks {from_block}-{to_block} "
@@ -1195,13 +1211,13 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Base agent registration events")
-                # Base feedback events
+                # Base feedback events (1K block limit for web3.py get_logs)
                 count = _process_chunked(
                     "erc8004_base_feedback",
                     process_base_feedback_events,
                     base_safe,
                     start_block=ERC8004_BASE_IDENTITY_START_BLOCK,
-                    chunk_size=BASE_MAX_BLOCK_RANGE,
+                    chunk_size=BASE_FEEDBACK_BLOCK_RANGE,
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Base feedback events")
