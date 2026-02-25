@@ -32,8 +32,10 @@ ERC8004_LINEA_IDENTITY_START_BLOCK = 28_662_500  # CREATE2 deployed at block 28,
 MAX_BLOCK_RANGE = 2000       # Avalanche RPCs support 2048
 ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicnode=1000)
 BASE_MAX_BLOCK_RANGE = 10000  # CDP RPC supports large ranges; speeds up catchup
-BASE_FEEDBACK_BLOCK_RANGE = 1000  # web3.py get_logs limited to 1K by RPC provider
+BASE_FEEDBACK_BLOCK_RANGE = 10000  # Now uses raw httpx (same as identity), supports 10K
 LINEA_MAX_BLOCK_RANGE = 2000
+# Maximum chunks to process per cycle during catchup (prevents one chain from starving others)
+MAX_CHUNKS_PER_CYCLE = 50
 
 
 def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
@@ -556,6 +558,98 @@ def process_base_feedback_events(from_block: int, to_block: int):
     logger.info(f"[ERC-8004-BASE] Scanning feedback blocks {from_block}-{to_block}")
     events = blockchain.get_base_feedback_events(from_block, to_block)
     return _process_cross_chain_feedback("base", events, blockchain.w3_base)
+
+
+# High-value agents to prioritize feedback sync for (Base agent_ids)
+# These agents have significant on-chain review counts but the sequential
+# catchup hasn't reached their feedback blocks yet.
+PRIORITY_BASE_AGENTS = [1380]  # Captain Dackie
+
+
+def sync_priority_agent_feedback(chain: str = "base"):
+    """Fetch ALL feedback for priority agents in one shot, bypassing sequential catchup.
+
+    Uses topic-filtered eth_getLogs (topics[1] = agentId) to retrieve every
+    NewFeedback event for specific high-value agents across the entire block
+    range.  This surfaces their reviews immediately while the sequential
+    catchup continues in the background.
+
+    Only runs once per agent — sets a flag in indexer_state to avoid re-querying.
+    """
+    if chain != "base":
+        return 0
+
+    blockchain = get_blockchain_service()
+    if not blockchain.w3_base:
+        return 0
+
+    db = get_supabase()
+    total = 0
+
+    for agent_id in PRIORITY_BASE_AGENTS:
+        state_key = f"priority_feedback_done_{chain}_{agent_id}"
+
+        # Check if we already synced this agent
+        try:
+            check = (
+                db.table("indexer_state")
+                .select("last_block")
+                .eq("contract_name", state_key)
+                .execute()
+            )
+            if check.data and check.data[0].get("last_block", 0) > 0:
+                continue  # Already done
+        except Exception:
+            pass
+
+        logger.info(f"[PRIORITY-SYNC] Fetching ALL feedback for agent #{agent_id} on {chain}")
+
+        try:
+            base_current = blockchain.get_base_current_block()
+            from_block = ERC8004_BASE_IDENTITY_START_BLOCK
+            to_block = base_current - CONFIRMATION_BLOCKS
+
+            # Process in large chunks (100K blocks) since topic filter is very selective
+            chunk = 100_000
+            from_b = from_block
+            agent_total = 0
+
+            while from_b <= to_block:
+                to_b = min(from_b + chunk - 1, to_block)
+                try:
+                    events = blockchain.get_base_feedback_events_for_agent(
+                        agent_id, from_b, to_b
+                    )
+                    if events:
+                        count = _process_cross_chain_feedback("base", events, blockchain.w3_base)
+                        agent_total += count
+                except Exception as e:
+                    err_str = str(e).lower()
+                    if "range" in err_str and "too large" in err_str:
+                        # Halve chunk and retry
+                        chunk = max(10_000, chunk // 2)
+                        logger.warning(f"[PRIORITY-SYNC] Range too large, halving to {chunk}")
+                        continue
+                    logger.error(f"[PRIORITY-SYNC] Error fetching agent #{agent_id} feedback ({from_b}-{to_b}): {e}")
+                    break
+                from_b = to_b + 1
+
+            logger.info(f"[PRIORITY-SYNC] Agent #{agent_id}: synced {agent_total} feedback events")
+            total += agent_total
+
+            # Mark as done so we don't re-query
+            try:
+                db.table("indexer_state").upsert({
+                    "contract_name": state_key,
+                    "last_block": to_block,
+                }, on_conflict="contract_name").execute()
+            except Exception as e:
+                logger.warning(f"[PRIORITY-SYNC] Failed to save state for {state_key}: {e}")
+
+        except Exception as e:
+            logger.error(f"[PRIORITY-SYNC] Failed to sync agent #{agent_id}: {e}")
+
+    return total
 
 
 def process_linea_feedback_events(from_block: int, to_block: int):
@@ -1097,28 +1191,36 @@ def _process_chunked(
     safe_block: int,
     start_block: int = DEFAULT_START_BLOCK,
     chunk_size: int = MAX_BLOCK_RANGE,
+    max_chunks: int = MAX_CHUNKS_PER_CYCLE,
 ):
     """Process events for a contract in chunk_size chunks with retry on failure.
 
-    Auto-halves chunk_size on "range is too large" RPC errors to recover
-    without manual intervention.
+    Processes up to max_chunks chunks per call to allow fast catchup while
+    preventing one chain from starving others.  Auto-halves chunk_size on
+    "range is too large" RPC errors.
     """
     last_block = get_last_processed_block(contract_name, default_start=start_block)
     if last_block >= safe_block:
         return 0
+
+    behind = safe_block - last_block
+    if behind > chunk_size * 10:
+        logger.info(f"[{contract_name}] {behind:,} blocks behind — processing up to {max_chunks} chunks of {chunk_size}")
 
     total_count = 0
     from_block = last_block + 1
     retries = 0
     max_retries = 3
     current_chunk = chunk_size
+    chunks_done = 0
 
-    while from_block <= safe_block:
+    while from_block <= safe_block and chunks_done < max_chunks:
         to_block = min(from_block + current_chunk - 1, safe_block)
         try:
             count = processor(from_block, to_block)
             total_count += count
             retries = 0  # Reset on success
+            chunks_done += 1
         except Exception as e:
             err_str = str(e).lower()
             # Auto-halve chunk size on range-too-large errors
@@ -1198,6 +1300,12 @@ def run_indexer_cycle():
 
     # --- Base ---
     if blockchain.w3_base:
+        # Priority sync: fetch ALL feedback for high-value agents before sequential catchup
+        try:
+            sync_priority_agent_feedback(chain="base")
+        except Exception as e:
+            logger.warning(f"Priority feedback sync failed (non-fatal): {e}")
+
         try:
             base_current = blockchain.get_base_current_block()
             base_safe = base_current - CONFIRMATION_BLOCKS

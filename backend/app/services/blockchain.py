@@ -758,6 +758,94 @@ class BlockchainService:
 
         return []
 
+    def get_base_feedback_events_for_agent(self, agent_id: int, from_block: int, to_block: int):
+        """Get NewFeedback events for a SPECIFIC agent on Base.
+
+        Filters by topics[1] = agent_id so the RPC only returns events for
+        that agent, enabling targeted sync across the full block range without
+        sequential catchup.  Uses raw httpx (same as get_base_feedback_events).
+        """
+        settings = get_settings()
+        addr = settings.active_reputation_address
+        if not addr or not self._base_rpc_url:
+            return []
+
+        topic0 = "0x" + Web3.keccak(
+            text="NewFeedback(uint256,address,uint64,int128,uint8,string,string,string,string,string,bytes32)"
+        ).hex()
+        # topics[1] is the indexed agentId — pad to 32 bytes
+        topic1 = "0x" + hex(agent_id)[2:].zfill(64)
+
+        payload = {
+            "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+            "params": [{
+                "address": addr,
+                "fromBlock": hex(from_block),
+                "toBlock": hex(to_block),
+                "topics": [topic0, topic1],
+            }],
+        }
+
+        for attempt in range(2):
+            rpc_url = self._base_rpc_url
+            try:
+                r = httpx.post(rpc_url, json=payload, timeout=60)
+            except httpx.RequestError as e:
+                logger.error(f"Base priority feedback HTTP error ({rpc_url[:50]}): {e}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise
+
+            if r.status_code != 200:
+                body = r.text[:500]
+                logger.error(f"Base priority feedback({from_block}-{to_block}, agent={agent_id}) HTTP {r.status_code}: {body}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"Base priority feedback HTTP {r.status_code}: {body}")
+
+            resp = r.json()
+            if "error" in resp:
+                err_msg = resp["error"].get("message", str(resp["error"]))
+                logger.error(f"Base priority feedback({from_block}-{to_block}, agent={agent_id}) RPC error: {err_msg}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"Base priority feedback RPC error: {err_msg}")
+
+            raw_logs = resp["result"]
+            events = []
+            for log in raw_logs:
+                try:
+                    aid = int(log["topics"][1], 16)
+                    client_addr = "0x" + log["topics"][2][-40:]
+                    data_bytes = bytes.fromhex(log["data"][2:])
+                    decoded = abi_decode(
+                        ["uint64", "int128", "uint8", "string", "string", "string", "string", "bytes32"],
+                        data_bytes,
+                    )
+                    value = int(decoded[1])
+                    tag1 = decoded[3]
+                    tag2 = decoded[4]
+                    feedback_hash = decoded[7]
+
+                    events.append(_RawFeedbackEvent(
+                        _args=_RawFeedbackArgs(
+                            agentId=aid,
+                            clientAddress=Web3.to_checksum_address(client_addr),
+                            value=value,
+                            feedbackHash=feedback_hash,
+                            tag1=tag1,
+                            tag2=tag2,
+                        ),
+                        blockNumber=int(log["blockNumber"], 16),
+                        transactionHash=bytes.fromhex(log["transactionHash"][2:]),
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to decode Base priority feedback log: {e}")
+            logger.info(f"Base priority feedback agent={agent_id} ({from_block}-{to_block}): {len(events)} events")
+            return events
+
+        return []
+
     def get_linea_feedback_events(self, from_block: int, to_block: int):
         """Get NewFeedback events from the ERC-8004 Reputation Registry on Linea."""
         if not self.erc8004_linea_reputation:
