@@ -30,6 +30,29 @@ class _RawEvent:
     def args(self):
         return _RawEventArgs(agentId=self.agentId, owner=self.owner, agentURI=self.agentURI)
 
+
+@dataclass
+class _RawFeedbackArgs:
+    agentId: int
+    clientAddress: str
+    value: int
+    feedbackHash: bytes
+    tag1: str
+    tag2: str
+
+
+@dataclass
+class _RawFeedbackEvent:
+    """Lightweight feedback event matching the interface _process_cross_chain_feedback expects."""
+    _args: _RawFeedbackArgs
+    blockNumber: int
+    transactionHash: bytes
+
+    @property
+    def args(self):
+        return self._args
+
+
 logger = logging.getLogger(__name__)
 
 # ─── Official ERC-8004 Identity Registry ABI (Ava Labs) ─────────────
@@ -648,27 +671,92 @@ class BlockchainService:
     def get_base_feedback_events(self, from_block: int, to_block: int):
         """Get NewFeedback events from the ERC-8004 Reputation Registry on Base.
 
-        Tries current RPC, then cycles through fallbacks on failure.
+        Uses raw httpx JSON-RPC calls (same approach as identity events) to
+        bypass web3.py middleware issues that cause "no response" errors on
+        historical block ranges with the CDP RPC.
         """
-        if not self.erc8004_base_reputation:
+        settings = get_settings()
+        addr = settings.active_reputation_address
+        if not addr or not self._base_rpc_url:
             return []
-        for attempt in range(2):  # try current RPC, then failover
+
+        # NewFeedback(uint256 indexed agentId, address indexed clientAddress, ...)
+        topic0 = "0x" + Web3.keccak(
+            text="NewFeedback(uint256,address,uint64,int128,uint8,string,string,string,string,string,bytes32)"
+        ).hex()
+
+        payload = {
+            "jsonrpc": "2.0", "method": "eth_getLogs", "id": 1,
+            "params": [{
+                "address": addr,
+                "fromBlock": hex(from_block),
+                "toBlock": hex(to_block),
+                "topics": [topic0],
+            }],
+        }
+
+        for attempt in range(2):
+            rpc_url = self._base_rpc_url
             try:
-                return self.erc8004_base_reputation.events.NewFeedback().get_logs(
-                    from_block=from_block, to_block=to_block
-                )
-            except Exception as e:
-                logger.error(f"Base NewFeedback get_logs({from_block}-{to_block}) FAILED: {e}")
+                r = httpx.post(rpc_url, json=payload, timeout=30)
+            except httpx.RequestError as e:
+                logger.error(f"Base NewFeedback HTTP error ({rpc_url[:50]}): {e}")
                 if attempt == 0 and self.reconnect_base():
-                    # Rebind contract to new web3 instance after RPC failover
-                    from app.config import get_settings
-                    rep_addr = get_settings().active_reputation_address
-                    self.erc8004_base_reputation = self.w3_base.eth.contract(
-                        address=Web3.to_checksum_address(rep_addr),
-                        abi=ERC8004_REPUTATION_ABI,
-                    )
                     continue
                 raise
+
+            if r.status_code != 200:
+                body = r.text[:500]
+                logger.error(f"Base NewFeedback({from_block}-{to_block}) HTTP {r.status_code}: {body}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"Base NewFeedback HTTP {r.status_code}: {body}")
+
+            resp = r.json()
+            if "error" in resp:
+                err_msg = resp["error"].get("message", str(resp["error"]))
+                logger.error(f"Base NewFeedback({from_block}-{to_block}) RPC error: {err_msg}")
+                if attempt == 0 and self.reconnect_base():
+                    continue
+                raise Exception(f"Base NewFeedback RPC error: {err_msg}")
+
+            raw_logs = resp["result"]
+            events = []
+            for log in raw_logs:
+                try:
+                    agent_id = int(log["topics"][1], 16)
+                    client_addr = "0x" + log["topics"][2][-40:]
+                    data_bytes = bytes.fromhex(log["data"][2:])
+                    # Non-indexed fields: feedbackIndex(uint64), value(int128),
+                    # valueDecimals(uint8), tag1(string), tag2(string),
+                    # endpoint(string), feedbackURI(string), feedbackHash(bytes32)
+                    decoded = abi_decode(
+                        ["uint64", "int128", "uint8", "string", "string", "string", "string", "bytes32"],
+                        data_bytes,
+                    )
+                    value = int(decoded[1])
+                    tag1 = decoded[3]
+                    tag2 = decoded[4]
+                    feedback_hash = decoded[7]
+
+                    events.append(_RawFeedbackEvent(
+                        _args=_RawFeedbackArgs(
+                            agentId=agent_id,
+                            clientAddress=Web3.to_checksum_address(client_addr),
+                            value=value,
+                            feedbackHash=feedback_hash,
+                            tag1=tag1,
+                            tag2=tag2,
+                        ),
+                        blockNumber=int(log["blockNumber"], 16),
+                        transactionHash=bytes.fromhex(log["transactionHash"][2:]),
+                    ))
+                except Exception as e:
+                    logger.warning(f"Failed to decode Base feedback log: {e}")
+            logger.info(f"Base NewFeedback get_logs({from_block}-{to_block}): {len(events)} events")
+            return events
+
+        return []
 
     def get_linea_feedback_events(self, from_block: int, to_block: int):
         """Get NewFeedback events from the ERC-8004 Reputation Registry on Linea."""
