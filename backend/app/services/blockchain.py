@@ -646,16 +646,29 @@ class BlockchainService:
         return []  # unreachable
 
     def get_base_feedback_events(self, from_block: int, to_block: int):
-        """Get NewFeedback events from the ERC-8004 Reputation Registry on Base."""
+        """Get NewFeedback events from the ERC-8004 Reputation Registry on Base.
+
+        Tries current RPC, then cycles through fallbacks on failure.
+        """
         if not self.erc8004_base_reputation:
             return []
-        try:
-            return self.erc8004_base_reputation.events.NewFeedback().get_logs(
-                from_block=from_block, to_block=to_block
-            )
-        except Exception as e:
-            logger.error(f"Base NewFeedback get_logs({from_block}-{to_block}) FAILED: {e}")
-            raise
+        for attempt in range(2):  # try current RPC, then failover
+            try:
+                return self.erc8004_base_reputation.events.NewFeedback().get_logs(
+                    from_block=from_block, to_block=to_block
+                )
+            except Exception as e:
+                logger.error(f"Base NewFeedback get_logs({from_block}-{to_block}) FAILED: {e}")
+                if attempt == 0 and self.reconnect_base():
+                    # Rebind contract to new web3 instance after RPC failover
+                    from app.config import get_settings
+                    rep_addr = get_settings().active_reputation_address
+                    self.erc8004_base_reputation = self.w3_base.eth.contract(
+                        address=Web3.to_checksum_address(rep_addr),
+                        abi=ERC8004_REPUTATION_ABI,
+                    )
+                    continue
+                raise
 
     def get_linea_feedback_events(self, from_block: int, to_block: int):
         """Get NewFeedback events from the ERC-8004 Reputation Registry on Linea."""
