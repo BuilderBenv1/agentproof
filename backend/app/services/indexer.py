@@ -296,11 +296,27 @@ IPFS_GATEWAYS = [
 def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
     """Resolve an agent URI to JSON metadata.
 
-    Supports https:// URLs, ipfs:// URIs, and raw IPFS CIDs.
-    Returns parsed JSON dict or None on failure.
+    Supports data: URIs (base64 JSON), https:// URLs, ipfs:// URIs,
+    and raw IPFS CIDs.  Returns parsed JSON dict or None on failure.
     """
     if not uri:
         return None
+
+    # Handle data: URIs (ERC-8004 standard inline metadata)
+    if uri.startswith("data:"):
+        import base64 as b64
+        try:
+            # Format: data:application/json;base64,<payload>
+            if ";base64," in uri:
+                payload = uri.split(";base64,", 1)[1]
+                decoded = b64.b64decode(payload).decode("utf-8")
+                return json.loads(decoded)
+            # Format: data:application/json,<json>
+            elif "," in uri:
+                payload = uri.split(",", 1)[1]
+                return json.loads(payload)
+        except Exception:
+            return None
 
     urls_to_try: list[str] = []
 
