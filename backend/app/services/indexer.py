@@ -3,9 +3,12 @@ Indexer service that runs as part of the backend process.
 Periodically polls for new blockchain events and syncs them to Supabase.
 """
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
+
+import httpx
 
 from app.database import get_supabase
 from app.services.blockchain import get_blockchain_service
@@ -283,6 +286,133 @@ def process_erc8004_base_identity_events(from_block: int, to_block: int):
     return len(events)
 
 
+IPFS_GATEWAYS = [
+    "https://ipfs.io/ipfs/",
+    "https://cloudflare-ipfs.com/ipfs/",
+    "https://gateway.pinata.cloud/ipfs/",
+]
+
+
+def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
+    """Resolve an agent URI to JSON metadata.
+
+    Supports https:// URLs, ipfs:// URIs, and raw IPFS CIDs.
+    Returns parsed JSON dict or None on failure.
+    """
+    if not uri:
+        return None
+
+    urls_to_try: list[str] = []
+
+    if uri.startswith("https://") or uri.startswith("http://"):
+        urls_to_try.append(uri)
+    elif uri.startswith("ipfs://"):
+        cid = uri[7:]  # strip "ipfs://"
+        urls_to_try.extend(gw + cid for gw in IPFS_GATEWAYS)
+    elif uri.startswith("Qm") or uri.startswith("bafy"):
+        # Bare CID
+        urls_to_try.extend(gw + uri for gw in IPFS_GATEWAYS)
+    else:
+        # Unknown format — try as-is
+        urls_to_try.append(uri)
+
+    for url in urls_to_try:
+        try:
+            resp = client.get(url, timeout=10, follow_redirects=True)
+            if resp.status_code == 200:
+                ct = resp.headers.get("content-type", "")
+                if "json" in ct or resp.text.strip().startswith("{"):
+                    return resp.json()
+                # Some URIs return plain text with JSON content
+                try:
+                    return json.loads(resp.text)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        except Exception:
+            continue
+    return None
+
+
+def resolve_agent_metadata(chain: str = "base", batch_size: int = 100):
+    """Fetch and parse agent_uri for agents that have no name yet.
+
+    Runs after identity indexing to enrich agents with name, description,
+    category, and image_url from their onchain metadata URI.
+    """
+    db = get_supabase()
+    label = chain.upper()
+
+    # Find agents on this chain with no name populated
+    try:
+        result = (
+            db.table("agents")
+            .select("agent_id, agent_uri, source_chain")
+            .eq("source_chain", chain)
+            .is_("name", "null")
+            .neq("agent_uri", "")
+            .limit(batch_size)
+            .execute()
+        )
+    except Exception as e:
+        logger.error(f"[URI-RESOLVE-{label}] Error fetching agents without names: {e}")
+        return 0
+
+    agents = result.data
+    if not agents:
+        return 0
+
+    logger.info(f"[URI-RESOLVE-{label}] Resolving URIs for {len(agents)} unnamed agents")
+    resolved = 0
+
+    with httpx.Client(
+        headers={"Accept": "application/json"},
+        limits=httpx.Limits(max_connections=10),
+    ) as client:
+        for agent in agents:
+            agent_id = agent["agent_id"]
+            uri = agent.get("agent_uri", "")
+            metadata = _resolve_uri(uri, client)
+            if not metadata:
+                continue
+
+            # Extract standard ERC-8004 / ERC-721 metadata fields
+            name = metadata.get("name") or metadata.get("agentName")
+            description = metadata.get("description")
+            image = (
+                metadata.get("image")
+                or metadata.get("image_url")
+                or metadata.get("avatar")
+            )
+            category = metadata.get("category") or metadata.get("type")
+
+            # Only update if we got at least a name
+            if not name:
+                continue
+
+            update = {"name": name[:200]}  # cap at 200 chars
+            if description:
+                update["description"] = description[:2000]
+            if image:
+                update["image_url"] = image[:500]
+            if category and category.lower() in (
+                "defi", "gaming", "rwa", "payments", "data", "general",
+            ):
+                update["category"] = category.lower()
+
+            try:
+                db.table("agents").update(update).eq(
+                    "agent_id", agent_id
+                ).eq(
+                    "source_chain", chain
+                ).execute()
+                resolved += 1
+            except Exception as e:
+                logger.warning(f"[URI-RESOLVE-{label}] Failed to update agent #{agent_id}: {e}")
+
+    logger.info(f"[URI-RESOLVE-{label}] Resolved {resolved}/{len(agents)} agent names")
+    return resolved
+
+
 def process_erc8004_linea_identity_events(from_block: int, to_block: int):
     """Process Registered events from the ERC-8004 Identity Registry on Linea."""
     blockchain = get_blockchain_service()
@@ -387,12 +517,11 @@ def _process_cross_chain_feedback(chain_name: str, events, w3_instance) -> int:
         logger.info(f"[{chain_name}] Batch upserted {len(rows)} feedback events")
     except Exception as e:
         err_str = str(e)
-        if "tag1" in err_str or "tag2" in err_str or "source_chain" in err_str or "column" in err_str.lower():
-            logger.warning(f"[{chain_name}] Column issue — retrying without extra columns")
+        if "tag1" in err_str or "tag2" in err_str or "column" in err_str.lower():
+            logger.warning(f"[{chain_name}] Column issue — retrying without tag columns")
             for row in rows:
                 row.pop("tag1", None)
                 row.pop("tag2", None)
-                row.pop("source_chain", None)
             try:
                 db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
                 logger.info(f"[{chain_name}] Batch upserted {len(rows)} feedback events (without extra cols)")
@@ -674,24 +803,24 @@ def recalculate_agent_scores():
     logger.info(f"Scoring {len(all_agent_data)} agents")
     agent_ids = [a["agent_id"] for a in all_agent_data]
 
-    # Bulk-fetch all ratings in one query (Supabase returns up to 1000 by default)
-    all_ratings: dict[int, list[int]] = {}
+    # Bulk-fetch all ratings keyed by (agent_id, source_chain) to prevent
+    # cross-chain feedback bleed (same agent_id on different chains).
+    all_ratings: dict[tuple[int, str], list[int]] = {}
     try:
-        # Fetch in pages of 1000 to handle large datasets
         offset = 0
         page_size = 1000
         while True:
             result = (
                 db.table("reputation_events")
-                .select("agent_id, rating")
+                .select("agent_id, source_chain, rating")
                 .range(offset, offset + page_size - 1)
                 .execute()
             )
             for r in result.data:
-                aid = r["agent_id"]
-                if aid not in all_ratings:
-                    all_ratings[aid] = []
-                all_ratings[aid].append(r["rating"])
+                key = (r["agent_id"], r.get("source_chain") or "ethereum")
+                if key not in all_ratings:
+                    all_ratings[key] = []
+                all_ratings[key].append(r["rating"])
             if len(result.data) < page_size:
                 break
             offset += page_size
@@ -700,7 +829,7 @@ def recalculate_agent_scores():
 
     total_ratings = sum(len(v) for v in all_ratings.values())
     agents_with_feedback = len(all_ratings)
-    logger.info(f"Fetched {total_ratings} ratings across {agents_with_feedback} agents")
+    logger.info(f"Fetched {total_ratings} ratings across {agents_with_feedback} agents (chain-scoped)")
 
     # Bulk-fetch all completed validations
     all_validations: dict[int, dict] = {}  # agent_id -> {completed, successful}
@@ -754,7 +883,8 @@ def recalculate_agent_scores():
     update_rows = []
     for agent in all_agent_data:
         agent_id = agent["agent_id"]
-        ratings = all_ratings.get(agent_id, [])
+        chain = agent.get("source_chain", "avalanche")
+        ratings = all_ratings.get((agent_id, chain), [])
         feedback_count = len(ratings)
         avg_rating = sum(ratings) / len(ratings) if ratings else 0
         std_dev = calculate_std_dev(ratings)
@@ -836,6 +966,7 @@ def recalculate_agent_scores():
                 for row in update_rows:
                     snapshot_rows.append({
                         "agent_id": row["agent_id"],
+                        "source_chain": row.get("source_chain", "avalanche"),
                         "composite_score": row["composite_score"],
                         "average_rating": row["average_rating"],
                         "total_feedback": row["total_feedback"],
@@ -847,7 +978,7 @@ def recalculate_agent_scores():
                     batch = snapshot_rows[i:i + batch_size]
                     try:
                         db.table("score_history").upsert(
-                            batch, on_conflict="agent_id,snapshot_date"
+                            batch, on_conflict="agent_id,source_chain,snapshot_date"
                         ).execute()
                     except Exception as e:
                         logger.error(f"Error writing score snapshot batch {i // batch_size}: {e}")
@@ -918,7 +1049,7 @@ def update_leaderboard():
         except Exception as e:
             logger.error(f"Error batch-updating ranks: {e}")
 
-    # Batch insert leaderboard cache
+    # Batch insert leaderboard cache (include source_chain to prevent ID collisions)
     now = datetime.now(timezone.utc).isoformat()
     cache_rows = []
     for category, category_agents in categories.items():
@@ -926,6 +1057,7 @@ def update_leaderboard():
             cache_rows.append({
                 "category": category,
                 "agent_id": agent["agent_id"],
+                "source_chain": agent.get("source_chain", "avalanche"),
                 "rank": rank,
                 "composite_score": agent["composite_score"],
                 "trend": "stable",
@@ -1022,6 +1154,13 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Ethereum agent registration events")
+            # Resolve metadata URIs for unnamed Ethereum agents
+            try:
+                resolved = resolve_agent_metadata(chain="ethereum", batch_size=200)
+                if resolved > 0:
+                    logger.info(f"Resolved {resolved} Ethereum agent metadata URIs")
+            except Exception as e:
+                logger.warning(f"Ethereum URI resolution failed (non-fatal): {e}")
         except Exception as e:
             logger.error(f"Error processing Ethereum ERC-8004 events: {e}")
 
@@ -1050,6 +1189,13 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Base feedback events")
+            # Resolve metadata URIs for unnamed Base agents
+            try:
+                resolved = resolve_agent_metadata(chain="base", batch_size=200)
+                if resolved > 0:
+                    logger.info(f"Resolved {resolved} Base agent metadata URIs")
+            except Exception as e:
+                logger.warning(f"Base URI resolution failed (non-fatal): {e}")
         except Exception as e:
             logger.error(f"Error processing Base ERC-8004 events: {e}")
 
@@ -1078,6 +1224,13 @@ def run_indexer_cycle():
                 )
                 if count > 0:
                     logger.info(f"Processed {count} ERC-8004 Linea feedback events")
+            # Resolve metadata URIs for unnamed Linea agents
+            try:
+                resolved = resolve_agent_metadata(chain="linea", batch_size=200)
+                if resolved > 0:
+                    logger.info(f"Resolved {resolved} Linea agent metadata URIs")
+            except Exception as e:
+                logger.warning(f"Linea URI resolution failed (non-fatal): {e}")
         except Exception as e:
             logger.error(f"Error processing Linea ERC-8004 events: {e}")
 

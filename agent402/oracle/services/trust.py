@@ -175,13 +175,23 @@ class TrustService:
             raise ValueError(f"Agent #{agent_id} not found")
         agent = result.data[0]
 
-        # Fetch ratings
-        ratings_result = (
+        # Fetch ratings scoped to the agent's chain
+        agent_chain = agent.get("source_chain", "avalanche")
+        ratings_query = (
             db.table("reputation_events")
             .select("rating, reviewer_address")
             .eq("agent_id", agent_id)
-            .execute()
         )
+        # Filter by chain if column exists (graceful fallback for migration rollout)
+        try:
+            ratings_result = ratings_query.eq("source_chain", agent_chain).execute()
+        except Exception:
+            ratings_result = (
+                db.table("reputation_events")
+                .select("rating, reviewer_address")
+                .eq("agent_id", agent_id)
+                .execute()
+            )
         ratings = [r["rating"] for r in ratings_result.data]
         reviewer_addresses = [r["reviewer_address"] for r in ratings_result.data]
         feedback_count = len(ratings)
@@ -280,17 +290,20 @@ class TrustService:
         min_score: float = 0,
         min_feedback: int = 0,
         tier: str | None = None,
+        chain: str | None = None,
         limit: int = 20,
     ) -> list[TrustedAgent]:
         db = get_supabase()
         query = db.table("agents").select(
-            "agent_id, name, composite_score, tier, category, total_feedback"
+            "agent_id, name, composite_score, tier, category, total_feedback, source_chain"
         )
 
         if category:
             query = query.eq("category", category)
         if tier:
             query = query.eq("tier", tier)
+        if chain:
+            query = query.eq("source_chain", chain)
         if min_score > 0:
             query = query.gte("composite_score", min_score)
         if min_feedback > 0:
@@ -307,6 +320,7 @@ class TrustService:
                 tier=a.get("tier", "unranked"),
                 category=a.get("category"),
                 feedback_count=a.get("total_feedback", 0),
+                source_chain=a.get("source_chain"),
             )
             for a in result.data
         ]

@@ -50,9 +50,10 @@ async def find_trusted_agents(
     min_score: float = Query(0, ge=0, le=100),
     min_feedback: int = Query(0, ge=0),
     tier: str | None = Query(None),
+    chain: str | None = Query(None, description="Filter by source chain (e.g. base, ethereum, avalanche)"),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Search trusted agents by category, score, and tier. [x402: $0.01]"""
+    """Search trusted agents by category, score, tier, and chain. [x402: $0.01]"""
     try:
         result = await asyncio.to_thread(
             get_trust_service().find_trusted_agents,
@@ -60,6 +61,7 @@ async def find_trusted_agents(
             min_score=min_score,
             min_feedback=min_feedback,
             tier=tier,
+            chain=chain,
             limit=limit,
         )
         return result
@@ -82,6 +84,7 @@ async def network_stats():
 @router.get("/agents/top", response_model=list[TrustedAgent])
 async def top_agents(
     category: str | None = Query(None),
+    chain: str | None = Query(None, description="Filter by source chain"),
     limit: int = Query(50, ge=1, le=100),
 ):
     """Top agents by score — free, for website leaderboard."""
@@ -92,6 +95,7 @@ async def top_agents(
             min_score=0,
             min_feedback=0,
             tier=None,
+            chain=chain,
             limit=limit,
         )
         return result

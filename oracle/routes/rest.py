@@ -53,6 +53,7 @@ async def find_trusted_agents(
     min_score: float = Query(0, ge=0, le=100, description="Minimum composite score"),
     min_feedback: int = Query(0, ge=0, description="Minimum feedback count"),
     tier: str | None = Query(None, description="Filter by tier"),
+    chain: str | None = Query(None, description="Filter by source chain (e.g. base, ethereum, avalanche)"),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
 ):
     """Find trusted agents matching the given criteria."""
@@ -63,6 +64,7 @@ async def find_trusted_agents(
             min_score=min_score,
             min_feedback=min_feedback,
             tier=tier,
+            chain=chain,
             limit=limit,
         )
     except Exception as e:

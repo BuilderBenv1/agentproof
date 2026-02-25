@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE TABLE IF NOT EXISTS reputation_events (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
+    source_chain TEXT DEFAULT 'ethereum',
     reviewer_address TEXT NOT NULL,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 100),
     feedback_uri TEXT,
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS leaderboard_cache (
     id SERIAL PRIMARY KEY,
     category TEXT NOT NULL,
     agent_id INTEGER NOT NULL,
+    source_chain TEXT DEFAULT 'avalanche',
     rank INTEGER NOT NULL,
     composite_score DECIMAL(5,2) NOT NULL,
     trend TEXT DEFAULT 'stable',
@@ -107,12 +109,13 @@ CREATE TABLE IF NOT EXISTS agent_categories (
 CREATE TABLE IF NOT EXISTS score_history (
     id SERIAL PRIMARY KEY,
     agent_id INTEGER NOT NULL,
+    source_chain TEXT DEFAULT 'avalanche',
     composite_score DECIMAL(5,2) NOT NULL,
     average_rating DECIMAL(5,2) NOT NULL,
     total_feedback INTEGER NOT NULL,
     validation_success_rate DECIMAL(5,2) DEFAULT 0,
     snapshot_date DATE NOT NULL,
-    UNIQUE(agent_id, snapshot_date)
+    UNIQUE(agent_id, source_chain, snapshot_date)
 );
 
 -- Indexer state tracking
@@ -134,7 +137,9 @@ CREATE INDEX IF NOT EXISTS idx_agents_category ON agents (category);
 CREATE INDEX IF NOT EXISTS idx_agents_rank ON agents (rank);
 CREATE INDEX IF NOT EXISTS idx_score_history_agent_date ON score_history (agent_id, snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_reputation_events_agent ON reputation_events (agent_id);
+CREATE INDEX IF NOT EXISTS idx_reputation_events_agent_chain ON reputation_events (agent_id, source_chain);
 CREATE INDEX IF NOT EXISTS idx_leaderboard_cache_category ON leaderboard_cache (category, rank);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_cache_category_chain ON leaderboard_cache (category, source_chain, rank);
 
 -- Seed categories
 INSERT INTO agent_categories (slug, name, description, icon) VALUES

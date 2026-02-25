@@ -71,6 +71,7 @@ class TrustedAgent(BaseModel):
     tier: str
     category: str | None = None
     feedback_count: int = 0
+    source_chain: str | None = None
 
 
 class RiskAssessment(BaseModel):
