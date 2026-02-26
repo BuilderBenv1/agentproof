@@ -1,8 +1,8 @@
 """
 Batch trust evaluation endpoint.
 
-Allows growth/enterprise tier protocols to evaluate multiple agents in a
-single request, reducing HTTP overhead for high-volume integrations.
+Allows paying protocols to evaluate multiple agents in a single request,
+reducing HTTP overhead for high-volume integrations.
 """
 
 import logging
@@ -13,9 +13,14 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/v1/trust", tags=["trust"])
 logger = logging.getLogger(__name__)
 
-MAX_BATCH_FREE = 0
-MAX_BATCH_GROWTH = 100
-MAX_BATCH_ENTERPRISE = 500
+# Batch size limits per tier
+TIER_BATCH_LIMITS = {
+    "paygo": 50,
+    "starter": 100,
+    "growth": 200,
+    "scale": 300,
+    "enterprise": 500,
+}
 
 
 class BatchRequest(BaseModel):
@@ -27,8 +32,7 @@ class BatchRequest(BaseModel):
 async def batch_evaluate(request: Request, body: BatchRequest):
     """Evaluate multiple agents in a single request.
 
-    Requires an API key with growth or enterprise tier.
-    Each agent counts as 1 query against the daily limit.
+    Requires an API key. Each agent counts as 1 query against the monthly limit.
     """
     tier = getattr(request.state, "tier", None)
     api_key_id = getattr(request.state, "api_key_id", None)
@@ -39,13 +43,7 @@ async def batch_evaluate(request: Request, body: BatchRequest):
             detail="API key required for batch evaluation. Register at /integrate",
         )
 
-    if tier == "free":
-        raise HTTPException(
-            status_code=403,
-            detail="Batch evaluation requires growth or enterprise tier. Upgrade at /api/v1/integrations/upgrade",
-        )
-
-    max_batch = MAX_BATCH_ENTERPRISE if tier == "enterprise" else MAX_BATCH_GROWTH
+    max_batch = TIER_BATCH_LIMITS.get(tier, 50)
     if len(body.agent_ids) > max_batch:
         raise HTTPException(
             status_code=400,

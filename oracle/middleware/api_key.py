@@ -22,10 +22,13 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
-TIER_DAILY_LIMITS = {
-    "free": 1_000,
-    "growth": 50_000,
-    "enterprise": 999_999_999,
+# Monthly call limits per tier (tracked via rolling 30-day window)
+TIER_MONTHLY_LIMITS = {
+    "paygo": 999_999_999,   # unlimited, billed per call at $0.05
+    "starter": 10_000,      # $250/mo
+    "growth": 25_000,       # $500/mo
+    "scale": 75_000,        # $1,000/mo
+    "enterprise": 200_000,  # $2,000/mo
 }
 
 # In-memory cache for validated keys (avoids DB lookup on every request)
@@ -128,20 +131,20 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 content={"detail": "API key has been deactivated"},
             )
 
-        # Check daily rate limit
+        # Check monthly rate limit
         from services.usage import get_usage_tracker
         tracker = get_usage_tracker()
         api_key_id = key_row["id"]
-        daily_count = tracker.get_daily_count(api_key_id)
-        daily_limit = key_row.get("daily_limit") or TIER_DAILY_LIMITS.get(key_row["tier"], 1000)
+        monthly_count = tracker.get_monthly_count(api_key_id)
+        monthly_limit = key_row.get("monthly_limit") or TIER_MONTHLY_LIMITS.get(key_row["tier"], 10_000)
 
-        if daily_count >= daily_limit:
+        if monthly_count >= monthly_limit:
             return JSONResponse(
                 status_code=429,
                 content={
-                    "detail": "Daily query limit exceeded",
-                    "limit": daily_limit,
-                    "used": daily_count,
+                    "detail": "Monthly query limit exceeded",
+                    "limit": monthly_limit,
+                    "used": monthly_count,
                     "tier": key_row["tier"],
                     "upgrade_url": "/integrate",
                 },

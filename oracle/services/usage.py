@@ -4,14 +4,14 @@ In-memory usage counter with periodic Supabase flush.
 Architecture:
 - Thread-safe dict tracking per-key daily request counts and endpoint breakdown
 - Background thread flushes to api_usage_daily every 60 seconds
-- Daily limit checks read from in-memory counter (zero-latency enforcement)
+- Monthly limit checks read from in-memory counter (zero-latency enforcement)
 - Same pattern as TrustCache in oracle/services/trust.py
 """
 
 import logging
 import threading
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,17 @@ class UsageTracker:
         self._lock = threading.Lock()
         # { api_key_id: { "date": "2026-02-26", "count": 42, "endpoints": {"trust": 30, "batch": 12} } }
         self._counters: dict[str, dict] = {}
+        # Monthly totals: { api_key_id: { "month": "2026-02", "count": 1234 } }
+        self._monthly: dict[str, dict] = {}
         self._running = False
         self._thread: threading.Thread | None = None
 
     def increment(self, api_key_id: str, endpoint: str = "other"):
-        """Increment the daily counter for a key. Called from middleware on every request."""
+        """Increment the daily and monthly counters for a key. Called from middleware."""
         today = date.today().isoformat()
+        month = today[:7]  # "2026-02"
         with self._lock:
+            # Daily counter
             entry = self._counters.get(api_key_id)
             if entry is None or entry["date"] != today:
                 self._counters[api_key_id] = {
@@ -43,13 +47,53 @@ class UsageTracker:
                 entry["count"] += 1
                 entry["endpoints"][endpoint] = entry["endpoints"].get(endpoint, 0) + 1
 
+            # Monthly counter
+            mentry = self._monthly.get(api_key_id)
+            if mentry is None or mentry["month"] != month:
+                # New month or first request — seed from DB on next check
+                self._monthly[api_key_id] = {"month": month, "count": 1, "seeded": False}
+            else:
+                mentry["count"] += 1
+
     def get_daily_count(self, api_key_id: str) -> int:
-        """Get current day's request count for a key. Used for rate limit enforcement."""
+        """Get current day's request count for a key."""
         today = date.today().isoformat()
         with self._lock:
             entry = self._counters.get(api_key_id)
             if entry and entry["date"] == today:
                 return entry["count"]
+        return 0
+
+    def get_monthly_count(self, api_key_id: str) -> int:
+        """Get current month's request count for a key. Used for rate limit enforcement.
+
+        On first call each month, seeds from DB (sum of api_usage_daily for the month)
+        so restarts mid-month don't reset the counter.
+        """
+        month = date.today().isoformat()[:7]
+        with self._lock:
+            mentry = self._monthly.get(api_key_id)
+            if mentry and mentry["month"] == month:
+                if not mentry.get("seeded"):
+                    mentry["seeded"] = True
+                    # Seed from DB (outside lock would be better, but this only
+                    # runs once per key per month/restart — acceptable latency)
+                    try:
+                        from database import get_supabase
+                        db = get_supabase()
+                        month_start = f"{month}-01"
+                        result = (
+                            db.table("api_usage_daily")
+                            .select("request_count")
+                            .eq("api_key_id", api_key_id)
+                            .gte("usage_date", month_start)
+                            .execute()
+                        )
+                        db_total = sum(r.get("request_count", 0) for r in (result.data or []))
+                        mentry["count"] += db_total
+                    except Exception:
+                        mentry["seeded"] = True  # don't retry on failure
+                return mentry["count"]
         return 0
 
     def start(self):

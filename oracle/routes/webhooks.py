@@ -9,7 +9,7 @@ from pydantic import BaseModel, HttpUrl
 from database import get_supabase
 from services.webhooks import deliver_event
 
-WEBHOOK_TIER_LIMITS = {"free": 1, "growth": 10, "enterprise": 999}
+WEBHOOK_TIER_LIMITS = {"paygo": 3, "starter": 5, "growth": 10, "scale": 25, "enterprise": 999}
 
 logger = logging.getLogger(__name__)
 

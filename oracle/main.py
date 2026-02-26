@@ -337,13 +337,12 @@ pre{background:#12121a;padding:1rem;border-radius:8px;overflow-x:auto;margin:1re
 table{width:100%;border-collapse:collapse;margin:1rem 0}
 th,td{text-align:left;padding:.5rem .75rem;border-bottom:1px solid #1a1a2e}
 th{color:#00E5A0;font-weight:600}
-.tier-free{color:#888}
+.tier-paygo{color:#888}
+.tier-starter{color:#00E5A0}
 .tier-growth{color:#00C8FF}
+.tier-scale{color:#F59E0B}
 .tier-enterprise{color:#A78BFA}
-.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75em;font-weight:600}
-.badge-free{background:#1a1a2e;color:#888}
-.badge-growth{background:#00293d;color:#00C8FF}
-.badge-enterprise{background:#1f1040;color:#A78BFA}
+.highlight{background:#00E5A015;border:1px solid #00E5A040;border-radius:6px;padding:.75rem 1rem;margin:1rem 0}
 .btn{display:inline-block;background:#00E5A0;color:#0A0A0F;padding:.6rem 1.5rem;border-radius:6px;text-decoration:none;font-weight:600;margin-top:.5rem}
 .btn:hover{opacity:.9}
 a{color:#00C8FF;text-decoration:none}
@@ -358,13 +357,18 @@ a:hover{text-decoration:underline}
 <p>Add trust scoring to your protocol in 3 steps. Gate DeFi actions, filter agent marketplaces, or verify agent reputation before transacting.</p>
 
 <h2>Pricing</h2>
+<div class="highlight">
+<strong>Pay-per-call:</strong> $0.05 per API call. No commitment, no minimum. Register and start querying.
+</div>
+
+<p>Volume subscriptions for lower per-call pricing:</p>
 <table>
-<tr><th></th><th class="tier-free">Free</th><th class="tier-growth">Growth</th><th class="tier-enterprise">Enterprise</th></tr>
-<tr><td>Daily queries</td><td>1,000</td><td>50,000</td><td>Unlimited</td></tr>
-<tr><td>Batch evaluation</td><td>-</td><td>100/batch</td><td>500/batch</td></tr>
-<tr><td>Webhooks</td><td>1</td><td>10</td><td>Unlimited</td></tr>
-<tr><td>On-chain score push</td><td>-</td><td>-</td><td>Yes</td></tr>
-<tr><td>Price</td><td>$0</td><td>$99/mo</td><td>Custom</td></tr>
+<tr><th></th><th class="tier-paygo">Pay-per-call</th><th class="tier-starter">Starter</th><th class="tier-growth">Growth</th><th class="tier-scale">Scale</th><th class="tier-enterprise">Enterprise</th></tr>
+<tr><td>Monthly calls</td><td>Unlimited</td><td>10,000</td><td>25,000</td><td>75,000</td><td>200,000</td></tr>
+<tr><td>Per call</td><td>$0.05</td><td>$0.025</td><td>$0.02</td><td>$0.013</td><td>$0.01</td></tr>
+<tr><td>Monthly price</td><td>Usage-based</td><td>$250</td><td>$500</td><td>$1,000</td><td>$2,000</td></tr>
+<tr><td>Batch size</td><td>50</td><td>100</td><td>200</td><td>300</td><td>500</td></tr>
+<tr><td>Webhooks</td><td>3</td><td>5</td><td>10</td><td>25</td><td>Unlimited</td></tr>
 </table>
 
 <h2>Quick Start</h2>

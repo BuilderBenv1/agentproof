@@ -25,13 +25,24 @@ class RegisterResponse(BaseModel):
     api_key: str
     key_id: str
     tier: str
-    daily_limit: int
+    monthly_limit: int
+    price_per_call: str
     message: str
 
 
 class UpgradeRequest(BaseModel):
-    tier: str
+    tier: str  # paygo, starter, growth, scale, enterprise
     billing_email: str | None = None
+
+
+# Tier definitions: monthly_limit, price_cents_per_month, price_per_call
+TIERS = {
+    "paygo":      {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "$0.05"},
+    "starter":    {"monthly_limit": 10_000,      "price_cents": 25_000,  "per_call": "$0.025"},
+    "growth":     {"monthly_limit": 25_000,      "price_cents": 50_000,  "per_call": "$0.02"},
+    "scale":      {"monthly_limit": 75_000,      "price_cents": 100_000, "per_call": "$0.013"},
+    "enterprise": {"monthly_limit": 200_000,     "price_cents": 200_000, "per_call": "$0.01"},
+}
 
 
 def _require_api_key(request: Request) -> str:
@@ -62,8 +73,8 @@ async def register_api_key(body: RegisterRequest):
             "key_prefix": key_prefix,
             "protocol_name": body.protocol_name[:200],
             "contact_email": body.contact_email[:200],
-            "tier": "free",
-            "daily_limit": 1000,
+            "tier": "paygo",
+            "monthly_limit": 999_999_999,
         }).execute()
 
         key_id = result.data[0]["id"] if result.data else "unknown"
@@ -71,9 +82,10 @@ async def register_api_key(body: RegisterRequest):
         return RegisterResponse(
             api_key=raw_key,
             key_id=key_id,
-            tier="free",
-            daily_limit=1000,
-            message="Store this API key securely. It will not be shown again.",
+            tier="paygo",
+            monthly_limit=999_999_999,
+            price_per_call="$0.05",
+            message="Store this API key securely. It will not be shown again. You are on pay-per-call pricing ($0.05/call).",
         )
     except Exception as e:
         logger.error("Failed to register API key: %s", e)
@@ -91,15 +103,17 @@ async def get_usage(request: Request):
     db = get_supabase()
     tracker = get_usage_tracker()
 
-    # Current day from in-memory counter
     today_count = tracker.get_daily_count(api_key_id)
+    monthly_count = tracker.get_monthly_count(api_key_id)
 
     # Get key info
     key_result = db.table("api_keys").select(
-        "protocol_name, tier, daily_limit, created_at"
+        "protocol_name, tier, monthly_limit, created_at"
     ).eq("id", api_key_id).limit(1).execute()
 
     key_info = key_result.data[0] if key_result.data else {}
+    tier = key_info.get("tier", "paygo")
+    tier_info = TIERS.get(tier, TIERS["paygo"])
 
     # Last 30 days from DB
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -114,10 +128,16 @@ async def get_usage(request: Request):
 
     return {
         "protocol_name": key_info.get("protocol_name"),
-        "tier": key_info.get("tier", "free"),
-        "today": {
-            "count": today_count,
-            "limit": key_info.get("daily_limit", 1000),
+        "tier": tier,
+        "pricing": {
+            "per_call": tier_info["per_call"],
+            "monthly_price_cents": tier_info["price_cents"],
+            "monthly_limit": tier_info["monthly_limit"],
+        },
+        "usage": {
+            "today": today_count,
+            "this_month": monthly_count,
+            "monthly_limit": tier_info["monthly_limit"],
         },
         "last_30_days": history_result.data or [],
         "created_at": key_info.get("created_at"),
@@ -126,41 +146,45 @@ async def get_usage(request: Request):
 
 @router.post("/upgrade")
 async def upgrade_tier(request: Request, body: UpgradeRequest):
-    """Upgrade API key to a higher tier.
+    """Upgrade API key to a subscription tier.
 
     For MVP: flips the tier in DB and creates a subscription record.
     Billing is handled manually (no Stripe integration yet).
     """
     api_key_id = _require_api_key(request)
 
-    if body.tier not in ("growth", "enterprise"):
-        raise HTTPException(status_code=400, detail="Tier must be 'growth' or 'enterprise'")
+    if body.tier not in TIERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tier must be one of: {', '.join(TIERS.keys())}",
+        )
 
     from database import get_supabase
     db = get_supabase()
 
-    limits = {"growth": 50_000, "enterprise": 999_999_999}
-    prices = {"growth": 9900, "enterprise": None}
+    tier_info = TIERS[body.tier]
 
     try:
         # Update the key's tier and limit
         db.table("api_keys").update({
             "tier": body.tier,
-            "daily_limit": limits[body.tier],
+            "monthly_limit": tier_info["monthly_limit"],
         }).eq("id", api_key_id).execute()
 
-        # Create subscription record
-        db.table("subscriptions").insert({
-            "api_key_id": api_key_id,
-            "tier": body.tier,
-            "price_cents": prices[body.tier],
-            "billing_email": body.billing_email,
-        }).execute()
+        # Create subscription record (for paid tiers)
+        if tier_info["price_cents"] > 0:
+            db.table("subscriptions").insert({
+                "api_key_id": api_key_id,
+                "tier": body.tier,
+                "price_cents": tier_info["price_cents"],
+                "billing_email": body.billing_email,
+            }).execute()
 
         return {
             "tier": body.tier,
-            "daily_limit": limits[body.tier],
-            "message": f"Upgraded to {body.tier}. Invoice will be sent to {body.billing_email or 'your contact email'}.",
+            "monthly_limit": tier_info["monthly_limit"],
+            "per_call": tier_info["per_call"],
+            "message": f"Upgraded to {body.tier} ({tier_info['per_call']}/call). Invoice will be sent to {body.billing_email or 'your contact email'}.",
         }
     except Exception as e:
         logger.error("Failed to upgrade tier: %s", e)
