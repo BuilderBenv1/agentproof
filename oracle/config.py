@@ -64,9 +64,13 @@ class OracleSettings(BaseSettings):
     # Protocol integration
     api_key_enabled: bool = True
 
-    # TrustScoreOracle on-chain contract
-    trust_score_oracle_address: str = ""
-    trust_score_oracle_chain: str = "avalanche"
+    # TrustScoreOracle on-chain contracts (deploy on every chain)
+    trust_score_oracle_address: str = ""          # legacy single-chain fallback
+    trust_score_oracle_chain: str = "avalanche"   # legacy
+    avax_oracle_address: str = ""
+    base_oracle_address: str = ""
+    ethereum_oracle_address: str = ""
+    linea_oracle_address: str = ""
     score_push_enabled: bool = False
     score_push_min_delta: float = 2.0
 
