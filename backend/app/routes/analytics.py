@@ -266,3 +266,56 @@ async def get_erc8004_stats():
     stats["indexed_validations"] = validations_result.count or 0
 
     return stats
+
+
+@router.get("/indexer-status")
+async def get_indexer_status():
+    """Show indexer progress for each chain/contract — how far behind each pointer is."""
+    db = get_supabase()
+    bc = get_blockchain_service()
+
+    # Fetch all indexer_state rows
+    result = db.table("indexer_state").select("*").execute()
+    states = {r["contract_name"]: r["last_block"] for r in (result.data or [])}
+
+    # Current chain heads
+    heads = {}
+    try:
+        heads["avalanche"] = bc.get_current_block()
+    except Exception:
+        heads["avalanche"] = 0
+    try:
+        heads["ethereum"] = bc.get_eth_current_block()
+    except Exception:
+        heads["ethereum"] = 0
+    try:
+        heads["base"] = bc.get_base_current_block()
+    except Exception:
+        heads["base"] = 0
+    try:
+        heads["linea"] = bc.get_linea_current_block()
+    except Exception:
+        heads["linea"] = 0
+
+    contracts = {}
+    for name, last_block in sorted(states.items()):
+        # Guess chain from contract name
+        if "eth" in name:
+            chain = "ethereum"
+        elif "base" in name:
+            chain = "base"
+        elif "linea" in name:
+            chain = "linea"
+        elif "priority" in name:
+            chain = "base"
+        else:
+            chain = "avalanche"
+        head = heads.get(chain, 0)
+        behind = max(0, head - last_block) if head else None
+        contracts[name] = {
+            "last_block": last_block,
+            "chain_head": head,
+            "blocks_behind": behind,
+        }
+
+    return {"chain_heads": heads, "contracts": contracts}
