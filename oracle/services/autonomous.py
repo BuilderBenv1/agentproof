@@ -364,7 +364,59 @@ class AgentScreener:
                 except Exception:
                     pass
 
+            # Detect score and tier changes for protocol integration webhooks
+            for agent in stale_agents:
+                agent_id = agent["agent_id"]
+                old_score = float(agent.get("composite_score") or 0)
+                old_tier = agent.get("tier", "unranked")
+                try:
+                    # Fetch current score from agents table (may have been updated by scoring cycle)
+                    current = (
+                        db.table("agents")
+                        .select("composite_score, tier")
+                        .eq("agent_id", agent_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    if not current.data:
+                        continue
+                    new_score = float(current.data[0].get("composite_score") or 0)
+                    new_tier = current.data[0].get("tier", "unranked")
+                    delta = new_score - old_score
+
+                    if abs(delta) >= 1.0:
+                        try:
+                            deliver_event("score_change", agent_id, {
+                                "old_score": round(old_score, 2),
+                                "new_score": round(new_score, 2),
+                                "delta": round(delta, 2),
+                                "tier": new_tier,
+                            })
+                        except Exception:
+                            pass
+
+                    if new_tier != old_tier:
+                        try:
+                            deliver_event("tier_change", agent_id, {
+                                "old_tier": old_tier,
+                                "new_tier": new_tier,
+                                "composite_score": round(new_score, 2),
+                            })
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
             self._insert_screenings_and_submit(db, rescreen_rows, "rescreen_stale")
+
+        # ── Phase 3: Push updated scores on-chain (if enabled) ─────────
+        try:
+            from services.score_pusher import push_scores
+            pushed = push_scores()
+            if pushed > 0:
+                logger.info(f"[screen_new_agents] Pushed {pushed} scores on-chain")
+        except Exception as e:
+            logger.error(f"[screen_new_agents] Score push failed: {e}")
 
     # ─── Job 2: Monitor Anomalies (every 15 min) ─────────────────────
 

@@ -61,6 +61,15 @@ class OracleSettings(BaseSettings):
     oracle_base_url: str = "https://oracle.agentproof.sh"
     cors_origins: str = "http://localhost:3000"
 
+    # Protocol integration
+    api_key_enabled: bool = True
+
+    # TrustScoreOracle on-chain contract
+    trust_score_oracle_address: str = ""
+    trust_score_oracle_chain: str = "avalanche"
+    score_push_enabled: bool = False
+    score_push_min_delta: float = 2.0
+
     # Self-registration (opt-in)
     self_register: bool = False
 

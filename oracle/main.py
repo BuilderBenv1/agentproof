@@ -14,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from config import get_settings
-from routes import rest, a2a, mcp, webhooks
+from routes import rest, a2a, mcp, webhooks, integrations, batch
+from middleware.api_key import ApiKeyMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Oracle agent indexing check failed: {e}")
 
+    # Start usage tracker flush thread
+    from services.usage import get_usage_tracker
+    usage_tracker = get_usage_tracker()
+    usage_tracker.start()
+
     # Start autonomous scheduler
     from services.autonomous import get_screener
     screener = get_screener()
@@ -80,6 +86,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown autonomous scheduler
     await screener.stop()
+    # Flush and stop usage tracker
+    usage_tracker.stop()
     logger.info("Trust Oracle shutting down")
 
 
@@ -101,11 +109,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API key authentication middleware (after CORS, before routes)
+app.add_middleware(ApiKeyMiddleware)
+
 # Include routers
 app.include_router(rest.router)
 app.include_router(a2a.router)
 app.include_router(mcp.router)
 app.include_router(webhooks.router)
+app.include_router(integrations.router)
+app.include_router(batch.router)
 
 
 LANDING_HTML = """\
@@ -303,6 +316,147 @@ async def info():
 async def landing():
     """Landing page for humans."""
     return LANDING_HTML
+
+
+INTEGRATE_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Integrate with AgentProof</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0A0A0F;color:#E8E8ED;font-family:'Space Grotesk',system-ui,sans-serif;line-height:1.6}
+.container{max-width:800px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:2rem;color:#00E5A0;margin-bottom:.5rem}
+h2{font-size:1.3rem;color:#00C8FF;margin:2rem 0 .75rem;border-bottom:1px solid #1a1a2e;padding-bottom:.5rem}
+p{margin-bottom:1rem;color:#b0b0ba}
+code{background:#12121a;color:#00E5A0;padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.85em}
+pre{background:#12121a;padding:1rem;border-radius:8px;overflow-x:auto;margin:1rem 0;font-family:'JetBrains Mono',monospace;font-size:.85em;border:1px solid #1a1a2e}
+table{width:100%;border-collapse:collapse;margin:1rem 0}
+th,td{text-align:left;padding:.5rem .75rem;border-bottom:1px solid #1a1a2e}
+th{color:#00E5A0;font-weight:600}
+.tier-free{color:#888}
+.tier-growth{color:#00C8FF}
+.tier-enterprise{color:#A78BFA}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75em;font-weight:600}
+.badge-free{background:#1a1a2e;color:#888}
+.badge-growth{background:#00293d;color:#00C8FF}
+.badge-enterprise{background:#1f1040;color:#A78BFA}
+.btn{display:inline-block;background:#00E5A0;color:#0A0A0F;padding:.6rem 1.5rem;border-radius:6px;text-decoration:none;font-weight:600;margin-top:.5rem}
+.btn:hover{opacity:.9}
+a{color:#00C8FF;text-decoration:none}
+a:hover{text-decoration:underline}
+.step{display:flex;gap:1rem;margin:1rem 0;align-items:flex-start}
+.step-num{background:#00E5A0;color:#0A0A0F;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Integrate with AgentProof</h1>
+<p>Add trust scoring to your protocol in 3 steps. Gate DeFi actions, filter agent marketplaces, or verify agent reputation before transacting.</p>
+
+<h2>Pricing</h2>
+<table>
+<tr><th></th><th class="tier-free">Free</th><th class="tier-growth">Growth</th><th class="tier-enterprise">Enterprise</th></tr>
+<tr><td>Daily queries</td><td>1,000</td><td>50,000</td><td>Unlimited</td></tr>
+<tr><td>Batch evaluation</td><td>-</td><td>100/batch</td><td>500/batch</td></tr>
+<tr><td>Webhooks</td><td>1</td><td>10</td><td>Unlimited</td></tr>
+<tr><td>On-chain score push</td><td>-</td><td>-</td><td>Yes</td></tr>
+<tr><td>Price</td><td>$0</td><td>$99/mo</td><td>Custom</td></tr>
+</table>
+
+<h2>Quick Start</h2>
+<div class="step"><div class="step-num">1</div><div>
+<strong>Get your API key</strong>
+<pre>curl -X POST https://oracle.agentproof.sh/api/v1/integrations/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"protocol_name": "My Protocol", "contact_email": "dev@example.com"}'</pre>
+</div></div>
+
+<div class="step"><div class="step-num">2</div><div>
+<strong>Query trust scores</strong>
+<pre>curl https://oracle.agentproof.sh/api/v1/trust/1380 \\
+  -H "X-Api-Key: ap_live_your_key_here"</pre>
+<p>Returns: <code>{ composite_score, tier, recommendation, risk_flags, score_breakdown }</code></p>
+</div></div>
+
+<div class="step"><div class="step-num">3</div><div>
+<strong>Set up webhooks</strong> (get notified when agent scores or tiers change)
+<pre>curl -X POST https://oracle.agentproof.sh/api/v1/webhooks \\
+  -H "X-Api-Key: ap_live_your_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{"subscriber_name": "My Protocol", "webhook_url": "https://my-app.com/webhooks/agentproof", "events": ["score_change", "tier_change"]}'</pre>
+</div></div>
+
+<h2>Batch Evaluation (Growth+)</h2>
+<pre>curl -X POST https://oracle.agentproof.sh/api/v1/trust/batch \\
+  -H "X-Api-Key: ap_live_your_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{"agent_ids": [1380, 1375, 1199, 888], "chain": "base"}'</pre>
+
+<h2>Python Example</h2>
+<pre>import httpx
+
+ORACLE = "https://oracle.agentproof.sh"
+API_KEY = "ap_live_your_key_here"
+headers = {"X-Api-Key": API_KEY}
+
+# Single evaluation
+r = httpx.get(f"{ORACLE}/api/v1/trust/1380", headers=headers)
+eval = r.json()
+print(f"Score: {eval['composite_score']}, Tier: {eval['tier']}")
+
+# Gate by tier
+if eval["tier"] not in ("gold", "platinum", "diamond"):
+    raise Exception("Agent does not meet minimum trust tier")</pre>
+
+<h2>JavaScript Example</h2>
+<pre>const ORACLE = "https://oracle.agentproof.sh";
+const API_KEY = "ap_live_your_key_here";
+
+const res = await fetch(`${ORACLE}/api/v1/trust/1380`, {
+  headers: { "X-Api-Key": API_KEY }
+});
+const { composite_score, tier, recommendation } = await res.json();
+
+if (tier === "diamond" || tier === "platinum") {
+  // Reduce collateral requirements for trusted agents
+}</pre>
+
+<h2>On-Chain Integration</h2>
+<p>For fully on-chain reputation gating, use the <code>TrustScoreOracle</code> contract. The oracle pushes composite scores on-chain; your contracts read them with a small per-query fee.</p>
+<pre>// Solidity
+ITrustScoreOracle oracle = ITrustScoreOracle(ORACLE_ADDRESS);
+(uint16 score, uint8 tier, ) = oracle.getScore{value: oracle.queryFee()}(agentId);
+require(tier >= 3, "Agent must be Gold or above");</pre>
+
+<h2>Endpoints Reference</h2>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+<tr><td><code>POST</code></td><td>/api/v1/integrations/register</td><td>Get API key</td></tr>
+<tr><td><code>GET</code></td><td>/api/v1/integrations/usage</td><td>Usage dashboard</td></tr>
+<tr><td><code>POST</code></td><td>/api/v1/integrations/upgrade</td><td>Upgrade tier</td></tr>
+<tr><td><code>GET</code></td><td>/api/v1/trust/{agent_id}</td><td>Trust evaluation</td></tr>
+<tr><td><code>GET</code></td><td>/api/v1/trust/{agent_id}/risk</td><td>Risk assessment</td></tr>
+<tr><td><code>POST</code></td><td>/api/v1/trust/batch</td><td>Batch evaluation (Growth+)</td></tr>
+<tr><td><code>GET</code></td><td>/api/v1/agents/trusted</td><td>Search trusted agents</td></tr>
+<tr><td><code>POST</code></td><td>/api/v1/webhooks</td><td>Register webhook</td></tr>
+<tr><td><code>GET</code></td><td>/api/v1/network/stats</td><td>Network statistics</td></tr>
+</table>
+
+<p style="margin-top:2rem;color:#666;font-size:.85em">Questions? Contact <a href="mailto:team@agentproof.sh">team@agentproof.sh</a> &middot; <a href="/">Back to Oracle</a></p>
+</div>
+</body>
+</html>
+"""
+
+
+@app.get("/integrate", response_class=HTMLResponse)
+async def integrate_page():
+    """Protocol integration landing page with self-serve docs."""
+    return INTEGRATE_HTML
 
 
 @app.get("/health")

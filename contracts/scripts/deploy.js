@@ -90,6 +90,15 @@ async function main() {
   const splitsAddr = await agentSplits.getAddress();
   console.log("AgentSplits deployed to:", splitsAddr);
 
+  // 11. Deploy TrustScoreOracle
+  console.log("\n--- Deploying TrustScoreOracle ---");
+  const QUERY_FEE = ethers.parseEther("0.001"); // 0.001 AVAX (~$0.02)
+  const TrustScoreOracle = await ethers.getContractFactory("TrustScoreOracle");
+  const trustScoreOracle = await TrustScoreOracle.deploy(deployer.address, QUERY_FEE);
+  await trustScoreOracle.waitForDeployment();
+  const trustOracleAddr = await trustScoreOracle.getAddress();
+  console.log("TrustScoreOracle deployed to:", trustOracleAddr);
+
   // Output deployed addresses
   const addresses = {
     network: network.name,
@@ -107,6 +116,7 @@ async function main() {
       ReputationSource: sourceAddr,
       AgentMonitor: monitorAddr,
       AgentSplits: splitsAddr,
+      TrustScoreOracle: trustOracleAddr,
     },
   };
 
@@ -153,6 +163,7 @@ async function main() {
     await verifyContract("ReputationSource", sourceAddr, [coreAddr, deployer.address]);
     await verifyContract("AgentMonitor", monitorAddr, [identityAddr]);
     await verifyContract("AgentSplits", splitsAddr, [identityAddr]);
+    await verifyContract("TrustScoreOracle", trustOracleAddr, [deployer.address, QUERY_FEE]);
   }
 }
 

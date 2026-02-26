@@ -1,0 +1,183 @@
+"""
+Protocol integration management routes.
+
+Self-serve API key registration, usage dashboard, tier upgrades.
+"""
+
+import hashlib
+import secrets
+import logging
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel, EmailStr
+
+router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
+logger = logging.getLogger(__name__)
+
+
+class RegisterRequest(BaseModel):
+    protocol_name: str
+    contact_email: str
+
+
+class RegisterResponse(BaseModel):
+    api_key: str
+    key_id: str
+    tier: str
+    daily_limit: int
+    message: str
+
+
+class UpgradeRequest(BaseModel):
+    tier: str
+    billing_email: str | None = None
+
+
+def _require_api_key(request: Request) -> str:
+    """Extract and validate the api_key_id from request state."""
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if not api_key_id:
+        raise HTTPException(status_code=401, detail="API key required. Pass X-Api-Key header.")
+    return api_key_id
+
+
+@router.post("/register", response_model=RegisterResponse)
+async def register_api_key(body: RegisterRequest):
+    """Register a new API key for protocol integration.
+
+    Returns the API key ONCE. Store it securely — it cannot be retrieved later.
+    """
+    from database import get_supabase
+    db = get_supabase()
+
+    # Generate key: ap_live_ + 32 hex chars
+    raw_key = "ap_live_" + secrets.token_hex(16)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = raw_key[:16]
+
+    try:
+        result = db.table("api_keys").insert({
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "protocol_name": body.protocol_name[:200],
+            "contact_email": body.contact_email[:200],
+            "tier": "free",
+            "daily_limit": 1000,
+        }).execute()
+
+        key_id = result.data[0]["id"] if result.data else "unknown"
+
+        return RegisterResponse(
+            api_key=raw_key,
+            key_id=key_id,
+            tier="free",
+            daily_limit=1000,
+            message="Store this API key securely. It will not be shown again.",
+        )
+    except Exception as e:
+        logger.error("Failed to register API key: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create API key")
+
+
+@router.get("/usage")
+async def get_usage(request: Request):
+    """Get usage statistics for the authenticated API key."""
+    api_key_id = _require_api_key(request)
+
+    from database import get_supabase
+    from services.usage import get_usage_tracker
+
+    db = get_supabase()
+    tracker = get_usage_tracker()
+
+    # Current day from in-memory counter
+    today_count = tracker.get_daily_count(api_key_id)
+
+    # Get key info
+    key_result = db.table("api_keys").select(
+        "protocol_name, tier, daily_limit, created_at"
+    ).eq("id", api_key_id).limit(1).execute()
+
+    key_info = key_result.data[0] if key_result.data else {}
+
+    # Last 30 days from DB
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    history_result = (
+        db.table("api_usage_daily")
+        .select("usage_date, request_count, endpoints_hit")
+        .eq("api_key_id", api_key_id)
+        .gte("usage_date", cutoff)
+        .order("usage_date", desc=True)
+        .execute()
+    )
+
+    return {
+        "protocol_name": key_info.get("protocol_name"),
+        "tier": key_info.get("tier", "free"),
+        "today": {
+            "count": today_count,
+            "limit": key_info.get("daily_limit", 1000),
+        },
+        "last_30_days": history_result.data or [],
+        "created_at": key_info.get("created_at"),
+    }
+
+
+@router.post("/upgrade")
+async def upgrade_tier(request: Request, body: UpgradeRequest):
+    """Upgrade API key to a higher tier.
+
+    For MVP: flips the tier in DB and creates a subscription record.
+    Billing is handled manually (no Stripe integration yet).
+    """
+    api_key_id = _require_api_key(request)
+
+    if body.tier not in ("growth", "enterprise"):
+        raise HTTPException(status_code=400, detail="Tier must be 'growth' or 'enterprise'")
+
+    from database import get_supabase
+    db = get_supabase()
+
+    limits = {"growth": 50_000, "enterprise": 999_999_999}
+    prices = {"growth": 9900, "enterprise": None}
+
+    try:
+        # Update the key's tier and limit
+        db.table("api_keys").update({
+            "tier": body.tier,
+            "daily_limit": limits[body.tier],
+        }).eq("id", api_key_id).execute()
+
+        # Create subscription record
+        db.table("subscriptions").insert({
+            "api_key_id": api_key_id,
+            "tier": body.tier,
+            "price_cents": prices[body.tier],
+            "billing_email": body.billing_email,
+        }).execute()
+
+        return {
+            "tier": body.tier,
+            "daily_limit": limits[body.tier],
+            "message": f"Upgraded to {body.tier}. Invoice will be sent to {body.billing_email or 'your contact email'}.",
+        }
+    except Exception as e:
+        logger.error("Failed to upgrade tier: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to upgrade tier")
+
+
+@router.delete("/key")
+async def delete_api_key(request: Request):
+    """Deactivate the authenticated API key (soft delete)."""
+    api_key_id = _require_api_key(request)
+
+    from database import get_supabase
+    db = get_supabase()
+
+    try:
+        db.table("api_keys").update({"is_active": False}).eq("id", api_key_id).execute()
+        return {"message": "API key deactivated"}
+    except Exception as e:
+        logger.error("Failed to deactivate API key: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to deactivate key")

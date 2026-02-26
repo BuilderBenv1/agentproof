@@ -3,11 +3,13 @@
 import secrets
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, HttpUrl
 
 from database import get_supabase
 from services.webhooks import deliver_event
+
+WEBHOOK_TIER_LIMITS = {"free": 1, "growth": 10, "enterprise": 999}
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
 class WebhookCreate(BaseModel):
     subscriber_name: str
     webhook_url: HttpUrl
-    events: list[str] = ["score_change", "risk_change", "uri_change", "unreachable"]
+    events: list[str] = ["score_change", "risk_change", "uri_change", "unreachable", "tier_change"]
     agent_ids: list[int] | None = None
     min_score_delta: float = 5.0
 
@@ -45,9 +47,32 @@ async def list_webhooks():
 
 
 @router.post("", response_model=WebhookResponse)
-async def register_webhook(body: WebhookCreate):
-    """Register a new webhook subscription. Returns the secret token (show once)."""
+async def register_webhook(request: Request, body: WebhookCreate):
+    """Register a new webhook subscription. Returns the secret token (show once).
+
+    If authenticated with an API key, the webhook is linked to that key and
+    subject to per-tier limits (free: 1, growth: 10, enterprise: unlimited).
+    """
     db = get_supabase()
+
+    # Enforce per-tier webhook limits when API key is present
+    api_key_id = getattr(request.state, "api_key_id", None)
+    tier = getattr(request.state, "tier", None)
+    if api_key_id and tier:
+        limit = WEBHOOK_TIER_LIMITS.get(tier, 1)
+        existing = (
+            db.table("webhook_subscriptions")
+            .select("id", count="exact")
+            .eq("api_key_id", api_key_id)
+            .eq("active", True)
+            .execute()
+        )
+        if (existing.count or 0) >= limit:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Webhook limit reached for {tier} tier ({limit}). Upgrade to add more.",
+            )
+
     secret = secrets.token_hex(32)
 
     row = {
@@ -59,6 +84,8 @@ async def register_webhook(body: WebhookCreate):
         "min_score_delta": body.min_score_delta,
         "active": True,
     }
+    if api_key_id:
+        row["api_key_id"] = api_key_id
 
     try:
         result = db.table("webhook_subscriptions").insert(row).execute()
