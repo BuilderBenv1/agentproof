@@ -22,3 +22,6 @@ ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_tier_check
 
 -- 5. Drop daily_limit if it exists (keep monthly_limit)
 ALTER TABLE api_keys DROP COLUMN IF EXISTS daily_limit;
+
+-- 6. Add overage tracking to usage table
+ALTER TABLE api_usage_daily ADD COLUMN IF NOT EXISTS overage_count INTEGER DEFAULT 0;

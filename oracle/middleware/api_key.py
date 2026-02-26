@@ -131,32 +131,25 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 content={"detail": "API key has been deactivated"},
             )
 
-        # Check monthly rate limit
+        # Check monthly usage and apply overage pricing
         from services.usage import get_usage_tracker
         tracker = get_usage_tracker()
         api_key_id = key_row["id"]
+        tier = key_row["tier"]
         monthly_count = tracker.get_monthly_count(api_key_id)
-        monthly_limit = key_row.get("monthly_limit") or TIER_MONTHLY_LIMITS.get(key_row["tier"], 10_000)
+        monthly_limit = key_row.get("monthly_limit") or TIER_MONTHLY_LIMITS.get(tier, 10_000)
 
-        if monthly_count >= monthly_limit:
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Monthly query limit exceeded",
-                    "limit": monthly_limit,
-                    "used": monthly_count,
-                    "tier": key_row["tier"],
-                    "upgrade_url": "/integrate",
-                },
-            )
+        # Over limit on a subscription tier → spill to pay-per-call (never block)
+        overage = tier != "paygo" and monthly_count >= monthly_limit
 
         # Attach metadata to request state
         request.state.api_key_id = api_key_id
-        request.state.tier = key_row["tier"]
+        request.state.tier = tier
         request.state.protocol_name = key_row.get("protocol_name")
+        request.state.overage = overage  # True = this call billed at $0.05 PPC
 
         # Increment counter
         endpoint = _classify_endpoint(request.url.path)
-        tracker.increment(api_key_id, endpoint)
+        tracker.increment(api_key_id, endpoint, overage=overage)
 
         return await call_next(request)

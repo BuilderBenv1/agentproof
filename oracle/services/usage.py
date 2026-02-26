@@ -30,7 +30,7 @@ class UsageTracker:
         self._running = False
         self._thread: threading.Thread | None = None
 
-    def increment(self, api_key_id: str, endpoint: str = "other"):
+    def increment(self, api_key_id: str, endpoint: str = "other", overage: bool = False):
         """Increment the daily and monthly counters for a key. Called from middleware."""
         today = date.today().isoformat()
         month = today[:7]  # "2026-02"
@@ -41,19 +41,23 @@ class UsageTracker:
                 self._counters[api_key_id] = {
                     "date": today,
                     "count": 1,
+                    "overage_count": 1 if overage else 0,
                     "endpoints": {endpoint: 1},
                 }
             else:
                 entry["count"] += 1
+                if overage:
+                    entry["overage_count"] = entry.get("overage_count", 0) + 1
                 entry["endpoints"][endpoint] = entry["endpoints"].get(endpoint, 0) + 1
 
             # Monthly counter
             mentry = self._monthly.get(api_key_id)
             if mentry is None or mentry["month"] != month:
-                # New month or first request — seed from DB on next check
-                self._monthly[api_key_id] = {"month": month, "count": 1, "seeded": False}
+                self._monthly[api_key_id] = {"month": month, "count": 1, "overage": 1 if overage else 0, "seeded": False}
             else:
                 mentry["count"] += 1
+                if overage:
+                    mentry["overage"] = mentry.get("overage", 0) + 1
 
     def get_daily_count(self, api_key_id: str) -> int:
         """Get current day's request count for a key."""
@@ -94,6 +98,15 @@ class UsageTracker:
                     except Exception:
                         mentry["seeded"] = True  # don't retry on failure
                 return mentry["count"]
+        return 0
+
+    def get_monthly_overage(self, api_key_id: str) -> int:
+        """Get current month's overage call count (calls billed at PPC rate)."""
+        month = date.today().isoformat()[:7]
+        with self._lock:
+            mentry = self._monthly.get(api_key_id)
+            if mentry and mentry["month"] == month:
+                return mentry.get("overage", 0)
         return 0
 
     def start(self):
@@ -154,11 +167,13 @@ class UsageTracker:
                 if existing.data:
                     row = existing.data[0]
                     new_count = (row.get("request_count") or 0) + entry["count"]
+                    new_overage = (row.get("overage_count") or 0) + entry.get("overage_count", 0)
                     old_endpoints = row.get("endpoints_hit") or {}
                     for ep, cnt in entry["endpoints"].items():
                         old_endpoints[ep] = old_endpoints.get(ep, 0) + cnt
                     db.table("api_usage_daily").update({
                         "request_count": new_count,
+                        "overage_count": new_overage,
                         "endpoints_hit": old_endpoints,
                     }).eq("id", row["id"]).execute()
                 else:
@@ -166,6 +181,7 @@ class UsageTracker:
                         "api_key_id": api_key_id,
                         "usage_date": entry["date"],
                         "request_count": entry["count"],
+                        "overage_count": entry.get("overage_count", 0),
                         "endpoints_hit": entry["endpoints"],
                     }).execute()
 

@@ -105,6 +105,7 @@ async def get_usage(request: Request):
 
     today_count = tracker.get_daily_count(api_key_id)
     monthly_count = tracker.get_monthly_count(api_key_id)
+    monthly_overage = tracker.get_monthly_overage(api_key_id)
 
     # Get key info
     key_result = db.table("api_keys").select(
@@ -138,6 +139,8 @@ async def get_usage(request: Request):
             "today": today_count,
             "this_month": monthly_count,
             "monthly_limit": tier_info["monthly_limit"],
+            "overage_calls": monthly_overage,
+            "overage_cost": f"${monthly_overage * 0.05:.2f}" if monthly_overage > 0 else "$0.00",
         },
         "last_30_days": history_result.data or [],
         "created_at": key_info.get("created_at"),
