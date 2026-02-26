@@ -548,7 +548,7 @@ export default function DocsPage() {
               <code className="text-sm font-mono text-emerald-400">{BASE_URL}</code>
               <CopyButton text={BASE_URL} />
             </div>
-            <p className="text-xs text-gray-500 mt-2">All endpoints return JSON. No authentication required for read operations.</p>
+            <p className="text-xs text-gray-500 mt-2">All endpoints return JSON. Public read endpoints are free. For metered access with usage tracking, pass an <code className="text-emerald-400/70">X-Api-Key</code> header — <a href="/pricing" className="text-emerald-400 hover:underline">see pricing</a>.</p>
           </div>
 
           <div className="space-y-2">

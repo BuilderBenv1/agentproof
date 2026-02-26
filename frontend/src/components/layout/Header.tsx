@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/register", label: "Register" },
   { href: "/mcp", label: "MCP" },
+  { href: "/pricing", label: "API Pricing" },
   { href: "/whitepaper", label: "Whitepaper" },
   { href: "/docs", label: "Docs" },
 ];
