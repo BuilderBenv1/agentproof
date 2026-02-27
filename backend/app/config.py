@@ -60,6 +60,16 @@ class Settings(BaseSettings):
                     urls.append(url)
         return urls
 
+    # Extra chains (generic indexer — just RPC URLs, same CREATE2 contract addresses)
+    polygon_rpc_url: str = ""
+    arbitrum_rpc_url: str = ""
+    optimism_rpc_url: str = ""
+    bsc_rpc_url: str = ""
+    scroll_rpc_url: str = ""
+    gnosis_rpc_url: str = ""
+    mantle_rpc_url: str = ""
+    celo_rpc_url: str = ""
+
     # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""
     erc8004_reputation_registry: str = ""

@@ -5,6 +5,7 @@ Periodically polls for new blockchain events and syncs them to Supabase.
 
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 
@@ -12,6 +13,7 @@ import httpx
 
 from app.database import get_supabase
 from app.services.blockchain import get_blockchain_service
+from app.services import generic_chain
 from app.services.scoring import (
     calculate_composite_score,
     calculate_std_dev,
@@ -1265,6 +1267,101 @@ def _eth_blocks_behind() -> int:
         return 0
 
 
+# ─── Generic multi-chain indexer ──────────────────────────────────────
+# Add new ERC-8004 chains here. The generic indexer uses raw httpx
+# JSON-RPC calls so no web3.py instance or per-chain boilerplate needed.
+EXTRA_CHAINS = [
+    {"name": "polygon",  "start_block": 82_458_000,  "block_range": 3500,  "env": "POLYGON_RPC_URL"},
+    {"name": "arbitrum", "start_block": 428_895_000, "block_range": 50000, "env": "ARBITRUM_RPC_URL"},
+    {"name": "optimism", "start_block": 147_514_000, "block_range": 10000, "env": "OPTIMISM_RPC_URL"},
+    {"name": "bsc",      "start_block": 47_000_000,  "block_range": 5000,  "env": "BSC_RPC_URL"},
+    {"name": "scroll",   "start_block": 29_432_000,  "block_range": 10000, "env": "SCROLL_RPC_URL"},
+    {"name": "gnosis",   "start_block": 44_505_000,  "block_range": 10000, "env": "GNOSIS_RPC_URL"},
+    {"name": "mantle",   "start_block": 91_333_000,  "block_range": 10000, "env": "MANTLE_RPC_URL"},
+    {"name": "celo",     "start_block": 58_396_000,  "block_range": 10000, "env": "CELO_RPC_URL"},
+]
+
+# Cache RPC URLs so we only read env vars once
+_extra_chain_rpcs: dict[str, str] = {}
+
+
+def _get_extra_chain_rpc(chain_cfg: dict) -> str:
+    """Get RPC URL for an extra chain, cached."""
+    name = chain_cfg["name"]
+    if name not in _extra_chain_rpcs:
+        _extra_chain_rpcs[name] = os.environ.get(chain_cfg["env"], "")
+    return _extra_chain_rpcs[name]
+
+
+def _process_generic_identity(chain_name: str, rpc_url: str, from_block: int, to_block: int) -> int:
+    """Generic identity event processor for any EVM chain."""
+    logger.info(f"[{chain_name}] Scanning identity blocks {from_block}-{to_block}")
+    events = generic_chain.fetch_registered_events(rpc_url, from_block, to_block)
+    if not events:
+        return 0
+    logger.info(f"[{chain_name}] Found {len(events)} Registered events")
+
+    # Fetch block timestamps
+    unique_blocks = set(e.blockNumber for e in events)
+    block_ts_cache: dict[int, datetime] = {}
+    for blk in sorted(unique_blocks):
+        try:
+            block_ts_cache[blk] = generic_chain.get_block_timestamp(rpc_url, blk)
+        except Exception as e:
+            logger.warning(f"[{chain_name}] Failed to get block {blk} timestamp: {e}")
+            block_ts_cache[blk] = datetime.now(timezone.utc)
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for event in events:
+        rows.append({
+            "agent_id": event.args.agentId,
+            "owner_address": event.args.owner,
+            "agent_uri": event.args.agentURI,
+            "source_chain": chain_name,
+            "registered_at": block_ts_cache[event.blockNumber].isoformat(),
+            "updated_at": now,
+        })
+
+    db = get_supabase()
+    try:
+        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
+        logger.info(f"[{chain_name}] Batch upserted {len(rows)} agents")
+    except Exception as e:
+        logger.error(f"[{chain_name}] Batch upsert failed ({len(rows)} rows): {e}")
+        for i in range(0, len(rows), 50):
+            batch = rows[i:i + 50]
+            try:
+                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
+            except Exception as e2:
+                logger.error(f"[{chain_name}] Sub-batch upsert failed: {e2}")
+
+    return len(events)
+
+
+def _process_generic_feedback(chain_name: str, rpc_url: str, from_block: int, to_block: int) -> int:
+    """Generic feedback event processor for any EVM chain."""
+    logger.info(f"[{chain_name}] Scanning feedback blocks {from_block}-{to_block}")
+    events = generic_chain.fetch_feedback_events(rpc_url, from_block, to_block)
+    if not events:
+        return 0
+
+    # We need a web3 instance for _process_cross_chain_feedback's block timestamp fetching.
+    # Use generic_chain's httpx-based timestamp fetcher instead by pre-populating timestamps.
+    unique_blocks = set(e.blockNumber for e in events)
+    # Monkey-patch a minimal object with eth.get_block() that returns timestamps
+    class _MinimalW3:
+        class eth:
+            @staticmethod
+            def get_block(blk):
+                ts = generic_chain.get_block_timestamp(rpc_url, blk)
+                class _B:
+                    timestamp = int(ts.timestamp())
+                return _B()
+
+    return _process_cross_chain_feedback(chain_name, events, _MinimalW3())
+
+
 def run_indexer_cycle():
     """Run one indexer cycle: scan blocks and index events. No scoring."""
     blockchain = get_blockchain_service()
@@ -1430,6 +1527,51 @@ def run_indexer_cycle():
     count = _process_chunked("validation", process_validation_events, safe_block)
     if count > 0:
         logger.info(f"Processed {count} validation events")
+
+    # --- Extra chains (generic indexer) ---
+    for chain_cfg in EXTRA_CHAINS:
+        rpc_url = _get_extra_chain_rpc(chain_cfg)
+        if not rpc_url:
+            continue
+        chain_name = chain_cfg["name"]
+        try:
+            current = generic_chain.get_current_block(rpc_url)
+            chain_safe = current - CONFIRMATION_BLOCKS
+            if chain_safe <= 0:
+                continue
+
+            # Identity events
+            count = _process_chunked(
+                f"erc8004_{chain_name}_identity",
+                lambda fb, tb, cn=chain_name, ru=rpc_url: _process_generic_identity(cn, ru, fb, tb),
+                chain_safe,
+                start_block=chain_cfg["start_block"],
+                chunk_size=chain_cfg["block_range"],
+            )
+            if count > 0:
+                logger.info(f"Processed {count} ERC-8004 {chain_name} agent registration events")
+
+            # Feedback events
+            count = _process_chunked(
+                f"erc8004_{chain_name}_feedback",
+                lambda fb, tb, cn=chain_name, ru=rpc_url: _process_generic_feedback(cn, ru, fb, tb),
+                chain_safe,
+                start_block=chain_cfg["start_block"],
+                chunk_size=chain_cfg["block_range"],
+            )
+            if count > 0:
+                logger.info(f"Processed {count} ERC-8004 {chain_name} feedback events")
+
+            # Resolve metadata URIs
+            try:
+                resolved = resolve_agent_metadata(chain=chain_name, batch_size=200)
+                if resolved > 0:
+                    logger.info(f"Resolved {resolved} {chain_name} agent metadata URIs")
+            except Exception as e:
+                logger.warning(f"{chain_name} URI resolution failed (non-fatal): {e}")
+
+        except Exception as e:
+            logger.error(f"Error processing {chain_name} ERC-8004 events: {e}")
 
 
 def run_scoring_cycle():

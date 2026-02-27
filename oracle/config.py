@@ -45,6 +45,16 @@ class OracleSettings(BaseSettings):
     linea_identity_registry: str = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     linea_reputation_registry: str = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
 
+    # Extra chains (for future feedback submission and score pushing)
+    polygon_rpc_url: str = ""
+    arbitrum_rpc_url: str = ""
+    optimism_rpc_url: str = ""
+    bsc_rpc_url: str = ""
+    scroll_rpc_url: str = ""
+    gnosis_rpc_url: str = ""
+    mantle_rpc_url: str = ""
+    celo_rpc_url: str = ""
+
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
     oracle_agent_description: str = (
