@@ -4,7 +4,7 @@ import { FileText, Download, ExternalLink, Shield, Brain, Globe, Lock } from "lu
 import Link from "next/link";
 
 const SECTIONS = [
-  { title: "The Trust Gap", description: "Why autonomous AI agents need verifiable reputation before the agent economy can scale." },
+  { title: "The Crisis of Static Trust", description: "Why scalar reputation systems fail in high-speed agent economies: scalar blindness, exit scams, Sybil vulnerability, and binary thinking." },
   { title: "ERC-8004 Standard", description: "The on-chain identity and reputation standard for AI agents, published by Ava Labs." },
   { title: "Trust Oracle Architecture", description: "How AgentProof indexes, evaluates, and scores ERC-8004 registered agents in real-time." },
   { title: "Scoring Methodology", description: "8-signal composite scoring: rating, volume, consistency, validation, age, uptime, deployer reputation, and URI stability." },
@@ -28,10 +28,46 @@ export default function WhitepaperPage() {
           The Trust Oracle for the ERC-8004 Agent Economy
         </h1>
         <p className="text-sm text-gray-400 max-w-xl mx-auto">
-          As autonomous AI agents proliferate across blockchain networks, the absence of a
-          verifiable trust layer creates systemic risk for the emerging agent economy. AgentProof
-          addresses this gap.
+          Scalar reputation systems are failing the agent economy. AgentProof replaces static
+          scores with adaptive, probabilistic trust &mdash; treating every agent as a probability
+          distribution, not a number.
         </p>
+      </div>
+
+      {/* Section 1: The Crisis of Static Trust */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white">1. The Crisis of Static Trust</h2>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          As autonomous agents become economic participants &mdash; executing trades, processing claims, negotiating terms &mdash; they inherit reputation systems designed for human e-commerce. Star ratings. Thumbs up. Transaction counters. These systems are failing.
+        </p>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          Current reputation models in ERC-8004 rely on <span className="text-white font-semibold">Scalar Accumulation</span>: simple counters that measure volume, not certainty. While this works for slow-moving human markets, it is catastrophically insufficient for high-speed agent economies where thousands of transactions occur per hour and a compromised agent can drain liquidity in minutes.
+        </p>
+
+        <div className="space-y-4 pl-4 border-l-2 border-emerald-500/30">
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">1.1 Scalar Blindness</p>
+            <p className="text-xs text-gray-500 mt-1">A new agent with 5 successful transactions often looks identical to a veteran with 5,000. Accumulative systems measure volume, not certainty. It is mathematically impossible to distinguish between &ldquo;High Potential&rdquo; and &ldquo;High Reliability&rdquo;, leading to misallocated capital and misplaced trust.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">1.2 The Exit Scam Problem</p>
+            <p className="text-xs text-gray-500 mt-1">Static scores are sticky. If an agent spends months building a perfect reputation and then turns malicious, a scalar system is too slow to react. Lifetime averages hide recent behaviour. A compromised agent can drain liquidity for days before their score drops. By then, the damage is done.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">1.3 The Sybil Vulnerability</p>
+            <p className="text-xs text-gray-500 mt-1">In a permissionless system, creating a new identity is nearly free. Bad actors can spin up thousands of bot wallets to wash-trade and artificially inflate scores. Most systems cannot distinguish between 100 reviews from 100 unique users and 100 reviews from a single bot farm.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">1.4 Binary Thinking in a Probabilistic World</p>
+            <p className="text-xs text-gray-500 mt-1">Current systems ask: &ldquo;Is this agent good?&rdquo; This is the wrong question. An agent might be 99% reliable at token transfers but only 60% reliable at complex arbitrage. A single static score cannot capture this multidimensional reality. Trust decisions require probability distributions, not binary labels.</p>
+          </div>
+        </div>
+
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
+          <p className="text-sm text-gray-300 leading-relaxed">
+            <span className="text-emerald-400 font-bold">We propose a shift from Accumulative Trust to Adaptive, Probabilistic Trust.</span> Instead of asking &ldquo;Is this agent good?&rdquo;, our system asks: <em>&ldquo;What is the probability that this agent will perform action X successfully in the next transaction, given their full behavioural history, the behaviour of similar agents, and the current state of the network?&rdquo;</em>
+          </p>
+        </div>
       </div>
 
       {/* Download Card */}
@@ -82,7 +118,7 @@ export default function WhitepaperPage() {
         {[
           { icon: Shield, label: "Chains", value: "4", sub: "AVAX · ETH · Base · Linea" },
           { icon: Brain, label: "Live Agents", value: "11", sub: "Intelligence + Trading" },
-          { icon: Globe, label: "Indexed", value: "25K+", sub: "Agent identities" },
+          { icon: Globe, label: "Indexed", value: "46K+", sub: "Agent identities" },
           { icon: Lock, label: "Escrow", value: "0.5%", sub: "Protocol fee" },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-center">
