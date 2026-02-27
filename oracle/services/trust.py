@@ -694,6 +694,56 @@ class TrustService:
         return stats
 
 
+# ─── Cache Warming ───────────────────────────────────────────────────
+
+
+def warm_cache():
+    """Pre-populate cache on startup so first requests are instant.
+
+    Loads top agents (by composite_score) using the fast path and
+    pre-computes network stats. Called from lifespan via to_thread.
+    """
+    import time as _time
+    start = _time.monotonic()
+
+    svc = get_trust_service()
+
+    # 1. Pre-warm network stats (the slowest cold query — 10s+ without cache)
+    try:
+        svc.network_stats(bypass_cache=True)
+        logger.info("[cache-warm] Network stats cached")
+    except Exception as e:
+        logger.warning("[cache-warm] Network stats failed: %s", e)
+
+    # 2. Pre-warm top agents by score (covers most API traffic)
+    try:
+        db = get_supabase()
+        top = (
+            db.table("agents")
+            .select("agent_id")
+            .gt("composite_score", 0)
+            .order("composite_score", desc=True)
+            .limit(500)
+            .execute()
+        )
+        agent_ids = [a["agent_id"] for a in (top.data or [])]
+    except Exception as e:
+        logger.warning("[cache-warm] Failed to fetch top agents: %s", e)
+        agent_ids = []
+
+    warmed = 0
+    for agent_id in agent_ids:
+        try:
+            svc.evaluate_agent_fast(agent_id)
+            warmed += 1
+        except Exception:
+            pass
+
+    elapsed = _time.monotonic() - start
+    logger.info("[cache-warm] Done: %d agents + network stats in %.1fs", warmed, elapsed)
+    return warmed
+
+
 # Singleton
 _trust_service: TrustService | None = None
 

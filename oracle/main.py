@@ -72,6 +72,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Oracle agent indexing check failed: {e}")
 
+    # Warm the trust cache so first API calls are instant
+    try:
+        from services.trust import warm_cache
+        warmed = await asyncio.wait_for(asyncio.to_thread(warm_cache), timeout=60)
+        logger.info(f"Cache warm complete — {warmed} agents pre-loaded")
+    except asyncio.TimeoutError:
+        logger.warning("Cache warm timed out after 60s — will warm on demand")
+    except Exception as e:
+        logger.warning(f"Cache warm failed: {e}")
+
     # Start usage tracker flush thread
     from services.usage import get_usage_tracker
     usage_tracker = get_usage_tracker()
