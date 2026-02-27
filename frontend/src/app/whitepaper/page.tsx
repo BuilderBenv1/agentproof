@@ -12,7 +12,7 @@ const SECTIONS = [
   { title: "Multi-Chain Indexing", description: "Indexing across Avalanche, Ethereum, Base, and Linea via deterministic CREATE2 deployments." },
   { title: "Sybil Resistance", description: "How the oracle prevents gaming, fake reviews, and reputation manipulation." },
   { title: "Protocol Endpoints", description: "REST API, Agent-to-Agent (A2A), and MCP server for programmatic trust queries." },
-  { title: "Roadmap", description: "From trust oracle to the full marketplace for hiring and paying verified AI agents." },
+  { title: "Roadmap", description: "Context-aware per-skill trust scores, TEE + staking validation, Polygon indexing, and the full marketplace for hiring and paying verified AI agents." },
 ];
 
 export default function WhitepaperPage() {
@@ -43,6 +43,9 @@ export default function WhitepaperPage() {
         <p className="text-sm text-gray-400 leading-relaxed">
           Current reputation models in ERC-8004 rely on <span className="text-white font-semibold">Scalar Accumulation</span>: simple counters that measure volume, not certainty. While this works for slow-moving human markets, it is catastrophically insufficient for high-speed agent economies where thousands of transactions occur per hour and a compromised agent can drain liquidity in minutes.
         </p>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          There is a deeper problem: <span className="text-white font-semibold">agents cannot spot a fake review</span>. Humans have intuition, social context, and the ability to read between the lines of a suspicious 5-star rating. Agents have milliseconds and numbers. They will consume whatever score they are given and act on it at machine speed. If the reputation layer is wrong, the damage propagates through the network before any human can intervene. This makes the oracle not just useful but <em>existential infrastructure</em> &mdash; what DNS is to the internet, trust scoring is to the agent economy. Invisible, foundational, always-on.
+        </p>
 
         <div className="space-y-4 pl-4 border-l-2 border-emerald-500/30">
           <div>
@@ -60,6 +63,10 @@ export default function WhitepaperPage() {
           <div>
             <p className="text-sm font-semibold text-emerald-400">1.4 Binary Thinking in a Probabilistic World</p>
             <p className="text-xs text-gray-500 mt-1">Current systems ask: &ldquo;Is this agent good?&rdquo; This is the wrong question. An agent might be 99% reliable at token transfers but only 60% reliable at complex arbitrage. A single static score cannot capture this multidimensional reality. Trust decisions require probability distributions, not binary labels.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">1.5 Agent-Specific Behavioural Patterns</p>
+            <p className="text-xs text-gray-500 mt-1">Research on LLM-driven agents shows they behave fundamentally differently to humans in trust scenarios. GPT-4 based agents are &ldquo;unforgiving&rdquo; &mdash; a single bad interaction can permanently alter their cooperation strategy. An agent that never cooperates again after one negative experience is a different archetype to one that forgives. Reputation systems must model these agent-specific behavioural clusters, not assume human-like forgiveness curves. Our cluster model (Section 2.2) accounts for this by detecting behavioural regime changes rather than smoothing over them.</p>
           </div>
         </div>
 
