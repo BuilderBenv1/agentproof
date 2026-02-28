@@ -8,6 +8,14 @@ const CHAINS = [
   { value: "ethereum", label: "Ethereum", color: "#627EEA" },
   { value: "base", label: "Base", color: "#0052FF" },
   { value: "linea", label: "Linea", color: "#61DFFF" },
+  { value: "polygon", label: "Polygon", color: "#8247E5" },
+  { value: "arbitrum", label: "Arbitrum", color: "#28A0F0" },
+  { value: "optimism", label: "Optimism", color: "#FF0420" },
+  { value: "bsc", label: "BSC", color: "#F0B90B" },
+  { value: "scroll", label: "Scroll", color: "#FFEEDA" },
+  { value: "gnosis", label: "Gnosis", color: "#3E6957" },
+  { value: "mantle", label: "Mantle", color: "#000000" },
+  { value: "celo", label: "Celo", color: "#FCFF52" },
 ] as const;
 
 interface FilterBarProps {

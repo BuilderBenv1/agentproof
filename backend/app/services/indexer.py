@@ -706,6 +706,7 @@ def process_feedback_events(from_block: int, to_block: int):
             "task_hash": task_hash,
             "tag1": tag1,
             "tag2": tag2,
+            "source_chain": "avalanche",
             "tx_hash": event.transactionHash.hex(),
             "block_number": block,
             "created_at": block_ts_cache[block].isoformat(),
@@ -930,7 +931,7 @@ def recalculate_agent_scores():
                 .execute()
             )
             for r in result.data:
-                key = (r["agent_id"], r.get("source_chain") or "ethereum")
+                key = (r["agent_id"], r.get("source_chain") or "avalanche")
                 if key not in all_ratings:
                     all_ratings[key] = []
                 all_ratings[key].append(r["rating"])

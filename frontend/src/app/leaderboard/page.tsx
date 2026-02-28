@@ -143,14 +143,17 @@ export default function LeaderboardPage() {
           <div className="flex rounded-full overflow-hidden h-3 bg-gray-800">
             {TIER_ORDER.map((tier) => {
               const count = tierDist[tier] || 0;
+              if (count === 0) return null;
               const pct = totalAgents > 0 ? (count / totalAgents) * 100 : 0;
-              if (pct < 0.5) return null;
+              // Ensure small tiers (gold, platinum, diamond) are always visible
+              const displayPct = pct < 1 ? Math.max(pct, 1) : pct;
               return (
                 <div
                   key={tier}
                   className="transition-all duration-500"
                   style={{
-                    width: `${pct}%`,
+                    width: `${displayPct}%`,
+                    minWidth: "4px",
                     backgroundColor: getTierColor(tier),
                     opacity: 0.8,
                   }}

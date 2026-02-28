@@ -136,6 +136,14 @@ export default function DiscoverPage() {
               <option value="ethereum">Ethereum</option>
               <option value="base">Base</option>
               <option value="linea">Linea</option>
+              <option value="polygon">Polygon</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="optimism">Optimism</option>
+              <option value="bsc">BSC</option>
+              <option value="scroll">Scroll</option>
+              <option value="gnosis">Gnosis</option>
+              <option value="mantle">Mantle</option>
+              <option value="celo">Celo</option>
             </select>
           </div>
           <div>
