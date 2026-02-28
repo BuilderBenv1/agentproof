@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
+from app.services.scoring import calculate_max_exposure
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -112,20 +114,51 @@ async def get_deployer_reputation(request: Request, address: str):
     else:
         label = "established"
 
-    # Get their agents (top 20 by score)
+    # Get their agents (top 20 by score) with chain info for cross-chain linking
     agents_result = (
         db.table("agents")
-        .select("agent_id, name, composite_score, tier, category, total_feedback")
+        .select("agent_id, name, composite_score, tier, category, total_feedback, source_chain")
         .eq("owner_address", address)
         .order("composite_score", desc=True)
-        .limit(20)
+        .limit(50)
         .execute()
     )
+
+    # Cross-chain identity analysis
+    chains_active = list(set(a.get("source_chain", "avalanche") for a in agents_result.data))
+    chain_breakdown = {}
+    for a in agents_result.data:
+        c = a.get("source_chain", "avalanche")
+        if c not in chain_breakdown:
+            chain_breakdown[c] = {"count": 0, "avg_score": 0, "scores": []}
+        chain_breakdown[c]["count"] += 1
+        chain_breakdown[c]["scores"].append(float(a.get("composite_score", 0)))
+
+    for c, data in chain_breakdown.items():
+        scores = data.pop("scores")
+        data["avg_score"] = round(sum(scores) / len(scores), 2) if scores else 0
+
+    # Detect reputation laundering: same deployer, new chain, low-score history
+    reputation_laundering_risk = False
+    if len(chains_active) > 1:
+        # If deployer has low-scored agents on one chain and new agents on another
+        for c, data in chain_breakdown.items():
+            if data["avg_score"] < 30 and data["count"] > 2:
+                for other_c, other_data in chain_breakdown.items():
+                    if other_c != c and other_data["count"] <= 3:
+                        reputation_laundering_risk = True
+                        break
 
     return {
         **deployer,
         "label": label,
-        "agents": agents_result.data,
+        "agents": agents_result.data[:20],
+        "cross_chain": {
+            "chains_active": chains_active,
+            "chain_count": len(chains_active),
+            "chain_breakdown": chain_breakdown,
+            "reputation_laundering_risk": reputation_laundering_risk,
+        },
     }
 
 
@@ -151,4 +184,68 @@ async def get_recent_feedback(
     return {
         "agent_id": agent_id,
         "feedback": result.data,
+    }
+
+
+@router.get("/{agent_id}/max-exposure")
+@limiter.limit("60/minute")
+async def get_max_exposure(request: Request, agent_id: int):
+    """Get max exposure (dollar-denominated trust ceiling) for an agent.
+
+    Returns how much you should trust this agent with, as a USD figure.
+    Based on composite score, feedback volume, age, insurance, and validations.
+    """
+    db = get_supabase()
+
+    agent_result = db.table("agents").select(
+        "composite_score, total_feedback, registered_at, validation_success_rate"
+    ).eq("agent_id", agent_id).execute()
+
+    if not agent_result.data:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    agent = agent_result.data[0]
+
+    # Check insurance
+    insurance_stake_usd = 0.0
+    try:
+        ins = (
+            db.table("insurance_stakes")
+            .select("stake_amount")
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if ins.data:
+            insurance_stake_usd = float(ins.data[0]["stake_amount"]) * 25.0
+    except Exception:
+        pass
+
+    reg_at = agent.get("registered_at", "")
+    age_days = 0
+    if reg_at:
+        reg_dt = datetime.fromisoformat(str(reg_at).replace("Z", "+00:00"))
+        age_days = max(0, (datetime.now(timezone.utc) - reg_dt).days)
+
+    exposure = calculate_max_exposure(
+        composite_score=float(agent.get("composite_score", 0)),
+        feedback_count=int(agent.get("total_feedback", 0)),
+        account_age_days=age_days,
+        insurance_stake_usd=insurance_stake_usd,
+        validation_success_rate=float(agent.get("validation_success_rate", 0)),
+    )
+
+    # Breakdown for transparency
+    return {
+        "agent_id": agent_id,
+        "max_exposure_usd": exposure,
+        "factors": {
+            "composite_score": float(agent.get("composite_score", 0)),
+            "feedback_count": int(agent.get("total_feedback", 0)),
+            "account_age_days": age_days,
+            "insurance_stake_usd": round(insurance_stake_usd, 2),
+            "validation_success_rate": float(agent.get("validation_success_rate", 0)),
+        },
+        "note": "Max exposure is a recommendation, not a guarantee. Based on reputation signals, feedback volume, account age, insurance stake, and validation history.",
     }

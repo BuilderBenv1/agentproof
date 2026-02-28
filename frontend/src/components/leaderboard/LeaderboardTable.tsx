@@ -3,7 +3,7 @@
 import Link from "next/link";
 import CategoryBadge from "@/components/reputation/CategoryBadge";
 import { formatScore, getTierColor } from "@/lib/utils";
-import { Crown, Medal, Award, MessageSquare, ShieldCheck } from "lucide-react";
+import { Crown, Medal, Award, MessageSquare, ShieldCheck, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface LeaderboardEntry {
   agent_id: number;
@@ -18,13 +18,14 @@ interface LeaderboardEntry {
   leaderboard_rank: number;
   image_url: string | null;
   source_chain?: string;
+  delta_7d?: number | null;
+  trend?: string;
 }
 
 const CHAIN_COLORS: Record<string, string> = {
-  avalanche: "#E84142",
-  ethereum: "#627EEA",
-  base: "#0052FF",
-  linea: "#61DFFF",
+  avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
+  polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
+  scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9",
 };
 
 interface LeaderboardTableProps {
@@ -133,6 +134,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden sm:table-cell">Rating</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden sm:table-cell">Reviews</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden lg:table-cell">Verified</th>
+            <th className="text-center text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden md:table-cell">7d</th>
             <th className="text-right text-xs font-mono text-gray-500 uppercase py-3 px-4">Tier</th>
           </tr>
         </thead>
@@ -205,6 +207,21 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                     </span>
                   ) : (
                     <span className="font-mono text-xs text-gray-600">---</span>
+                  )}
+                </td>
+                <td className="py-3 px-4 text-center hidden md:table-cell">
+                  {entry.delta_7d != null ? (
+                    <span className={`font-mono text-xs font-bold flex items-center justify-center gap-0.5 ${
+                      entry.delta_7d > 1 ? "text-emerald-400" :
+                      entry.delta_7d < -1 ? "text-red-400" : "text-gray-500"
+                    }`}>
+                      {entry.delta_7d > 1 ? <TrendingUp className="w-3 h-3" /> :
+                       entry.delta_7d < -1 ? <TrendingDown className="w-3 h-3" /> :
+                       <Minus className="w-3 h-3" />}
+                      {entry.delta_7d > 0 ? "+" : ""}{entry.delta_7d.toFixed(1)}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs text-gray-600">--</span>
                   )}
                 </td>
                 <td className="py-3 px-4 text-right">

@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query, Request
 from app.database import get_supabase
 
@@ -70,10 +71,48 @@ async def get_leaderboard(
     offset = (page - 1) * page_size
     result = query.range(offset, offset + page_size - 1).execute()
 
-    # Add rank to results
+    # Batch-fetch 7d-ago scores for trajectory arrows
+    agent_ids_page = [a["agent_id"] for a in result.data]
+    score_7d_ago: dict[int, float] = {}
+    if agent_ids_page:
+        try:
+            target_7d = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+            hist = (
+                db.table("score_history")
+                .select("agent_id, composite_score, snapshot_date")
+                .in_("agent_id", agent_ids_page[:100])
+                .lte("snapshot_date", target_7d)
+                .order("snapshot_date", desc=True)
+                .execute()
+            )
+            for h in hist.data:
+                aid = h["agent_id"]
+                if aid not in score_7d_ago:
+                    score_7d_ago[aid] = float(h["composite_score"])
+        except Exception:
+            pass
+
+    # Add rank + trajectory to results
     entries = []
     for idx, agent in enumerate(result.data, start=offset + 1):
-        entries.append({**agent, "leaderboard_rank": agent.get("rank") or idx})
+        aid = agent["agent_id"]
+        current = float(agent.get("composite_score", 0))
+        old = score_7d_ago.get(aid)
+        delta_7d = round(current - old, 2) if old is not None else None
+        if delta_7d is None:
+            trend = "new"
+        elif delta_7d > 1.0:
+            trend = "rising"
+        elif delta_7d < -1.0:
+            trend = "falling"
+        else:
+            trend = "stable"
+        entries.append({
+            **agent,
+            "leaderboard_rank": agent.get("rank") or idx,
+            "delta_7d": delta_7d,
+            "trend": trend,
+        })
 
     response = {
         "entries": entries,

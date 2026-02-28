@@ -19,6 +19,8 @@ interface LeaderboardEntry {
   rank: number | null;
   leaderboard_rank: number;
   image_url: string | null;
+  delta_7d?: number | null;
+  trend?: string;
 }
 
 interface OverviewData {

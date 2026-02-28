@@ -172,3 +172,88 @@ def calculate_account_age_days(registered_at: datetime) -> int:
         registered_at = registered_at.replace(tzinfo=timezone.utc)
     delta = now - registered_at
     return max(0, delta.days)
+
+
+def calculate_max_exposure(
+    composite_score: float,
+    feedback_count: int,
+    account_age_days: int,
+    insurance_stake_usd: float = 0.0,
+    validation_success_rate: float = 0.0,
+) -> float:
+    """Calculate max exposure — dollar-denominated trust ceiling.
+
+    "How much should you trust this agent with?" in USD.
+
+    Formula:
+    - Base exposure from score: exponential curve, score 50 = $100, score 90 = $50K
+    - Confidence multiplier from feedback volume (log scale, caps at 5x)
+    - Age multiplier: <7d = 0.1x, <30d = 0.5x, <90d = 0.8x, else 1.0x
+    - Insurance bonus: adds insured amount directly (skin in the game)
+    - Validation bonus: high success rate boosts by up to 1.5x
+    - Hard cap at $1M for any single agent
+    """
+    if composite_score < 20 or feedback_count == 0:
+        return 0.0
+
+    # Exponential base: score 50 → $100, score 75 → ~$5K, score 90 → ~$50K
+    base = 100.0 * math.exp((composite_score - 50) * 0.08)
+
+    # Confidence from feedback volume (log scale, 1 review = 1x, 100 = 3x, 1000 = 5x)
+    confidence = min(5.0, 1.0 + math.log10(max(1, feedback_count)))
+
+    # Age discount
+    if account_age_days < 7:
+        age_mult = 0.1
+    elif account_age_days < 30:
+        age_mult = 0.5
+    elif account_age_days < 90:
+        age_mult = 0.8
+    else:
+        age_mult = 1.0
+
+    # Validation bonus
+    val_mult = 1.0 + (validation_success_rate / 100.0) * 0.5 if validation_success_rate > 0 else 1.0
+
+    exposure = base * confidence * age_mult * val_mult
+
+    # Insurance adds directly (staked funds = real skin in the game)
+    exposure += insurance_stake_usd
+
+    # Hard cap
+    return round(min(1_000_000.0, max(0.0, exposure)), 2)
+
+
+def calculate_score_trajectory(
+    current_score: float,
+    score_7d_ago: float | None,
+    score_30d_ago: float | None,
+) -> dict:
+    """Calculate score trajectory with 7-day and 30-day deltas.
+
+    Returns:
+        {
+            "delta_7d": float | None,
+            "delta_30d": float | None,
+            "trend": "rising" | "falling" | "stable" | "new"
+        }
+    """
+    delta_7d = round(current_score - score_7d_ago, 2) if score_7d_ago is not None else None
+    delta_30d = round(current_score - score_30d_ago, 2) if score_30d_ago is not None else None
+
+    # Determine trend from 7d delta (or 30d if 7d unavailable)
+    active_delta = delta_7d if delta_7d is not None else delta_30d
+    if active_delta is None:
+        trend = "new"
+    elif active_delta > 1.0:
+        trend = "rising"
+    elif active_delta < -1.0:
+        trend = "falling"
+    else:
+        trend = "stable"
+
+    return {
+        "delta_7d": delta_7d,
+        "delta_30d": delta_30d,
+        "trend": trend,
+    }

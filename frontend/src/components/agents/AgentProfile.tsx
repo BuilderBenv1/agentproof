@@ -12,6 +12,7 @@ import { useFeedback, useScoreHistory } from "@/hooks/useReputation";
 import {
   ExternalLink, Copy, Calendar, Shield, Star, BarChart3,
   CheckCircle, MessageSquare, Activity, FileText, RefreshCw,
+  TrendingUp, TrendingDown, Minus, DollarSign, Link2,
 } from "lucide-react";
 import { useState } from "react";
 import type { Agent } from "@/hooks/useAgents";
@@ -110,7 +111,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 const chainColors: Record<string, string> = {
                   avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
                   polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
-                  scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52",
+                  scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9",
                 };
                 const c = chainColors[agent.source_chain] || "#666";
                 return (
@@ -254,6 +255,122 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
           />
         </div>
       </div>
+
+      {/* Score Trajectory + Max Exposure Row */}
+      {(agent.score_trajectory || agent.max_exposure_usd != null) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Score Trajectory */}
+          {agent.score_trajectory && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+              <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" /> Score Trajectory
+              </h3>
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-xs font-mono text-gray-500 block mb-1">7-Day</span>
+                  {agent.score_trajectory.delta_7d != null ? (
+                    <span className={`text-lg font-bold font-mono flex items-center gap-1 ${
+                      agent.score_trajectory.delta_7d > 0 ? "text-emerald-400" :
+                      agent.score_trajectory.delta_7d < 0 ? "text-red-400" : "text-gray-400"
+                    }`}>
+                      {agent.score_trajectory.delta_7d > 0 ? <TrendingUp className="w-4 h-4" /> :
+                       agent.score_trajectory.delta_7d < 0 ? <TrendingDown className="w-4 h-4" /> :
+                       <Minus className="w-4 h-4" />}
+                      {agent.score_trajectory.delta_7d > 0 ? "+" : ""}{agent.score_trajectory.delta_7d.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span className="text-sm font-mono text-gray-600">N/A</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-mono text-gray-500 block mb-1">30-Day</span>
+                  {agent.score_trajectory.delta_30d != null ? (
+                    <span className={`text-lg font-bold font-mono flex items-center gap-1 ${
+                      agent.score_trajectory.delta_30d > 0 ? "text-emerald-400" :
+                      agent.score_trajectory.delta_30d < 0 ? "text-red-400" : "text-gray-400"
+                    }`}>
+                      {agent.score_trajectory.delta_30d > 0 ? <TrendingUp className="w-4 h-4" /> :
+                       agent.score_trajectory.delta_30d < 0 ? <TrendingDown className="w-4 h-4" /> :
+                       <Minus className="w-4 h-4" />}
+                      {agent.score_trajectory.delta_30d > 0 ? "+" : ""}{agent.score_trajectory.delta_30d.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span className="text-sm font-mono text-gray-600">N/A</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-mono text-gray-500 block mb-1">Trend</span>
+                  <span className={`text-sm font-bold font-mono uppercase ${
+                    agent.score_trajectory.trend === "rising" ? "text-emerald-400" :
+                    agent.score_trajectory.trend === "falling" ? "text-red-400" :
+                    agent.score_trajectory.trend === "new" ? "text-cyan-400" : "text-gray-400"
+                  }`}>
+                    {agent.score_trajectory.trend}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Max Exposure */}
+          {agent.max_exposure_usd != null && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+              <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5" /> Max Exposure
+              </h3>
+              <p className="text-2xl font-bold font-mono text-white mb-1">
+                ${agent.max_exposure_usd >= 1000
+                  ? `${(agent.max_exposure_usd / 1000).toFixed(1)}K`
+                  : agent.max_exposure_usd.toFixed(2)}
+              </p>
+              <p className="text-xs text-gray-500 font-mono">
+                Recommended maximum trust value for this agent based on reputation signals, feedback volume, account age, and insurance.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cross-Chain Identity */}
+      {agent.cross_chain_agents && agent.cross_chain_agents.length > 0 && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+            <Link2 className="w-3.5 h-3.5" /> Cross-Chain Identity ({agent.cross_chain_agents.length} linked agents)
+          </h3>
+          <p className="text-xs text-gray-500 font-mono mb-3">
+            Same deployer detected on other chains. Linked reputation across networks.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {agent.cross_chain_agents.map((linked) => {
+              const chainColors: Record<string, string> = {
+                avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
+                polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
+                scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9",
+              };
+              const lc = chainColors[linked.source_chain] || "#666";
+              const lt = getTierColor(linked.tier);
+              return (
+                <a
+                  key={`${linked.agent_id}-${linked.source_chain}`}
+                  href={`/agents/${linked.agent_id}?chain=${linked.source_chain}`}
+                  className="flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg p-2 hover:border-emerald-500/30 transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: lc }} />
+                  <span className="text-xs font-mono text-gray-300 truncate flex-1">
+                    {linked.name || `Agent #${linked.agent_id}`}
+                  </span>
+                  <span className="text-xs font-mono font-bold" style={{ color: lt }}>
+                    {linked.composite_score.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] font-mono uppercase text-gray-500">
+                    {linked.source_chain}
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Deployer History */}
       {agent.deployer_info && (

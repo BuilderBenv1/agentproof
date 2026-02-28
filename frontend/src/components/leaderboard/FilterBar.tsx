@@ -16,6 +16,7 @@ const CHAINS = [
   { value: "gnosis", label: "Gnosis", color: "#3E6957" },
   { value: "mantle", label: "Mantle", color: "#000000" },
   { value: "celo", label: "Celo", color: "#FCFF52" },
+  { value: "monad", label: "Monad", color: "#836EF9" },
 ] as const;
 
 interface FilterBarProps {

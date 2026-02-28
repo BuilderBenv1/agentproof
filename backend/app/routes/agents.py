@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.auth import sanitize_search
 from app.models.agent import AgentResponse, AgentListResponse, AgentProfileResponse
+from app.services.scoring import calculate_max_exposure, calculate_score_trajectory
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -122,6 +124,88 @@ async def get_agent(request: Request, agent_id: int, chain: str | None = None):
     except Exception:
         pass
 
+    # Score trajectory (7d/30d deltas from score_history)
+    score_trajectory = None
+    try:
+        cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=31)).strftime("%Y-%m-%d")
+        history = (
+            db.table("score_history")
+            .select("composite_score, snapshot_date")
+            .eq("agent_id", agent_id)
+            .gte("snapshot_date", cutoff_30d)
+            .order("snapshot_date", desc=False)
+            .execute()
+        )
+        if history.data:
+            now = datetime.now(timezone.utc)
+            target_7d = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+            target_30d = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+            # Find closest snapshot to 7d and 30d ago
+            score_7d = None
+            score_30d = None
+            for h in history.data:
+                if h["snapshot_date"] <= target_7d:
+                    score_7d = float(h["composite_score"])
+                if h["snapshot_date"] <= target_30d:
+                    score_30d = float(h["composite_score"])
+            current = float(agent.get("composite_score", 0))
+            score_trajectory = calculate_score_trajectory(current, score_7d, score_30d)
+    except Exception:
+        pass
+
+    # Max exposure calculation
+    max_exposure_usd = None
+    try:
+        # Check insurance stake
+        insurance_stake = 0.0
+        ins_result = (
+            db.table("insurance_stakes")
+            .select("stake_amount")
+            .eq("agent_id", agent_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if ins_result.data:
+            # Rough AVAX→USD conversion (conservative estimate)
+            insurance_stake = float(ins_result.data[0]["stake_amount"]) * 25.0
+
+        reg_at = agent.get("registered_at", "")
+        age_days = 0
+        if reg_at:
+            reg_dt = datetime.fromisoformat(str(reg_at).replace("Z", "+00:00"))
+            age_days = max(0, (datetime.now(timezone.utc) - reg_dt).days)
+
+        max_exposure_usd = calculate_max_exposure(
+            composite_score=float(agent.get("composite_score", 0)),
+            feedback_count=int(agent.get("total_feedback", 0)),
+            account_age_days=age_days,
+            insurance_stake_usd=insurance_stake,
+            validation_success_rate=float(agent.get("validation_success_rate", 0)),
+        )
+    except Exception:
+        pass
+
+    # Cross-chain identity linking (same deployer on other chains)
+    cross_chain_agents = None
+    try:
+        owner = agent.get("owner_address", "")
+        agent_chain = agent.get("source_chain", "avalanche")
+        if owner:
+            linked = (
+                db.table("agents")
+                .select("agent_id, name, source_chain, composite_score, tier")
+                .eq("owner_address", owner)
+                .neq("source_chain", agent_chain)
+                .order("composite_score", desc=True)
+                .limit(20)
+                .execute()
+            )
+            if linked.data:
+                cross_chain_agents = linked.data
+    except Exception:
+        pass
+
     return AgentProfileResponse(
         **agent,
         feedback_count=feedback_result.count or 0,
@@ -135,6 +219,9 @@ async def get_agent(request: Request, agent_id: int, chain: str | None = None):
         },
         deployer_info=deployer_info,
         uri_changes=uri_changes,
+        score_trajectory=score_trajectory,
+        max_exposure_usd=max_exposure_usd,
+        cross_chain_agents=cross_chain_agents,
     )
 
 

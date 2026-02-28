@@ -61,3 +61,6 @@ class AgentProfileResponse(AgentResponse):
     score_breakdown: Optional[dict] = None
     deployer_info: Optional[dict] = None
     uri_changes: Optional[list] = None
+    score_trajectory: Optional[dict] = None  # {delta_7d, delta_30d, trend}
+    max_exposure_usd: Optional[float] = None  # dollar-denominated trust ceiling
+    cross_chain_agents: Optional[list] = None  # same deployer, other chains

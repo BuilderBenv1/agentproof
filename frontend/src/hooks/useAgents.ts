@@ -45,6 +45,19 @@ export interface Agent {
     tx_hash: string;
     block_number: number;
   }[];
+  score_trajectory?: {
+    delta_7d: number | null;
+    delta_30d: number | null;
+    trend: "rising" | "falling" | "stable" | "new";
+  };
+  max_exposure_usd?: number;
+  cross_chain_agents?: {
+    agent_id: number;
+    name: string | null;
+    source_chain: string;
+    composite_score: number;
+    tier: string;
+  }[];
 }
 
 interface AgentListResult {
