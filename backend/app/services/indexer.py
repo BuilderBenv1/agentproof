@@ -1342,6 +1342,7 @@ EXTRA_CHAINS = [
     {"name": "mantle",   "start_block": 91_333_000,  "block_range": 10000, "env": "MANTLE_RPC_URL"},
     {"name": "celo",     "start_block": 58_396_000,  "block_range": 10000, "env": "CELO_RPC_URL"},
     {"name": "monad",    "start_block": 1,           "block_range": 10000, "env": "MONAD_RPC_URL"},
+    {"name": "abstract", "start_block": 1,           "block_range": 10000, "env": "ABSTRACT_RPC_URL"},
 ]
 
 # Cache RPC URLs so we only read env vars once

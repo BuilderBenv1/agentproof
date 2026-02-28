@@ -145,6 +145,7 @@ export default function DiscoverPage() {
               <option value="mantle">Mantle</option>
               <option value="celo">Celo</option>
               <option value="monad">Monad</option>
+              <option value="abstract">Abstract</option>
             </select>
           </div>
           <div>

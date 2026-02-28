@@ -111,7 +111,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 const chainColors: Record<string, string> = {
                   avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
                   polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
-                  scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9",
+                  scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9", abstract: "#0066FF",
                 };
                 const c = chainColors[agent.source_chain] || "#666";
                 return (
@@ -345,7 +345,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               const chainColors: Record<string, string> = {
                 avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
                 polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
-                scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9",
+                scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9", abstract: "#0066FF",
               };
               const lc = chainColors[linked.source_chain] || "#666";
               const lt = getTierColor(linked.tier);

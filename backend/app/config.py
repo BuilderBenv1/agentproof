@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     mantle_rpc_url: str = ""
     celo_rpc_url: str = ""
     monad_rpc_url: str = ""
+    abstract_rpc_url: str = ""
 
     # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""
