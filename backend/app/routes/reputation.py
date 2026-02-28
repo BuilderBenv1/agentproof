@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/reputation", tags=["reputation"])
 
 
 @router.get("/{agent_id}/summary")
-async def get_reputation_summary(agent_id: int):
+@limiter.limit("60/minute")
+async def get_reputation_summary(request: Request, agent_id: int):
     """Get reputation summary for an agent."""
     db = get_supabase()
 
@@ -50,7 +55,9 @@ async def get_reputation_summary(agent_id: int):
 
 
 @router.get("/{agent_id}/history")
+@limiter.limit("30/minute")
 async def get_reputation_history(
+    request: Request,
     agent_id: int,
     limit: int = Query(30, ge=1, le=365),
 ):
@@ -73,7 +80,8 @@ async def get_reputation_history(
 
 
 @router.get("/deployer/{address}")
-async def get_deployer_reputation(address: str):
+@limiter.limit("30/minute")
+async def get_deployer_reputation(request: Request, address: str):
     """Get deployer reputation and their agents."""
     db = get_supabase()
 
@@ -122,7 +130,9 @@ async def get_deployer_reputation(address: str):
 
 
 @router.get("/{agent_id}/recent-feedback")
+@limiter.limit("60/minute")
 async def get_recent_feedback(
+    request: Request,
     agent_id: int,
     limit: int = Query(10, ge=1, le=50),
 ):

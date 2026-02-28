@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/validation", tags=["validation"])
 
 
 @router.get("/{agent_id}")
+@limiter.limit("60/minute")
 async def get_agent_validations(
+    request: Request,
     agent_id: int,
     status: str | None = Query(None, pattern="^(pending|completed|all)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get validations for an agent with optional status filter."""
@@ -41,7 +47,8 @@ async def get_agent_validations(
 
 
 @router.get("/{agent_id}/stats")
-async def get_validation_stats(agent_id: int):
+@limiter.limit("30/minute")
+async def get_validation_stats(request: Request, agent_id: int):
     """Get validation statistics for an agent."""
     db = get_supabase()
 

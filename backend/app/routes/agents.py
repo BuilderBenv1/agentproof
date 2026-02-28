@@ -1,20 +1,27 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
+from app.auth import sanitize_search
 from app.models.agent import AgentResponse, AgentListResponse, AgentProfileResponse
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
 @router.get("", response_model=AgentListResponse)
+@limiter.limit("60/minute")
 async def list_agents(
-    category: str | None = None,
-    chain: str | None = None,
-    search: str | None = None,
-    tier: str | None = None,
-    address: str | None = Query(None, description="Filter by owner address (exact, case-insensitive)"),
+    request: Request,
+    category: str | None = Query(None, max_length=50),
+    chain: str | None = Query(None, max_length=30),
+    search: str | None = Query(None, max_length=200),
+    tier: str | None = Query(None, max_length=20),
+    address: str | None = Query(None, max_length=42, description="Filter by owner address (exact, case-insensitive)"),
     sort_by: str = Query("composite_score", pattern="^(composite_score|registered_at|total_feedback)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List all agents with filtering, search, and pagination."""
@@ -30,8 +37,9 @@ async def list_agents(
         query = query.eq("tier", tier)
     if address:
         query = query.ilike("owner_address", address)
-    if search:
-        query = query.or_(f"name.ilike.%{search}%,description.ilike.%{search}%,owner_address.ilike.%{search}%")
+    safe_search = sanitize_search(search)
+    if safe_search:
+        query = query.or_(f"name.ilike.%{safe_search}%,description.ilike.%{safe_search}%,owner_address.ilike.%{safe_search}%")
 
     query = query.order(sort_by, desc=(order == "desc"))
 
@@ -49,7 +57,8 @@ async def list_agents(
 
 
 @router.get("/{agent_id}", response_model=AgentProfileResponse)
-async def get_agent(agent_id: int, chain: str | None = None):
+@limiter.limit("60/minute")
+async def get_agent(request: Request, agent_id: int, chain: str | None = None):
     """Get full agent profile with reputation details.
 
     When agents share the same agent_id across chains (ERC-8004 CREATE2),
@@ -130,9 +139,11 @@ async def get_agent(agent_id: int, chain: str | None = None):
 
 
 @router.get("/{agent_id}/feedback")
+@limiter.limit("60/minute")
 async def get_agent_feedback(
+    request: Request,
     agent_id: int,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get paginated feedback list for an agent."""
@@ -162,9 +173,11 @@ async def get_agent_feedback(
 
 
 @router.get("/{agent_id}/validations")
+@limiter.limit("60/minute")
 async def get_agent_validations(
+    request: Request,
     agent_id: int,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get paginated validation list for an agent."""
@@ -193,7 +206,8 @@ async def get_agent_validations(
 
 
 @router.get("/{agent_id}/score-history")
-async def get_agent_score_history(agent_id: int):
+@limiter.limit("30/minute")
+async def get_agent_score_history(request: Request, agent_id: int):
     """Get score history (daily snapshots) for an agent."""
     db = get_supabase()
 

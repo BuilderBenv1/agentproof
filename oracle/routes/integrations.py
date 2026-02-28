@@ -7,6 +7,8 @@ Self-serve API key registration, usage dashboard, tier upgrades.
 import hashlib
 import secrets
 import logging
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request, HTTPException
@@ -14,6 +16,31 @@ from pydantic import BaseModel, EmailStr
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
 logger = logging.getLogger(__name__)
+
+# Simple in-memory rate limiter for registration endpoint
+_register_attempts: dict[str, list[float]] = {}
+_register_lock = threading.Lock()
+_REGISTER_LIMIT = 5  # max registrations per IP per hour
+_REGISTER_WINDOW = 3600  # 1 hour
+
+
+def _check_register_rate_limit(client_ip: str) -> bool:
+    """Returns True if the request should be allowed."""
+    now = time.monotonic()
+    with _register_lock:
+        attempts = _register_attempts.get(client_ip, [])
+        # Prune old attempts
+        attempts = [t for t in attempts if now - t < _REGISTER_WINDOW]
+        if len(attempts) >= _REGISTER_LIMIT:
+            _register_attempts[client_ip] = attempts
+            return False
+        attempts.append(now)
+        _register_attempts[client_ip] = attempts
+        # Evict stale IPs periodically
+        if len(_register_attempts) > 10_000:
+            cutoff = now - _REGISTER_WINDOW
+            _register_attempts.clear()
+        return True
 
 
 class RegisterRequest(BaseModel):
@@ -54,11 +81,19 @@ def _require_api_key(request: Request) -> str:
 
 
 @router.post("/register", response_model=RegisterResponse)
-async def register_api_key(body: RegisterRequest):
+async def register_api_key(request: Request, body: RegisterRequest):
     """Register a new API key for protocol integration.
 
     Returns the API key ONCE. Store it securely — it cannot be retrieved later.
     """
+    # Rate limit: 5 registrations per IP per hour
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_register_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many registration attempts. Try again later.",
+        )
+
     from database import get_supabase
     db = get_supabase()
 

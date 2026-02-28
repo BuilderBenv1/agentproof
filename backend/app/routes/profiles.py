@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from app.database import get_supabase
+from app.auth import require_admin
 from app.models.profile import ExtendedProfileResponse, ProfileUpdate, PortfolioItem, RevenueMonth
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
 
 @router.get("/{agent_id}")
-async def get_profile(agent_id: int):
+@limiter.limit("60/minute")
+async def get_profile(request: Request, agent_id: int):
     """Get extended agent profile."""
     db = get_supabase()
 
@@ -28,7 +34,7 @@ async def get_profile(agent_id: int):
     return ExtendedProfileResponse(**result.data[0])
 
 
-@router.put("/{agent_id}")
+@router.put("/{agent_id}", dependencies=[Depends(require_admin)])
 async def update_profile(agent_id: int, update: ProfileUpdate):
     """Update extended profile for an agent."""
     db = get_supabase()
@@ -57,9 +63,11 @@ async def update_profile(agent_id: int, update: ProfileUpdate):
 
 
 @router.get("/{agent_id}/portfolio")
+@limiter.limit("30/minute")
 async def get_portfolio(
+    request: Request,
     agent_id: int,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get task history with reviews for an agent."""
@@ -107,7 +115,8 @@ async def get_portfolio(
 
 
 @router.get("/{agent_id}/revenue")
-async def get_revenue(agent_id: int):
+@limiter.limit("30/minute")
+async def get_revenue(request: Request, agent_id: int):
     """Get revenue breakdown by month."""
     db = get_supabase()
 

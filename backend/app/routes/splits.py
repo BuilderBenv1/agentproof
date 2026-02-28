@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.models.splits import SplitResponse, SplitPaymentResponse, SplitStatsResponse
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/splits", tags=["splits"])
 
 
 @router.get("/")
+@limiter.limit("60/minute")
 async def get_splits(
+    request: Request,
     agent_id: int = Query(None),
     active_only: bool = Query(True),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List revenue splits, optionally filtered by agent."""
@@ -37,7 +43,8 @@ async def get_splits(
 
 
 @router.get("/{split_id}")
-async def get_split(split_id: int):
+@limiter.limit("60/minute")
+async def get_split(request: Request, split_id: int):
     """Get split detail with participant agent profiles."""
     db = get_supabase()
 
@@ -62,9 +69,11 @@ async def get_split(split_id: int):
 
 
 @router.get("/{split_id}/payments")
+@limiter.limit("30/minute")
 async def get_split_payments(
+    request: Request,
     split_id: int,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get payment history for a split."""
@@ -89,7 +98,8 @@ async def get_split_payments(
 
 
 @router.get("/agent/{agent_id}")
-async def get_agent_splits(agent_id: int):
+@limiter.limit("60/minute")
+async def get_agent_splits(request: Request, agent_id: int):
     """Get all splits for an agent with total revenue."""
     db = get_supabase()
 
@@ -133,7 +143,8 @@ async def get_agent_splits(agent_id: int):
 
 
 @router.get("/stats/overview", response_model=SplitStatsResponse)
-async def get_split_stats():
+@limiter.limit("20/minute")
+async def get_split_stats(request: Request):
     """Get global split statistics."""
     db = get_supabase()
 

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from app.database import get_supabase
+from app.auth import require_admin, sanitize_search, sanitize_ilike
 from app.models.marketplace import (
     ListingResponse,
     ListingCreate,
@@ -12,13 +13,18 @@ from app.models.marketplace import (
 )
 from app.services.audit import log_audit_event
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
 
 
 # ─── Stats (defined first to avoid any path-parameter shadowing) ─────
 
 @router.get("/stats")
-async def get_marketplace_stats():
+@limiter.limit("20/minute")
+async def get_marketplace_stats(request: Request):
     """Get marketplace overview statistics."""
     db = get_supabase()
 
@@ -46,14 +52,16 @@ async def get_marketplace_stats():
 # ─── Listings ────────────────────────────────────────────
 
 @router.get("/listings")
+@limiter.limit("60/minute")
 async def get_listings(
-    skill: str = Query(None),
-    min_tier: str = Query(None),
+    request: Request,
+    skill: str = Query(None, max_length=100),
+    min_tier: str = Query(None, max_length=20),
     max_price: float = Query(None),
     sort: str = Query("created_at", pattern="^(created_at|price_avax|title)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
-    search: str = Query(None),
+    search: str = Query(None, max_length=200),
 ):
     """Search and filter marketplace listings."""
     db = get_supabase()
@@ -84,7 +92,8 @@ async def get_listings(
 
 
 @router.get("/listings/{listing_id}")
-async def get_listing(listing_id: int):
+@limiter.limit("60/minute")
+async def get_listing(request: Request, listing_id: int):
     """Get full listing details with agent profile."""
     db = get_supabase()
 
@@ -104,7 +113,7 @@ async def get_listing(listing_id: int):
     }
 
 
-@router.post("/listings")
+@router.post("/listings", dependencies=[Depends(require_admin)])
 async def create_listing(listing: ListingCreate):
     """Create a new marketplace listing."""
     db = get_supabase()
@@ -126,7 +135,7 @@ async def create_listing(listing: ListingCreate):
     return ListingResponse(**result.data[0])
 
 
-@router.put("/listings/{listing_id}")
+@router.put("/listings/{listing_id}", dependencies=[Depends(require_admin)])
 async def update_listing(listing_id: int, update: ListingUpdate):
     """Update a listing."""
     db = get_supabase()
@@ -148,7 +157,7 @@ async def update_listing(listing_id: int, update: ListingUpdate):
     return ListingResponse(**result.data[0])
 
 
-@router.delete("/listings/{listing_id}")
+@router.delete("/listings/{listing_id}", dependencies=[Depends(require_admin)])
 async def deactivate_listing(listing_id: int):
     """Deactivate a listing."""
     db = get_supabase()
@@ -168,7 +177,7 @@ async def deactivate_listing(listing_id: int):
 
 # ─── Tasks ───────────────────────────────────────────────
 
-@router.post("/tasks")
+@router.post("/tasks", dependencies=[Depends(require_admin)])
 async def create_task(task: TaskCreate):
     """Create a marketplace task (hire agent)."""
     db = get_supabase()
@@ -193,11 +202,13 @@ async def create_task(task: TaskCreate):
 
 
 @router.get("/tasks")
+@limiter.limit("60/minute")
 async def get_tasks(
+    request: Request,
     agent_id: int = Query(None),
-    client_address: str = Query(None),
-    status: str = Query(None),
-    page: int = Query(1, ge=1),
+    client_address: str = Query(None, max_length=42),
+    status: str = Query(None, max_length=20),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List tasks with optional filters."""
@@ -227,7 +238,8 @@ async def get_tasks(
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(task_id: str):
+@limiter.limit("60/minute")
+async def get_task(request: Request, task_id: str):
     """Get task details."""
     db = get_supabase()
 
@@ -254,7 +266,7 @@ async def get_task(task_id: str):
     }
 
 
-@router.put("/tasks/{task_id}/accept")
+@router.put("/tasks/{task_id}/accept", dependencies=[Depends(require_admin)])
 async def accept_task(task_id: str):
     """Agent accepts a task."""
     db = get_supabase()
@@ -281,7 +293,7 @@ async def accept_task(task_id: str):
     return TaskResponse(**task)
 
 
-@router.put("/tasks/{task_id}/complete")
+@router.put("/tasks/{task_id}/complete", dependencies=[Depends(require_admin)])
 async def complete_task(task_id: str, deliverables_uri: str = Query(None)):
     """Agent marks task as completed."""
     db = get_supabase()
@@ -312,7 +324,7 @@ async def complete_task(task_id: str, deliverables_uri: str = Query(None)):
     return TaskResponse(**task)
 
 
-@router.put("/tasks/{task_id}/cancel")
+@router.put("/tasks/{task_id}/cancel", dependencies=[Depends(require_admin)])
 async def cancel_task(task_id: str):
     """Cancel a task."""
     db = get_supabase()
@@ -333,7 +345,7 @@ async def cancel_task(task_id: str):
 
 # ─── Reviews ─────────────────────────────────────────────
 
-@router.post("/tasks/{task_id}/review")
+@router.post("/tasks/{task_id}/review", dependencies=[Depends(require_admin)])
 async def submit_review(task_id: str, review: ReviewCreate):
     """Submit a review for a completed task."""
     db = get_supabase()
@@ -463,7 +475,7 @@ REAL_AGENT_LISTINGS = [
 ]
 
 
-@router.post("/admin/reseed")
+@router.post("/admin/reseed", dependencies=[Depends(require_admin)])
 async def reseed_with_real_agents():
     """Replace seed marketplace data with real AgentProof agent listings."""
     db = get_supabase()

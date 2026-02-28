@@ -1,19 +1,25 @@
 import csv
 import io
 import json
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.database import get_supabase
 from app.models.audit import AuditLogResponse, TaskEventResponse, AuditSummaryResponse
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
 
 @router.get("/{agent_id}")
+@limiter.limit("30/minute")
 async def get_audit_log(
+    request: Request,
     agent_id: int,
-    action: str = Query(None),
-    page: int = Query(1, ge=1),
+    action: str = Query(None, max_length=50),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=200),
 ):
     """Get paginated audit log for an agent."""
@@ -44,7 +50,9 @@ async def get_audit_log(
 
 
 @router.get("/{agent_id}/export")
+@limiter.limit("10/minute")
 async def export_audit_log(
+    request: Request,
     agent_id: int,
     format: str = Query("csv", pattern="^(csv|json)$"),
 ):
@@ -93,7 +101,8 @@ async def export_audit_log(
 
 
 @router.get("/{agent_id}/summary", response_model=AuditSummaryResponse)
-async def get_audit_summary(agent_id: int):
+@limiter.limit("30/minute")
+async def get_audit_summary(request: Request, agent_id: int):
     """Get audit log summary for an agent."""
     db = get_supabase()
 
@@ -127,7 +136,8 @@ async def get_audit_summary(agent_id: int):
 
 
 @router.get("/task/{task_id}")
-async def get_task_events(task_id: str):
+@limiter.limit("30/minute")
+async def get_task_events(request: Request, task_id: str):
     """Get event timeline for a task."""
     db = get_supabase()
 

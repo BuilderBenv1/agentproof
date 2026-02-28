@@ -2,9 +2,13 @@ import hashlib
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from app.database import get_supabase
 from app.services.blockchain import get_blockchain_service
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -124,7 +128,8 @@ def _compute_overview() -> dict:
 
 
 @router.get("/overview")
-async def get_overview():
+@limiter.limit("30/minute")
+async def get_overview(request: Request):
     """Get aggregate analytics overview. Cached 5 min, stale-while-revalidate."""
     global _overview_cache, _overview_cache_ts, _refreshing
     now = time.time()
@@ -157,7 +162,9 @@ async def get_overview():
 
 
 @router.get("/trends")
+@limiter.limit("20/minute")
 async def get_trends(
+    request: Request,
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
 ):
     """Get registration, feedback, and validation rates over time."""
@@ -213,7 +220,8 @@ async def get_trends(
 
 
 @router.get("/categories")
-async def get_categories():
+@limiter.limit("30/minute")
+async def get_categories(request: Request):
     """List all categories with agent counts."""
     db = get_supabase()
 
@@ -249,7 +257,8 @@ async def get_categories():
 
 
 @router.get("/erc8004")
-async def get_erc8004_stats():
+@limiter.limit("20/minute")
+async def get_erc8004_stats(request: Request):
     """Get stats about the official ERC-8004 registries."""
     bc = get_blockchain_service()
     stats = bc.get_erc8004_stats()
@@ -269,7 +278,8 @@ async def get_erc8004_stats():
 
 
 @router.get("/indexer-status")
-async def get_indexer_status():
+@limiter.limit("20/minute")
+async def get_indexer_status(request: Request):
     """Show indexer progress for each chain/contract — how far behind each pointer is."""
     db = get_supabase()
     bc = get_blockchain_service()

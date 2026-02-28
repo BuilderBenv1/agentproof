@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.models.monitoring import (
     EndpointResponse,
@@ -8,11 +8,16 @@ from app.models.monitoring import (
     MonitoringStatsResponse,
 )
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
 
 @router.get("/agent/{agent_id}", response_model=MonitoringOverview)
-async def get_agent_monitoring(agent_id: int):
+@limiter.limit("60/minute")
+async def get_agent_monitoring(request: Request, agent_id: int):
     """Get monitoring overview for an agent."""
     db = get_supabase()
 
@@ -68,7 +73,9 @@ async def get_agent_monitoring(agent_id: int):
 
 
 @router.get("/agent/{agent_id}/history")
+@limiter.limit("30/minute")
 async def get_agent_uptime_history(
+    request: Request,
     agent_id: int,
     days: int = Query(30, ge=1, le=90),
 ):
@@ -92,9 +99,11 @@ async def get_agent_uptime_history(
 
 
 @router.get("/agent/{agent_id}/checks")
+@limiter.limit("30/minute")
 async def get_agent_uptime_checks(
+    request: Request,
     agent_id: int,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=200),
 ):
     """Get raw uptime check records for an agent."""
@@ -120,7 +129,8 @@ async def get_agent_uptime_checks(
 
 
 @router.get("/stats", response_model=MonitoringStatsResponse)
-async def get_monitoring_stats():
+@limiter.limit("20/minute")
+async def get_monitoring_stats(request: Request):
     """Get global monitoring statistics."""
     db = get_supabase()
 

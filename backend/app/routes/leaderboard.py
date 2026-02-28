@@ -1,6 +1,10 @@
 import time
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from app.database import get_supabase
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
@@ -14,12 +18,14 @@ def _cache_key(category, chain, tier, time_range, page, page_size):
 
 
 @router.get("")
+@limiter.limit("60/minute")
 async def get_leaderboard(
-    category: str | None = None,
-    chain: str | None = None,
-    tier: str | None = None,
+    request: Request,
+    category: str | None = Query(None, max_length=50),
+    chain: str | None = Query(None, max_length=30),
+    tier: str | None = Query(None, max_length=20),
     time_range: str = Query("all", pattern="^(all|30d|7d)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=100),
 ):
     """Get the global leaderboard, filterable by category, chain, tier, and time range."""
@@ -90,7 +96,9 @@ async def get_leaderboard(
 
 
 @router.get("/movers")
+@limiter.limit("30/minute")
 async def get_movers(
+    request: Request,
     period: str = Query("7d", pattern="^(7d|30d)$"),
     limit: int = Query(10, ge=1, le=50),
 ):

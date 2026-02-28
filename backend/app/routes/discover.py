@@ -1,19 +1,26 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
+from app.auth import sanitize_search, sanitize_ilike
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
 
 @router.get("/search")
+@limiter.limit("60/minute")
 async def search_agents(
-    q: str | None = None,
-    category: str | None = None,
-    tier: str | None = None,
+    request: Request,
+    q: str | None = Query(None, max_length=200),
+    category: str | None = Query(None, max_length=50),
+    tier: str | None = Query(None, max_length=20),
     min_score: float | None = None,
-    chain: str | None = None,
+    chain: str | None = Query(None, max_length=30),
     has_insurance: bool | None = None,
     sort: str = Query("score", pattern="^(score|newest|most_reviewed|most_earned|relevance)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Full-text search across agents with rich filtering."""
@@ -21,9 +28,10 @@ async def search_agents(
 
     query = db.table("agents").select("*", count="exact")
 
-    if q:
+    safe_q = sanitize_search(q)
+    if safe_q:
         query = query.or_(
-            f"name.ilike.%{q}%,description.ilike.%{q}%,owner_address.ilike.%{q}%,category.ilike.%{q}%"
+            f"name.ilike.%{safe_q}%,description.ilike.%{safe_q}%,owner_address.ilike.%{safe_q}%,category.ilike.%{safe_q}%"
         )
     if category:
         query = query.eq("category", category)
@@ -80,20 +88,23 @@ async def search_agents(
 
 
 @router.get("/skills")
+@limiter.limit("30/minute")
 async def search_by_skill(
-    skill: str = Query(..., min_length=1),
-    page: int = Query(1, ge=1),
+    request: Request,
+    skill: str = Query(..., min_length=1, max_length=100),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Search agents by capability/skill."""
     db = get_supabase()
+    safe_skill = sanitize_ilike(skill) or ""
 
     # Search agent_capabilities table
     offset = (page - 1) * page_size
     caps = (
         db.table("agent_capabilities")
         .select("agent_id", count="exact")
-        .ilike("capability", f"%{skill}%")
+        .ilike("capability", f"%{safe_skill}%")
         .range(offset, offset + page_size - 1)
         .execute()
     )
@@ -121,20 +132,23 @@ async def search_by_skill(
 
 
 @router.get("/endpoints")
+@limiter.limit("30/minute")
 async def search_by_endpoint(
-    type: str = Query(..., min_length=1),
-    version: str | None = None,
-    page: int = Query(1, ge=1),
+    request: Request,
+    type: str = Query(..., min_length=1, max_length=50),
+    version: str | None = Query(None, max_length=20),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Search agents by endpoint type (A2A, MCP, REST, etc.)."""
     db = get_supabase()
+    safe_type = sanitize_ilike(type) or ""
 
     offset = (page - 1) * page_size
     query = (
         db.table("agent_endpoints")
         .select("agent_id", count="exact")
-        .ilike("endpoint_type", f"%{type}%")
+        .ilike("endpoint_type", f"%{safe_type}%")
     )
 
     if version:
@@ -166,7 +180,8 @@ async def search_by_endpoint(
 
 
 @router.get("/similar/{agent_id}")
-async def get_similar_agents(agent_id: int, limit: int = Query(5, ge=1, le=20)):
+@limiter.limit("30/minute")
+async def get_similar_agents(request: Request, agent_id: int, limit: int = Query(5, ge=1, le=20)):
     """Find similar agents based on category, skills, and score range."""
     db = get_supabase()
 
@@ -216,7 +231,9 @@ async def get_similar_agents(agent_id: int, limit: int = Query(5, ge=1, le=20)):
 
 
 @router.get("/trending")
+@limiter.limit("30/minute")
 async def get_trending(
+    request: Request,
     period: str = Query("7d", pattern="^(7d|30d)$"),
     limit: int = Query(10, ge=1, le=50),
 ):
@@ -271,7 +288,8 @@ async def get_trending(
 
 
 @router.get("/new")
-async def get_new_agents(limit: int = Query(20, ge=1, le=50)):
+@limiter.limit("30/minute")
+async def get_new_agents(request: Request, limit: int = Query(20, ge=1, le=50)):
     """Get recently registered agents."""
     db = get_supabase()
 
@@ -287,7 +305,8 @@ async def get_new_agents(limit: int = Query(20, ge=1, le=50)):
 
 
 @router.get("/compare")
-async def compare_agents(agents: str = Query(..., description="Comma-separated agent IDs")):
+@limiter.limit("20/minute")
+async def compare_agents(request: Request, agents: str = Query(..., max_length=100, description="Comma-separated agent IDs")):
     """Side-by-side comparison of 2-5 agents."""
     try:
         agent_ids = [int(x.strip()) for x in agents.split(",")]
@@ -351,7 +370,8 @@ async def compare_agents(agents: str = Query(..., description="Comma-separated a
 
 
 @router.get("/categories/stats")
-async def get_category_stats():
+@limiter.limit("20/minute")
+async def get_category_stats(request: Request):
     """Get agent statistics grouped by category."""
     db = get_supabase()
 
@@ -404,10 +424,12 @@ async def get_category_stats():
 
 
 @router.get("/export")
+@limiter.limit("10/minute")
 async def export_agents(
+    request: Request,
     format: str = Query("json", pattern="^(json|csv)$"),
-    category: str | None = None,
-    tier: str | None = None,
+    category: str | None = Query(None, max_length=50),
+    tier: str | None = Query(None, max_length=20),
 ):
     """Export agent data in JSON or CSV format."""
     db = get_supabase()

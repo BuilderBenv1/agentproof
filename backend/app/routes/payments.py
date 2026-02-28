@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.models.payment import PaymentResponse, PaymentStatsResponse
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 
 @router.get("/agent/{agent_id}")
+@limiter.limit("60/minute")
 async def get_agent_payments(
+    request: Request,
     agent_id: int,
     direction: str = Query("all", pattern="^(all|sent|received)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """Get payment history for an agent."""
@@ -60,7 +66,8 @@ async def get_agent_payments(
 
 
 @router.get("/{payment_id}")
-async def get_payment(payment_id: int):
+@limiter.limit("60/minute")
+async def get_payment(request: Request, payment_id: int):
     """Get payment details by ID."""
     db = get_supabase()
 
@@ -78,7 +85,8 @@ async def get_payment(payment_id: int):
 
 
 @router.get("/stats/overview", response_model=PaymentStatsResponse)
-async def get_payment_stats():
+@limiter.limit("20/minute")
+async def get_payment_stats(request: Request):
     """Get aggregate payment statistics."""
     db = get_supabase()
 

@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
     cors_origins: str = "http://localhost:3000"
+    admin_api_key: str = ""  # Required for write/admin endpoints
 
     @property
     def cors_origins_list(self) -> list[str]:

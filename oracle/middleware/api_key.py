@@ -119,11 +119,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 _cache_key(key_hash, key_row)
             except Exception as e:
                 logger.error("API key validation failed: %s", e)
-                # Fail open: allow request but don't track
-                request.state.api_key_id = None
-                request.state.tier = None
-                request.state.protocol_name = None
-                return await call_next(request)
+                # Fail CLOSED: reject request when we can't validate
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "Authentication service temporarily unavailable"},
+                )
 
         if not key_row.get("is_active", False):
             return JSONResponse(

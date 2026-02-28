@@ -298,11 +298,51 @@ IPFS_GATEWAYS = [
 ]
 
 
+def _is_safe_url(url: str) -> bool:
+    """Check that a URL doesn't point to internal/private networks (SSRF protection)."""
+    import ipaddress
+    from urllib.parse import urlparse
+    import socket
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Block non-http(s) schemes
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        # Block common internal hostnames
+        blocked_hosts = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "metadata.google.internal", "169.254.169.254"}
+        if hostname.lower() in blocked_hosts:
+            return False
+
+        # Resolve hostname and check if IP is private/reserved
+        try:
+            addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for _, _, _, _, sockaddr in addrs:
+                ip = ipaddress.ip_address(sockaddr[0])
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return False
+        except socket.gaierror:
+            return False
+
+        return True
+    except Exception:
+        return False
+
+
+_MAX_RESPONSE_SIZE = 1_048_576  # 1 MB max for metadata responses
+
+
 def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
     """Resolve an agent URI to JSON metadata.
 
     Supports data: URIs (base64 JSON), https:// URLs, ipfs:// URIs,
     and raw IPFS CIDs.  Returns parsed JSON dict or None on failure.
+    Includes SSRF protection: blocks private/internal IPs and limits response size.
     """
     if not uri:
         return None
@@ -314,11 +354,15 @@ def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
             # Format: data:application/json;base64,<payload>
             if ";base64," in uri:
                 payload = uri.split(";base64,", 1)[1]
+                if len(payload) > _MAX_RESPONSE_SIZE:
+                    return None
                 decoded = b64.b64decode(payload).decode("utf-8")
                 return json.loads(decoded)
             # Format: data:application/json,<json>
             elif "," in uri:
                 payload = uri.split(",", 1)[1]
+                if len(payload) > _MAX_RESPONSE_SIZE:
+                    return None
                 return json.loads(payload)
         except Exception:
             return None
@@ -334,13 +378,30 @@ def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
         # Bare CID
         urls_to_try.extend(gw + uri for gw in IPFS_GATEWAYS)
     else:
-        # Unknown format — try as-is
-        urls_to_try.append(uri)
+        # Unknown scheme — reject (SSRF protection)
+        return None
 
     for url in urls_to_try:
         try:
-            resp = client.get(url, timeout=10, follow_redirects=True)
+            # SSRF protection: validate URL doesn't target internal networks
+            if not _is_safe_url(url):
+                logger.warning("Blocked SSRF attempt: %s", url[:200])
+                continue
+
+            resp = client.get(url, timeout=10, follow_redirects=False)
+
+            # Handle redirects manually with SSRF check
+            if resp.status_code in (301, 302, 307, 308):
+                redirect_url = resp.headers.get("location", "")
+                if not redirect_url or not _is_safe_url(redirect_url):
+                    continue
+                resp = client.get(redirect_url, timeout=10, follow_redirects=False)
+
             if resp.status_code == 200:
+                # Enforce response size limit
+                if len(resp.content) > _MAX_RESPONSE_SIZE:
+                    continue
+
                 ct = resp.headers.get("content-type", "")
                 if "json" in ct or resp.text.strip().startswith("{"):
                     return resp.json()

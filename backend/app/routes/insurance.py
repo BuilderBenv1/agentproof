@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.models.insurance import InsuranceStakeResponse, InsuranceClaimResponse, InsuranceStatsResponse
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/api/insurance", tags=["insurance"])
 
 
 @router.get("/agent/{agent_id}")
-async def get_agent_insurance(agent_id: int):
+@limiter.limit("60/minute")
+async def get_agent_insurance(request: Request, agent_id: int):
     """Get insurance stake status and claims history for an agent."""
     db = get_supabase()
 
@@ -44,10 +49,12 @@ async def get_agent_insurance(agent_id: int):
 
 
 @router.get("/claims")
+@limiter.limit("30/minute")
 async def list_claims(
-    status: str | None = None,
+    request: Request,
+    status: str | None = Query(None, max_length=20),
     agent_id: int | None = None,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List all insurance claims with optional filtering."""
@@ -76,7 +83,8 @@ async def list_claims(
 
 
 @router.get("/stats", response_model=InsuranceStatsResponse)
-async def get_insurance_stats():
+@limiter.limit("20/minute")
+async def get_insurance_stats(request: Request):
     """Get aggregate insurance statistics."""
     db = get_supabase()
 
