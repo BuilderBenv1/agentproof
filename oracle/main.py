@@ -75,10 +75,10 @@ async def lifespan(app: FastAPI):
     # Warm the trust cache so first API calls are instant
     try:
         from services.trust import warm_cache
-        warmed = await asyncio.wait_for(asyncio.to_thread(warm_cache), timeout=60)
+        warmed = await asyncio.wait_for(asyncio.to_thread(warm_cache), timeout=20)
         logger.info(f"Cache warm complete — {warmed} agents pre-loaded")
     except asyncio.TimeoutError:
-        logger.warning("Cache warm timed out after 60s — will warm on demand")
+        logger.warning("Cache warm timed out after 20s — will warm on demand")
     except Exception as e:
         logger.warning(f"Cache warm failed: {e}")
 
