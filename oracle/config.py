@@ -54,6 +54,8 @@ class OracleSettings(BaseSettings):
     gnosis_rpc_url: str = ""
     mantle_rpc_url: str = ""
     celo_rpc_url: str = ""
+    monad_rpc_url: str = ""
+    abstract_rpc_url: str = ""
 
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
