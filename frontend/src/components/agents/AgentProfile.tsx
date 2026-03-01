@@ -326,6 +326,24 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               <p className="text-xs text-gray-500 font-mono">
                 Recommended maximum trust value for this agent based on reputation signals, feedback volume, account age, and insurance.
               </p>
+              {(agent.coverage_tier || agent.insurable != null) && (
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-800">
+                  {agent.coverage_tier && agent.coverage_tier !== "none" && (
+                    <span className="text-xs font-mono px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+                      Coverage: {agent.coverage_tier}
+                    </span>
+                  )}
+                  {agent.insurable != null && (
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
+                      agent.insurable
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : "border-gray-700 bg-gray-800 text-gray-500"
+                    }`}>
+                      {agent.insurable ? "Insurable" : "Not Insurable"}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -369,6 +387,107 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Agent Capabilities (ERC-8004 Identity Tags) */}
+      {(agent.autonomy_level || agent.financial_access || agent.data_access_level ||
+        agent.open_source != null || agent.human_in_loop != null ||
+        (agent.audited_by && agent.audited_by.length > 0) ||
+        (agent.supported_protocols && agent.supported_protocols.length > 0) ||
+        agent.owner_type || agent.upgrade_pattern) && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5" /> Agent Capabilities
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {agent.autonomy_level && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300 capitalize">
+                {agent.autonomy_level.replace("_", " ")}
+              </span>
+            )}
+            {agent.financial_access && (
+              <span className={`text-xs font-mono px-2 py-1 rounded border ${
+                agent.financial_access === "unlimited" ? "border-red-500/30 bg-red-500/10 text-red-400" :
+                agent.financial_access === "write" ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-400" :
+                "border-gray-700 bg-gray-800 text-gray-300"
+              }`}>
+                Financial: {agent.financial_access}
+              </span>
+            )}
+            {agent.data_access_level && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+                Data: {agent.data_access_level}
+              </span>
+            )}
+            {agent.owner_type && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300 uppercase">
+                {agent.owner_type}
+              </span>
+            )}
+            {agent.upgrade_pattern && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+                {agent.upgrade_pattern.replace("_", " ")}
+              </span>
+            )}
+            {agent.open_source && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+                Open Source
+              </span>
+            )}
+            {agent.human_in_loop && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-blue-500/30 bg-blue-500/10 text-blue-400">
+                Human Override
+              </span>
+            )}
+            {agent.audited_by && agent.audited_by.length > 0 && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+                Audited ({agent.audited_by.join(", ")})
+              </span>
+            )}
+            {agent.can_delegate && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+                Can Delegate
+              </span>
+            )}
+            {agent.can_be_delegated && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+                Accepts Delegation
+              </span>
+            )}
+          </div>
+          {agent.supported_protocols && agent.supported_protocols.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-800">
+              <span className="text-[10px] font-mono text-gray-600 uppercase">Protocols: </span>
+              {agent.supported_protocols.map((p) => (
+                <span key={p} className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 mr-1 uppercase">
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+          {(agent.jurisdiction || (agent.compliance_tags && agent.compliance_tags.length > 0)) && (
+            <div className="mt-3 pt-3 border-t border-gray-800 flex flex-wrap gap-2">
+              {agent.jurisdiction && (
+                <span className="text-xs font-mono px-2 py-0.5 rounded border border-gray-700 bg-gray-800 text-gray-400">
+                  {agent.jurisdiction}
+                </span>
+              )}
+              {agent.compliance_tags?.map((tag) => (
+                <span key={tag} className="text-xs font-mono px-2 py-0.5 rounded border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 uppercase">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+          {agent.source_url && (
+            <div className="mt-3 pt-3 border-t border-gray-800">
+              <a href={agent.source_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs font-mono text-emerald-400 hover:underline flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Source Code
+              </a>
+            </div>
+          )}
         </div>
       )}
 

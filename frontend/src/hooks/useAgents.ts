@@ -51,6 +51,8 @@ export interface Agent {
     trend: "rising" | "falling" | "stable" | "new";
   };
   max_exposure_usd?: number;
+  coverage_tier?: string;
+  insurable?: boolean;
   cross_chain_agents?: {
     agent_id: number;
     name: string | null;
@@ -58,6 +60,21 @@ export interface Agent {
     composite_score: number;
     tier: string;
   }[];
+  // ERC-8004 identity tags
+  autonomy_level?: string | null;
+  financial_access?: string | null;
+  data_access_level?: string | null;
+  can_delegate?: boolean | null;
+  can_be_delegated?: boolean | null;
+  supported_protocols?: string[] | null;
+  open_source?: boolean | null;
+  source_url?: string | null;
+  audited_by?: string[] | null;
+  owner_type?: string | null;
+  upgrade_pattern?: string | null;
+  human_in_loop?: boolean | null;
+  jurisdiction?: string | null;
+  compliance_tags?: string[] | null;
 }
 
 interface AgentListResult {

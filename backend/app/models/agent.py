@@ -44,6 +44,21 @@ class AgentResponse(AgentBase):
     deployer_agent_count: Optional[int] = None
     uri_change_count: Optional[int] = None
     freshness_multiplier: Optional[float] = None
+    # ERC-8004 identity tags
+    autonomy_level: Optional[str] = None
+    financial_access: Optional[str] = None
+    data_access_level: Optional[str] = None
+    can_delegate: Optional[bool] = None
+    can_be_delegated: Optional[bool] = None
+    supported_protocols: Optional[list[str]] = None
+    open_source: Optional[bool] = None
+    source_url: Optional[str] = None
+    audited_by: Optional[list[str]] = None
+    owner_type: Optional[str] = None
+    upgrade_pattern: Optional[str] = None
+    human_in_loop: Optional[bool] = None
+    jurisdiction: Optional[str] = None
+    compliance_tags: Optional[list[str]] = None
 
     model_config = {"from_attributes": True}
 
@@ -64,3 +79,5 @@ class AgentProfileResponse(AgentResponse):
     score_trajectory: Optional[dict] = None  # {delta_7d, delta_30d, trend}
     max_exposure_usd: Optional[float] = None  # dollar-denominated trust ceiling
     cross_chain_agents: Optional[list] = None  # same deployer, other chains
+    coverage_tier: Optional[str] = None  # $1K, $10K, $100K, $1M
+    insurable: Optional[bool] = None  # meets minimum thresholds for coverage

@@ -257,3 +257,28 @@ def calculate_score_trajectory(
         "delta_30d": delta_30d,
         "trend": trend,
     }
+
+
+def calculate_coverage_tier(max_exposure_usd: float) -> str:
+    """Map max exposure to a coverage tier band."""
+    if max_exposure_usd >= 100_000:
+        return "$1M"
+    if max_exposure_usd >= 10_000:
+        return "$100K"
+    if max_exposure_usd >= 1_000:
+        return "$10K"
+    if max_exposure_usd > 0:
+        return "$1K"
+    return "none"
+
+
+def is_insurable(
+    composite_score: float,
+    feedback_count: int,
+    account_age_days: int,
+) -> bool:
+    """Whether an agent meets minimum thresholds for insurance coverage.
+
+    Requires: score >= 50, at least 5 reviews, and at least 30 days old.
+    """
+    return composite_score >= 50 and feedback_count >= 5 and account_age_days >= 30

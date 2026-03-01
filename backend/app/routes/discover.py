@@ -19,6 +19,10 @@ async def search_agents(
     min_score: float | None = None,
     chain: str | None = Query(None, max_length=30),
     has_insurance: bool | None = None,
+    open_source: bool | None = None,
+    audited: bool | None = None,
+    autonomy_level: str | None = Query(None, max_length=30),
+    financial_access: str | None = Query(None, max_length=30),
     sort: str = Query("score", pattern="^(score|newest|most_reviewed|most_earned|relevance)$"),
     page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(20, ge=1, le=100),
@@ -41,6 +45,17 @@ async def search_agents(
         query = query.gte("composite_score", min_score)
     if chain:
         query = query.eq("source_chain", chain)
+
+    # ERC-8004 identity tag filters (graceful — no-op if columns don't exist)
+    try:
+        if open_source is not None:
+            query = query.eq("open_source", open_source)
+        if autonomy_level:
+            query = query.eq("autonomy_level", autonomy_level)
+        if financial_access:
+            query = query.eq("financial_access", financial_access)
+    except Exception:
+        pass  # columns may not exist yet
 
     # Sort mapping
     sort_map = {
@@ -77,6 +92,13 @@ async def search_agents(
                 agents = [a for a in agents if a["agent_id"] in insured_ids]
             else:
                 agents = [a for a in agents if a["agent_id"] not in insured_ids]
+
+    # Audited filter — client-side check on audited_by JSONB array
+    if audited is not None:
+        if audited:
+            agents = [a for a in agents if a.get("audited_by") and len(a["audited_by"]) > 0]
+        else:
+            agents = [a for a in agents if not a.get("audited_by")]
 
     return {
         "agents": agents,

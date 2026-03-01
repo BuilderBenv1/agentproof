@@ -476,10 +476,43 @@ def resolve_agent_metadata(chain: str = "base", batch_size: int = 100):
                 update["description"] = description[:2000]
             if image:
                 update["image_url"] = image[:500]
-            if category and category.lower() in (
-                "defi", "gaming", "rwa", "payments", "data", "general",
-            ):
+            from app.tag_constants import (
+                VALID_CATEGORIES, AUTONOMY_LEVELS, FINANCIAL_ACCESS_LEVELS,
+                DATA_ACCESS_LEVELS, OWNER_TYPES, UPGRADE_PATTERNS,
+            )
+            if category and category.lower() in VALID_CATEGORIES:
                 update["category"] = category.lower()
+
+            # ERC-8004 identity tags (optional, extracted from metadata)
+            _enum_fields = {
+                "autonomy_level": AUTONOMY_LEVELS,
+                "financial_access": FINANCIAL_ACCESS_LEVELS,
+                "data_access_level": DATA_ACCESS_LEVELS,
+                "owner_type": OWNER_TYPES,
+                "upgrade_pattern": UPGRADE_PATTERNS,
+            }
+            for field, valid_set in _enum_fields.items():
+                val = metadata.get(field)
+                if val and str(val).lower() in valid_set:
+                    update[field] = str(val).lower()
+
+            _bool_fields = ["can_delegate", "can_be_delegated", "open_source", "human_in_loop"]
+            for field in _bool_fields:
+                val = metadata.get(field)
+                if val is not None:
+                    update[field] = bool(val)
+
+            _str_fields = {"source_url": 500, "jurisdiction": 10}
+            for field, max_len in _str_fields.items():
+                val = metadata.get(field)
+                if val and isinstance(val, str):
+                    update[field] = val[:max_len]
+
+            _list_fields = ["supported_protocols", "audited_by", "compliance_tags"]
+            for field in _list_fields:
+                val = metadata.get(field)
+                if val and isinstance(val, list):
+                    update[field] = [str(v)[:100] for v in val[:20]]
 
             try:
                 db.table("agents").update(update).eq(
@@ -489,7 +522,19 @@ def resolve_agent_metadata(chain: str = "base", batch_size: int = 100):
                 ).execute()
                 resolved += 1
             except Exception as e:
-                logger.warning(f"[URI-RESOLVE-{label}] Failed to update agent #{agent_id}: {e}")
+                # If new columns don't exist yet, retry with only basic fields
+                if "column" in str(e).lower():
+                    basic_update = {k: v for k, v in update.items()
+                                    if k in ("name", "description", "image_url", "category")}
+                    try:
+                        db.table("agents").update(basic_update).eq(
+                            "agent_id", agent_id
+                        ).eq("source_chain", chain).execute()
+                        resolved += 1
+                    except Exception as e2:
+                        logger.warning(f"[URI-RESOLVE-{label}] Failed basic update agent #{agent_id}: {e2}")
+                else:
+                    logger.warning(f"[URI-RESOLVE-{label}] Failed to update agent #{agent_id}: {e}")
 
     logger.info(f"[URI-RESOLVE-{label}] Resolved {resolved}/{len(agents)} agent names")
     return resolved

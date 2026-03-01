@@ -38,5 +38,9 @@ export const CATEGORIES = [
   { slug: "rwa", name: "RWA Agents", icon: "landmark" },
   { slug: "payments", name: "Payment Agents", icon: "credit-card" },
   { slug: "data", name: "Data Agents", icon: "bar-chart-3" },
+  { slug: "security", name: "Security Agents", icon: "shield" },
+  { slug: "infrastructure", name: "Infrastructure Agents", icon: "wrench" },
+  { slug: "social", name: "Social Agents", icon: "users" },
+  { slug: "governance", name: "Governance Agents", icon: "vote" },
   { slug: "general", name: "General Agents", icon: "bot" },
 ] as const;

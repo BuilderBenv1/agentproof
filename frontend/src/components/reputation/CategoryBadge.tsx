@@ -7,6 +7,10 @@ import {
   CreditCard,
   BarChart3,
   Bot,
+  Shield,
+  Wrench,
+  Users,
+  Vote,
 } from "lucide-react";
 
 const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; color: string }> = {
@@ -15,6 +19,10 @@ const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; color: string }
   rwa: { icon: Landmark, color: "text-red-400 bg-red-400/10 border-red-400/20" },
   payments: { icon: CreditCard, color: "text-green-400 bg-green-400/10 border-green-400/20" },
   data: { icon: BarChart3, color: "text-red-300 bg-red-300/10 border-red-300/20" },
+  security: { icon: Shield, color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
+  infrastructure: { icon: Wrench, color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/20" },
+  social: { icon: Users, color: "text-pink-400 bg-pink-400/10 border-pink-400/20" },
+  governance: { icon: Vote, color: "text-indigo-400 bg-indigo-400/10 border-indigo-400/20" },
   general: { icon: Bot, color: "text-gray-400 bg-gray-400/10 border-gray-400/20" },
 };
 

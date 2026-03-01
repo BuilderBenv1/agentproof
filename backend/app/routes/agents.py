@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, HTTPException, Request
 from app.database import get_supabase
 from app.auth import sanitize_search
 from app.models.agent import AgentResponse, AgentListResponse, AgentProfileResponse
-from app.services.scoring import calculate_max_exposure, calculate_score_trajectory
+from app.services.scoring import calculate_max_exposure, calculate_score_trajectory, calculate_coverage_tier, is_insurable
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -155,6 +155,7 @@ async def get_agent(request: Request, agent_id: int, chain: str | None = None):
 
     # Max exposure calculation
     max_exposure_usd = None
+    age_days = 0
     try:
         # Check insurance stake
         insurance_stake = 0.0
@@ -221,6 +222,12 @@ async def get_agent(request: Request, agent_id: int, chain: str | None = None):
         uri_changes=uri_changes,
         score_trajectory=score_trajectory,
         max_exposure_usd=max_exposure_usd,
+        coverage_tier=calculate_coverage_tier(max_exposure_usd) if max_exposure_usd else "none",
+        insurable=is_insurable(
+            composite_score=float(agent.get("composite_score", 0)),
+            feedback_count=int(agent.get("total_feedback", 0)),
+            account_age_days=age_days,
+        ) if age_days else False,
         cross_chain_agents=cross_chain_agents,
     )
 

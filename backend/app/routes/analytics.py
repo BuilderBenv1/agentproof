@@ -72,7 +72,7 @@ def _compute_overview() -> dict:
             futures[f"tier_{tier}"] = pool.submit(_count_query, "agents", "id", "tier", tier)
 
         # Category distribution
-        for cat in ("general", "defi", "gaming", "rwa", "payments", "data"):
+        for cat in ("general", "defi", "gaming", "rwa", "payments", "data", "security", "infrastructure", "social", "governance"):
             futures[f"cat_{cat}"] = pool.submit(_count_query, "agents", "id", "category", cat)
 
         # Chain breakdown
@@ -104,7 +104,7 @@ def _compute_overview() -> dict:
     total_agents = results["total_agents"]
 
     tier_counts = {t: results[f"tier_{t}"] for t in ("diamond", "platinum", "gold", "silver", "bronze", "unranked") if results.get(f"tier_{t}", 0) > 0}
-    category_counts = {c: results[f"cat_{c}"] for c in ("general", "defi", "gaming", "rwa", "payments", "data") if results.get(f"cat_{c}", 0) > 0}
+    category_counts = {c: results[f"cat_{c}"] for c in ("general", "defi", "gaming", "rwa", "payments", "data", "security", "infrastructure", "social", "governance") if results.get(f"cat_{c}", 0) > 0}
     chain_counts = {c: results[f"chain_{c}"] for c in ("avalanche", "ethereum", "base", "linea", "polygon", "arbitrum", "optimism", "bsc", "scroll", "gnosis", "mantle", "celo", "monad", "abstract") if results.get(f"chain_{c}", 0) > 0}
 
     protocol_counts = {

@@ -37,6 +37,8 @@ export default function DiscoverPage() {
   const [trending, setTrending] = useState<TrendingAgent[]>([]);
   const [newAgents, setNewAgents] = useState<Agent[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [openSourceFilter, setOpenSourceFilter] = useState<string>("");
+  const [autonomyFilter, setAutonomyFilter] = useState("");
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,8 @@ export default function DiscoverPage() {
           tier: tier || undefined,
           chain: chain || undefined,
           min_score: minScore || undefined,
+          open_source: openSourceFilter || undefined,
+          autonomy_level: autonomyFilter || undefined,
           sort,
           page,
           page_size: 20,
@@ -60,7 +64,7 @@ export default function DiscoverPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, category, tier, chain, minScore, sort, page]);
+  }, [query, category, tier, chain, minScore, openSourceFilter, autonomyFilter, sort, page]);
 
   useEffect(() => {
     fetchAgents();
@@ -123,7 +127,7 @@ export default function DiscoverPage() {
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-gray-900/30 border border-gray-800 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <div>
             <label className="text-xs font-mono text-gray-500 block mb-1">Chain</label>
             <select
@@ -196,6 +200,31 @@ export default function DiscoverPage() {
               <option value="score">Highest Score</option>
               <option value="newest">Newest</option>
               <option value="most_reviewed">Most Reviewed</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-mono text-gray-500 block mb-1">Open Source</label>
+            <select
+              value={openSourceFilter}
+              onChange={(e) => { setOpenSourceFilter(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white font-mono"
+            >
+              <option value="">Any</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-mono text-gray-500 block mb-1">Autonomy</label>
+            <select
+              value={autonomyFilter}
+              onChange={(e) => { setAutonomyFilter(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white font-mono"
+            >
+              <option value="">Any</option>
+              <option value="supervised">Supervised</option>
+              <option value="semi_autonomous">Semi-Autonomous</option>
+              <option value="autonomous">Autonomous</option>
             </select>
           </div>
         </div>

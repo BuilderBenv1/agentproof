@@ -26,6 +26,18 @@ export default function RegisterForm() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [capInput, setCapInput] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  // ERC-8004 identity tags
+  const [autonomyLevel, setAutonomyLevel] = useState("");
+  const [financialAccess, setFinancialAccess] = useState("");
+  const [dataAccessLevel, setDataAccessLevel] = useState("");
+  const [canDelegate, setCanDelegate] = useState(false);
+  const [canBeDelegated, setCanBeDelegated] = useState(false);
+  const [openSource, setOpenSource] = useState(false);
+  const [humanInLoop, setHumanInLoop] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [ownerType, setOwnerType] = useState("");
+  const [upgradePattern, setUpgradePattern] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Redirect to agent profile after successful registration
   useEffect(() => {
@@ -59,7 +71,7 @@ export default function RegisterForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const metadata = {
+    const metadata: Record<string, unknown> = {
       name,
       description,
       category,
@@ -69,6 +81,17 @@ export default function RegisterForm() {
         ? [{ url: endpointUrl, type: endpointType }]
         : [],
     };
+    // ERC-8004 identity tags (only include if set)
+    if (autonomyLevel) metadata.autonomy_level = autonomyLevel;
+    if (financialAccess) metadata.financial_access = financialAccess;
+    if (dataAccessLevel) metadata.data_access_level = dataAccessLevel;
+    if (canDelegate) metadata.can_delegate = true;
+    if (canBeDelegated) metadata.can_be_delegated = true;
+    if (openSource) metadata.open_source = true;
+    if (humanInLoop) metadata.human_in_loop = true;
+    if (sourceUrl) metadata.source_url = sourceUrl;
+    if (ownerType) metadata.owner_type = ownerType;
+    if (upgradePattern) metadata.upgrade_pattern = upgradePattern;
 
     // For MVP, use a data URI. In production, upload to IPFS first.
     const dataUri = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
@@ -285,6 +308,108 @@ export default function RegisterForm() {
           placeholder="https://..."
           className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-2.5 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50"
         />
+      </div>
+
+      {/* ERC-8004 Identity Tags (Advanced) */}
+      <div className="border border-gray-800 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="w-full flex items-center justify-between px-4 py-3 text-xs font-mono text-gray-400 uppercase hover:text-gray-300 transition-colors"
+        >
+          <span className="flex items-center gap-1.5">
+            <Shield className="w-3 h-3" />
+            Agent Capabilities (Optional)
+          </span>
+          <span>{showAdvanced ? "−" : "+"}</span>
+        </button>
+        {showAdvanced && (
+          <div className="px-4 pb-4 space-y-4 border-t border-gray-800">
+            <div className="grid grid-cols-2 gap-3 pt-3">
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Autonomy Level</label>
+                <select value={autonomyLevel} onChange={(e) => setAutonomyLevel(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                  <option value="">Not specified</option>
+                  <option value="supervised">Supervised</option>
+                  <option value="semi_autonomous">Semi-Autonomous</option>
+                  <option value="autonomous">Autonomous</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Financial Access</label>
+                <select value={financialAccess} onChange={(e) => setFinancialAccess(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                  <option value="">Not specified</option>
+                  <option value="none">None</option>
+                  <option value="read">Read-only</option>
+                  <option value="write">Write (can move funds)</option>
+                  <option value="unlimited">Unlimited</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Data Access</label>
+                <select value={dataAccessLevel} onChange={(e) => setDataAccessLevel(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                  <option value="">Not specified</option>
+                  <option value="none">None</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="sensitive">Sensitive</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Owner Type</label>
+                <select value={ownerType} onChange={(e) => setOwnerType(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                  <option value="">Not specified</option>
+                  <option value="eoa">EOA (Individual)</option>
+                  <option value="multisig">Multisig</option>
+                  <option value="dao">DAO</option>
+                  <option value="protocol">Protocol</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Upgrade Pattern</label>
+                <select value={upgradePattern} onChange={(e) => setUpgradePattern(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white">
+                  <option value="">Not specified</option>
+                  <option value="immutable">Immutable</option>
+                  <option value="proxy">Proxy (Upgradeable)</option>
+                  <option value="uri_mutable">URI Mutable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-500 mb-1">Source Code URL</label>
+                <input type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)}
+                  placeholder="https://github.com/..."
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm font-mono text-white placeholder-gray-600" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 pt-1">
+              <label className="flex items-center gap-2 text-xs font-mono text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={openSource} onChange={(e) => setOpenSource(e.target.checked)}
+                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-500" />
+                Open Source
+              </label>
+              <label className="flex items-center gap-2 text-xs font-mono text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={humanInLoop} onChange={(e) => setHumanInLoop(e.target.checked)}
+                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-500" />
+                Human Override
+              </label>
+              <label className="flex items-center gap-2 text-xs font-mono text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={canDelegate} onChange={(e) => setCanDelegate(e.target.checked)}
+                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-500" />
+                Can Delegate
+              </label>
+              <label className="flex items-center gap-2 text-xs font-mono text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={canBeDelegated} onChange={(e) => setCanBeDelegated(e.target.checked)}
+                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-500" />
+                Accepts Delegation
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Fee Breakdown */}
