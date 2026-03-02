@@ -273,7 +273,7 @@ class _ChainBackend:
 
 
 class ChainService:
-    """Multi-chain feedback service. Routes to Avalanche, Base, or Ethereum automatically."""
+    """Multi-chain feedback service. Routes to Avalanche, Base, Ethereum, or Solana automatically."""
 
     def __init__(self):
         settings = get_settings()
@@ -346,13 +346,30 @@ class ChainService:
         else:
             logger.info("LINEA_RPC_URL not set — Linea feedback disabled")
 
+        # Solana backend (optional — only if SOLANA_RPC_URL is set)
+        self._solana = None
+        solana_key = settings.solana_private_key or settings.private_key
+        if settings.solana_rpc_url and solana_key:
+            try:
+                from services.solana_feedback import SolanaFeedbackBackend
+                self._solana = SolanaFeedbackBackend(
+                    rpc_url=settings.solana_rpc_url,
+                    private_key_hex=solana_key,
+                )
+            except Exception as e:
+                logger.error(f"Solana backend init failed: {e}")
+                self._solana = None
+        else:
+            logger.info("SOLANA_RPC_URL not set — Solana feedback disabled")
+
         self._cached_oracle_agent_id: int | None = None
 
         logger.info(
             f"ChainService initialized — avax={settings.reputation_registry}, "
             f"eth={'enabled' if self._eth else 'disabled'}, "
             f"base={'enabled' if self._base else 'disabled'}, "
-            f"linea={'enabled' if self._linea else 'disabled'}"
+            f"linea={'enabled' if self._linea else 'disabled'}, "
+            f"solana={'enabled' if self._solana else 'disabled'}"
         )
 
     def get_oracle_agent_id(self) -> int | None:
@@ -450,17 +467,26 @@ class ChainService:
             if result is not None:
                 return result
 
-        # Try Ethereum last (expensive gas)
+        # Try Ethereum (expensive gas)
         if self._eth is not None:
             logger.info(
                 f"Agent {agent_id} not on Avalanche/Base/Linea — trying Ethereum"
             )
-            return self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
+            result = self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
+            if result is not None:
+                return result
+
+        # Try Solana last (non-EVM)
+        if self._solana is not None:
+            logger.info(
+                f"Agent {agent_id} not on any EVM chain — trying Solana"
+            )
+            return self._solana.submit_feedback(agent_id, score, comment, tag1, tag2)
 
         return None
 
     def get_agent_onchain_data(self, agent_id: int) -> dict | None:
-        """Read agent owner + URI from chain (tries Avalanche, then Base, then Ethereum)."""
+        """Read agent owner + URI from chain (tries EVM chains, then Solana)."""
         for backend in [self._avax, self._base, self._linea, self._eth]:
             if backend is None:
                 continue
@@ -470,6 +496,17 @@ class ChainService:
                 return {"owner_address": owner, "agent_uri": uri, "chain": backend.chain_name}
             except Exception:
                 continue
+
+        # Try Solana
+        if self._solana is not None:
+            mint_str = self._solana.agent_exists(agent_id)
+            if mint_str:
+                return {
+                    "owner_address": mint_str,
+                    "agent_uri": "",
+                    "chain": "solana",
+                }
+
         logger.warning(f"Agent {agent_id} not found on any chain")
         return None
 

@@ -57,6 +57,20 @@ class OracleSettings(BaseSettings):
     monad_rpc_url: str = ""
     abstract_rpc_url: str = ""
 
+    # Solana (non-EVM)
+    solana_rpc_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("SOLANA_RPC_URL", "SOLANA_RPC"),
+    )
+    solana_private_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SOLANA_PRIVATE_KEY", "SOLANA_PRIVATE_KEY_HEX"),
+        description="Hex-encoded 32-byte Ed25519 seed for Solana signing. "
+        "Falls back to ORACLE_PRIVATE_KEY if not set.",
+    )
+    solana_agent_registry_program: str = "8oo4dC4JvBLwy5tGgiH3WwK4B9PWxL9Z4XjA2jzkQMbQ"
+    solana_atom_engine_program: str = "AToMw53aiPQ8j7iHVb4fGt6nzUNxUhcPc3tbPBZuzVVb"
+
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"
     oracle_agent_description: str = (
@@ -85,6 +99,10 @@ class OracleSettings(BaseSettings):
     linea_oracle_address: str = ""
     score_push_enabled: bool = False
     score_push_min_delta: float = 2.0
+
+    # Cross-oracle verification (multi-oracle consensus)
+    agent402_oracle_wallet: str = ""  # Agent402's wallet address for on-chain reads
+    divergence_threshold: float = 10.0  # points on 0-100 scale
 
     # Self-registration (opt-in)
     self_register: bool = False
