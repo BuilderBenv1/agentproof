@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     monad_rpc_url: str = ""
     abstract_rpc_url: str = ""
 
+    # Solana (non-EVM)
+    solana_rpc_url: str = ""
+    solana_agent_registry_program: str = "8oo4dC4JvBLwy5tGgiH3WwK4B9PWxL9Z4XjA2jzkQMbQ"
+    solana_atom_engine_program: str = "AToMw53aiPQ8j7iHVb4fGt6nzUNxUhcPc3tbPBZuzVVb"
+
     # Official ERC-8004 Registries (Avalanche)
     erc8004_identity_registry: str = ""
     erc8004_reputation_registry: str = ""

@@ -14,6 +14,7 @@ import httpx
 from app.database import get_supabase
 from app.services.blockchain import get_blockchain_service
 from app.services import generic_chain
+from app.services import solana_chain
 from app.services.scoring import (
     calculate_composite_score,
     calculate_std_dev,
@@ -1681,6 +1682,138 @@ def run_indexer_cycle():
 
         except Exception as e:
             logger.error(f"Error processing {chain_name} ERC-8004 events: {e}")
+
+    # --- Solana (non-EVM) ---
+    solana_rpc = os.environ.get("SOLANA_RPC_URL", "")
+    if solana_rpc:
+        try:
+            count = _process_solana_agents(solana_rpc)
+            if count > 0:
+                logger.info(f"Processed {count} Solana agent registrations")
+
+            count = _process_solana_feedback(solana_rpc)
+            if count > 0:
+                logger.info(f"Processed {count} Solana feedback events")
+
+            try:
+                resolved = resolve_agent_metadata(chain="solana", batch_size=200)
+                if resolved > 0:
+                    logger.info(f"Resolved {resolved} Solana agent metadata URIs")
+            except Exception as e:
+                logger.warning(f"Solana URI resolution failed (non-fatal): {e}")
+
+        except Exception as e:
+            logger.error(f"Error processing Solana events: {e}")
+
+
+def _process_solana_agents(rpc_url: str) -> int:
+    """Index new Solana agent registrations."""
+    db = get_supabase()
+    contract_name = "solana_agent_registry"
+    last_slot = get_last_processed_block(contract_name, default_start=0)
+
+    if last_slot == 0:
+        # First run — backfill via getProgramAccounts snapshot
+        logger.info("Solana: first run — performing full agent snapshot")
+        agents = solana_chain.snapshot_all_agents(rpc_url)
+        if not agents:
+            # Store current slot so next run uses incremental mode
+            current = solana_chain.get_current_slot(rpc_url)
+            update_last_processed_block(contract_name, current)
+            return 0
+        current = solana_chain.get_current_slot(rpc_url)
+        new_slot = current
+    else:
+        agents, new_slot = solana_chain.fetch_new_registrations(
+            rpc_url, solana_chain.AGENT_REGISTRY_PROGRAM, last_slot
+        )
+        if not agents:
+            return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for agent in agents:
+        # Try to get block time for the slot
+        try:
+            registered_at = solana_chain.get_block_time(rpc_url, agent.slot).isoformat() if agent.slot > 0 else now
+        except Exception:
+            registered_at = now
+
+        rows.append({
+            "agent_id": agent.agent_id,
+            "owner_address": agent.owner,
+            "agent_uri": agent.agent_uri,
+            "name": agent.nft_name or None,
+            "source_chain": "solana",
+            "registered_at": registered_at,
+            "updated_at": now,
+        })
+
+    try:
+        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
+        logger.info(f"[solana] Batch upserted {len(rows)} agents")
+    except Exception as e:
+        logger.error(f"[solana] Batch upsert failed ({len(rows)} rows): {e}")
+        for i in range(0, len(rows), 50):
+            batch = rows[i:i + 50]
+            try:
+                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
+            except Exception as e2:
+                logger.error(f"[solana] Sub-batch upsert failed: {e2}")
+
+    update_last_processed_block(contract_name, new_slot)
+    return len(rows)
+
+
+def _process_solana_feedback(rpc_url: str) -> int:
+    """Index new Solana ATOM Engine feedback."""
+    db = get_supabase()
+    contract_name = "solana_atom_feedback"
+    last_slot = get_last_processed_block(contract_name, default_start=0)
+
+    if last_slot == 0:
+        # First run — just set the current slot, don't backfill all feedback
+        current = solana_chain.get_current_slot(rpc_url)
+        update_last_processed_block(contract_name, current)
+        logger.info(f"Solana feedback: initialized at slot {current}")
+        return 0
+
+    feedback_list, new_slot = solana_chain.fetch_new_feedback(
+        rpc_url, solana_chain.ATOM_ENGINE_PROGRAM, last_slot
+    )
+    if not feedback_list:
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for fb in feedback_list:
+        if fb.is_revoked:
+            continue
+
+        agent_id = solana_chain.mint_to_agent_id(fb.agent_mint)
+        rows.append({
+            "agent_id": agent_id,
+            "reviewer_address": fb.reviewer,
+            "rating": fb.score,
+            "feedback_uri": None,
+            "task_hash": None,
+            "tag1": None,
+            "tag2": None,
+            "tx_hash": fb.tx_signature,
+            "block_number": fb.slot,
+            "source_chain": "solana",
+            "created_at": now,
+        })
+
+    if rows:
+        try:
+            db.table("reputation_events").upsert(rows, on_conflict="tx_hash").execute()
+            logger.info(f"[solana] Upserted {len(rows)} feedback events")
+        except Exception as e:
+            logger.error(f"[solana] Feedback upsert failed: {e}")
+
+    update_last_processed_block(contract_name, new_slot)
+    return len(rows)
 
 
 def run_scoring_cycle():

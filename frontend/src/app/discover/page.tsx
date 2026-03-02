@@ -150,6 +150,7 @@ export default function DiscoverPage() {
               <option value="celo">Celo</option>
               <option value="monad">Monad</option>
               <option value="abstract">Abstract</option>
+              <option value="solana">Solana</option>
             </select>
           </div>
           <div>
