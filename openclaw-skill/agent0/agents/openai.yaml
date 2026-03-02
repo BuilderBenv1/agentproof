@@ -1,0 +1,15 @@
+interface:
+  display_name: "Agent0 SDK Integration"
+  short_description: "Implement and troubleshoot agent0 SDK integrations (TypeScript and Python)"
+  default_prompt: "Use $agent0 to integrate registration, search, and feedback flows with agent0 SDKs."
+  triggers:
+    - "agent0"
+    - "agent0-sdk"
+    - "agent0-ts"
+    - "agent0-py"
+    - "agent registration"
+    - "register agent"
+    - "search agents"
+    - "give feedback"
+    - "agent discovery"
+  fallback_behavior: "If unsure about TypeScript vs Python, ask the user which SDK they are using. If the question is about spec semantics rather than implementation, suggest the 8004 skill."

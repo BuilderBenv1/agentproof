@@ -1,0 +1,15 @@
+interface:
+  display_name: "ERC-8004 Standard"
+  short_description: "Answer ERC-8004 spec, registry, and architecture questions"
+  default_prompt: "Use $8004 to explain ERC-8004 semantics, registries, and flows."
+  triggers:
+    - "ERC-8004"
+    - "EIP-8004"
+    - "trustless agents"
+    - "agent registry"
+    - "identity registry"
+    - "reputation registry"
+    - "validation registry"
+    - "agent identity"
+    - "agent reputation"
+  fallback_behavior: "If unsure whether a question is about the spec or implementation, ask whether the user wants spec semantics or SDK integration guidance."
