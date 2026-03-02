@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Trophy, Users, BarChart3, TrendingUp, Shield } from "lucide-react";
 import LeaderboardTable from "@/components/leaderboard/LeaderboardTable";
 import FilterBar from "@/components/leaderboard/FilterBar";
@@ -34,10 +35,11 @@ interface OverviewData {
 const TIER_ORDER = ["diamond", "platinum", "gold", "silver", "bronze", "unranked"] as const;
 
 export default function LeaderboardPage() {
-  const [category, setCategory] = useState("");
-  const [chain, setChain] = useState("");
-  const [timeRange, setTimeRange] = useState("all");
-  const [tierFilter, setTierFilter] = useState("");
+  const searchParams = useSearchParams();
+  const [category, setCategory] = useState(searchParams.get("category") || "");
+  const [chain, setChain] = useState(searchParams.get("chain") || "");
+  const [timeRange, setTimeRange] = useState(searchParams.get("time_range") || "all");
+  const [tierFilter, setTierFilter] = useState(searchParams.get("tier") || "");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);

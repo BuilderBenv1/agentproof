@@ -8,6 +8,7 @@ const CHAINS = [
   { value: "ethereum", label: "Ethereum", color: "#627EEA" },
   { value: "base", label: "Base", color: "#0052FF" },
   { value: "linea", label: "Linea", color: "#61DFFF" },
+  { value: "solana", label: "Solana", color: "#9945FF" },
   { value: "polygon", label: "Polygon", color: "#8247E5" },
   { value: "arbitrum", label: "Arbitrum", color: "#28A0F0" },
   { value: "optimism", label: "Optimism", color: "#FF0420" },
