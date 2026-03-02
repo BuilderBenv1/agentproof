@@ -1,0 +1,21 @@
+AgentProof SDK License
+
+Copyright (c) 2026 AgentProof
+
+Permission is hereby granted to use this SDK solely for the purpose of
+interfacing with the AgentProof API service ("Service"). This license
+does NOT grant permission to:
+
+1. Reverse-engineer, decompile, or derive the scoring algorithms,
+   oracle logic, or any proprietary methodology of the Service.
+2. Build a competing reputation oracle or trust scoring service using
+   knowledge gained from this SDK.
+3. Redistribute or sublicense this SDK outside of applications that
+   consume the AgentProof API.
+4. Remove or alter any proprietary notices or attribution.
+
+THE SDK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO EVENT
+SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY
+ARISING FROM USE OF THE SDK.
+
+For commercial licensing enquiries: hello@agentproof.xyz

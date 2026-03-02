@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentproof"
+version = "1.0.0"
+description = "Official AgentProof SDK — query trust scores, reputation data, and agent intelligence from the ERC-8004 trust oracle."
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+dependencies = ["httpx>=0.25.0"]
+keywords = ["agentproof", "erc-8004", "trust", "reputation", "ai-agents"]
+
+[project.urls]
+Homepage = "https://agentproof.xyz"
+Repository = "https://github.com/BuilderBenv1/agentproof"
+
+[tool.setuptools.packages.find]
+include = ["agentproof*"]

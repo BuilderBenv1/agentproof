@@ -1,0 +1,30 @@
+{
+  "name": "@agentproof/sdk",
+  "version": "1.0.0",
+  "description": "Official AgentProof SDK — query trust scores, reputation data, and agent intelligence from the ERC-8004 trust oracle.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["agentproof", "erc-8004", "trust", "reputation", "ai-agents", "oracle"],
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BuilderBenv1/agentproof"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  }
+}
