@@ -308,9 +308,9 @@ class SolanaFeedbackBackend:
         return pda
 
     def _get_registry_authority_pda(self) -> Pubkey:
-        """CPI authority PDA: seeds=["cpi_authority"]"""
+        """CPI authority PDA: seeds=["atom_cpi_authority"]"""
         pda, _bump = Pubkey.find_program_address(
-            [b"cpi_authority"],
+            [b"atom_cpi_authority"],
             AGENT_REGISTRY_PROGRAM,
         )
         return pda
@@ -452,27 +452,23 @@ class SolanaFeedbackBackend:
             # Build account list
             # Order from 8004-solana-ts instruction-builder:
             #   [client, agentAccount, asset, collection, systemProgram,
-            #    atomConfig?, atomStats?, atomEngineProgram?, registryAuthority?]
+            #    atomConfig, atomStats, atomEngineProgram, registryAuthority]
+            # ATOM accounts are always required by the program.
+            atom_config = self._get_atom_config_pda()
+            atom_stats = self._get_atom_stats_pda(asset)
+            registry_authority = self._get_registry_authority_pda()
+
             accounts = [
                 AccountMeta(client, is_signer=True, is_writable=True),
                 AccountMeta(agent_pda, is_signer=False, is_writable=True),
                 AccountMeta(asset, is_signer=False, is_writable=False),
                 AccountMeta(agent_info.collection, is_signer=False, is_writable=False),
                 AccountMeta(SYSTEM_PROGRAM, is_signer=False, is_writable=False),
+                AccountMeta(atom_config, is_signer=False, is_writable=False),
+                AccountMeta(atom_stats, is_signer=False, is_writable=True),
+                AccountMeta(ATOM_ENGINE_PROGRAM, is_signer=False, is_writable=False),
+                AccountMeta(registry_authority, is_signer=False, is_writable=False),
             ]
-
-            # Include ATOM Engine accounts if atom is enabled on this agent
-            if agent_info.atom_enabled:
-                atom_config = self._get_atom_config_pda()
-                atom_stats = self._get_atom_stats_pda(asset)
-                registry_authority = self._get_registry_authority_pda()
-
-                accounts.extend([
-                    AccountMeta(atom_config, is_signer=False, is_writable=False),
-                    AccountMeta(atom_stats, is_signer=False, is_writable=True),
-                    AccountMeta(ATOM_ENGINE_PROGRAM, is_signer=False, is_writable=False),
-                    AccountMeta(registry_authority, is_signer=False, is_writable=False),
-                ])
 
             ix = Instruction(AGENT_REGISTRY_PROGRAM, ix_data, accounts)
 
