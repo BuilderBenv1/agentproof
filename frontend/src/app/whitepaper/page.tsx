@@ -9,7 +9,7 @@ const SECTIONS = [
   { title: "Trust Oracle Architecture", description: "How AgentProof indexes, evaluates, and scores ERC-8004 registered agents in real-time." },
   { title: "Scoring Methodology", description: "8-signal composite scoring: rating, volume, consistency, validation, age, uptime, deployer reputation, and URI stability." },
   { title: "Anti-Identity-Mutation", description: "Freshness penalties, deployer lineage tracking, and URI mutation detection to make identity abandonment economically irrational." },
-  { title: "Multi-Chain Indexing", description: "Indexing across 15 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BSC, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, and Solana — via deterministic CREATE2 deployments and native Solana program indexing." },
+  { title: "Multi-Chain Indexing", description: "Indexing across 21 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB Smart Chain, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, and Solana — via deterministic CREATE2 deployments and native Solana program indexing." },
   { title: "Standardised Tag Taxonomy", description: "Industry-standard vocabulary for agent identity tags, feedback categories, and reputation signals — enabling cross-platform interoperability across the ERC-8004 ecosystem." },
   { title: "Sybil Resistance", description: "How the oracle prevents gaming, fake reviews, and reputation manipulation." },
   { title: "Protocol Endpoints", description: "REST API, Agent-to-Agent (A2A), and MCP server for programmatic trust queries." },
@@ -124,7 +124,7 @@ export default function WhitepaperPage() {
       {/* Key Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: Shield, label: "Chains", value: "15", sub: "AVAX · ETH · Base · Solana + 11 more" },
+          { icon: Shield, label: "Chains", value: "21", sub: "AVAX · ETH · Base · Solana + 17 more" },
           { icon: Brain, label: "Live Agents", value: "11", sub: "Intelligence + Trading" },
           { icon: Globe, label: "Indexed", value: "46K+", sub: "Agent identities" },
           { icon: Lock, label: "Escrow", value: "0.5%", sub: "Protocol fee" },

@@ -143,13 +143,19 @@ export default function DiscoverPage() {
               <option value="polygon">Polygon</option>
               <option value="arbitrum">Arbitrum</option>
               <option value="optimism">Optimism</option>
-              <option value="bsc">BSC</option>
+              <option value="bsc">BNB Smart Chain</option>
               <option value="scroll">Scroll</option>
               <option value="gnosis">Gnosis</option>
               <option value="mantle">Mantle</option>
               <option value="celo">Celo</option>
               <option value="monad">Monad</option>
               <option value="abstract">Abstract</option>
+              <option value="taiko">Taiko</option>
+              <option value="megaeth">MegaETH</option>
+              <option value="skale">SKALE</option>
+              <option value="xlayer">X Layer</option>
+              <option value="soneium">Soneium</option>
+              <option value="metis">Metis</option>
               <option value="solana">Solana</option>
             </select>
           </div>

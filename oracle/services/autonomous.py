@@ -50,18 +50,20 @@ class AgentScreener:
             "monitor_anomalies": 0,
             "verify_agent_liveness": 0,
             "publish_network_report": 0,
+            "sync_github_activity": 0,
         }
         self.last_errors: dict[str, str] = {}
 
     async def start(self):
         """Launch all background jobs as asyncio tasks."""
         self._running = True
-        logger.info("AgentScreener starting — 4 background jobs")
+        logger.info("AgentScreener starting — 5 background jobs")
         self._tasks = [
             asyncio.create_task(self._loop("screen_new_agents", self._screen_new_agents, 300)),
             asyncio.create_task(self._loop("monitor_anomalies", self._monitor_anomalies, 900)),
             asyncio.create_task(self._loop("verify_agent_liveness", self._verify_agent_liveness, 3600)),
             asyncio.create_task(self._loop("publish_network_report", self._publish_network_report, 21600)),
+            asyncio.create_task(self._loop("sync_github_activity", self._sync_github_activity, 600)),
         ]
 
     async def stop(self):
@@ -96,6 +98,7 @@ class AgentScreener:
             "monitor_anomalies": 30,
             "verify_agent_liveness": 60,
             "publish_network_report": 120,
+            "sync_github_activity": 150,
         }
         await asyncio.sleep(delays.get(name, 5))
 
@@ -739,6 +742,27 @@ class AgentScreener:
             )
         except Exception as e:
             logger.error(f"[publish_network_report] Failed to insert report: {e}")
+
+    # ─── Job 5: Sync GitHub Activity (every 10 min) ────────────────────
+
+    def _sync_github_activity(self):
+        """Poll GitHub for coding agent PR metrics."""
+        from config import get_settings
+
+        settings = get_settings()
+        token = settings.github_token
+        if not token:
+            return  # Skip silently if no token configured
+
+        from services.github_poller import GitHubPoller
+
+        poller = GitHubPoller(github_token=token)
+        try:
+            count = poller.poll_agent_repos()
+            if count:
+                logger.info(f"[github] Updated git activity for {count} agents")
+        finally:
+            poller.close()
 
 
 # Singleton

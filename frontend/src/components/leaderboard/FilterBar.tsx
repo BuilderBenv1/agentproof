@@ -12,13 +12,19 @@ const CHAINS = [
   { value: "polygon", label: "Polygon", color: "#8247E5" },
   { value: "arbitrum", label: "Arbitrum", color: "#28A0F0" },
   { value: "optimism", label: "Optimism", color: "#FF0420" },
-  { value: "bsc", label: "BSC", color: "#F0B90B" },
+  { value: "bsc", label: "BNB Chain", color: "#F0B90B" },
   { value: "scroll", label: "Scroll", color: "#FFEEDA" },
   { value: "gnosis", label: "Gnosis", color: "#3E6957" },
   { value: "mantle", label: "Mantle", color: "#000000" },
   { value: "celo", label: "Celo", color: "#FCFF52" },
   { value: "monad", label: "Monad", color: "#836EF9" },
   { value: "abstract", label: "Abstract", color: "#0066FF" },
+  { value: "taiko", label: "Taiko", color: "#E81899" },
+  { value: "megaeth", label: "MegaETH", color: "#FF6B35" },
+  { value: "skale", label: "SKALE", color: "#4DFFD2" },
+  { value: "xlayer", label: "X Layer", color: "#1E1E1E" },
+  { value: "soneium", label: "Soneium", color: "#7B61FF" },
+  { value: "metis", label: "Metis", color: "#00DACC" },
 ] as const;
 
 interface FilterBarProps {

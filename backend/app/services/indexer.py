@@ -1389,6 +1389,12 @@ EXTRA_CHAINS = [
     {"name": "celo",     "start_block": 58_396_000,  "block_range": 10000, "env": "CELO_RPC_URL"},
     {"name": "monad",    "start_block": 1,           "block_range": 10000, "env": "MONAD_RPC_URL"},
     {"name": "abstract", "start_block": 1,           "block_range": 10000, "env": "ABSTRACT_RPC_URL"},
+    {"name": "taiko",    "start_block": 1,           "block_range": 10000, "env": "TAIKO_RPC_URL"},
+    {"name": "megaeth",  "start_block": 1,           "block_range": 10000, "env": "MEGAETH_RPC_URL"},
+    {"name": "skale",    "start_block": 1,           "block_range": 10000, "env": "SKALE_RPC_URL"},
+    {"name": "xlayer",   "start_block": 1,           "block_range": 10000, "env": "XLAYER_RPC_URL"},
+    {"name": "soneium",  "start_block": 1,           "block_range": 10000, "env": "SONEIUM_RPC_URL"},
+    {"name": "metis",    "start_block": 1,           "block_range": 10000, "env": "METIS_RPC_URL"},
 ]
 
 # Cache RPC URLs so we only read env vars once

@@ -8,15 +8,14 @@ import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/intelligence", label: "Intelligence" },
   { href: "/discover", label: "Discover" },
-  { href: "/marketplace", label: "Marketplace" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/register", label: "Register" },
   { href: "/mcp", label: "MCP" },
   { href: "/pricing", label: "API Pricing" },
   { href: "/whitepaper", label: "Whitepaper" },
   { href: "/docs", label: "Docs" },
+  { href: "/intelligence", label: "Intelligence" },
 ];
 
 export default function Header() {

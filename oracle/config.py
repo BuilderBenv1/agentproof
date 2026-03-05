@@ -56,6 +56,12 @@ class OracleSettings(BaseSettings):
     celo_rpc_url: str = ""
     monad_rpc_url: str = ""
     abstract_rpc_url: str = ""
+    taiko_rpc_url: str = ""
+    megaeth_rpc_url: str = ""
+    skale_rpc_url: str = ""
+    xlayer_rpc_url: str = ""
+    soneium_rpc_url: str = ""
+    metis_rpc_url: str = ""
 
     # Solana (non-EVM)
     solana_rpc_url: str = Field(
@@ -70,6 +76,13 @@ class OracleSettings(BaseSettings):
     )
     solana_agent_registry_program: str = "8oo4dC4JvBLwy5tGgiH3WwK4B9PWxL9Z4XjA2jzkQMbQ"
     solana_atom_engine_program: str = "AToMw53aiPQ8j7iHVb4fGt6nzUNxUhcPc3tbPBZuzVVb"
+
+    # GitHub integration (optional — enables coding agent reputation)
+    github_token: str = Field(
+        default="",
+        validation_alias=AliasChoices("GITHUB_TOKEN", "GH_TOKEN"),
+        description="GitHub PAT for polling agent repos (5000 req/hr)",
+    )
 
     # Oracle identity
     oracle_agent_name: str = "AgentProof Trust Oracle"

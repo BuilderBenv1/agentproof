@@ -136,6 +136,55 @@ async def trust_feed(
     return EventSourceResponse(event_generator())
 
 
+@router.get("/agents/{agent_id}/github")
+async def get_agent_github_activity(agent_id: int):
+    """Return GitHub coding metrics for an agent."""
+    from database import get_supabase
+    from services.github_poller import compute_coding_score
+
+    try:
+        db = get_supabase()
+        result = (
+            db.table("git_activity")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=404, detail=f"No GitHub activity for agent #{agent_id}")
+
+        activities = []
+        for row in result.data:
+            score = compute_coding_score(row) if row.get("total_prs", 0) else 0.0
+            total = row.get("total_prs", 0) or 0
+            merged = row.get("merged_prs", 0) or 0
+            activities.append({
+                "github_repo": row.get("github_repo"),
+                "total_prs": total,
+                "merged_prs": merged,
+                "rejected_prs": row.get("rejected_prs", 0),
+                "reverted_prs": row.get("reverted_prs", 0),
+                "merge_rate": round(merged / max(total, 1), 4),
+                "avg_time_to_merge_hours": row.get("avg_time_to_merge_hours", 0),
+                "avg_review_score": row.get("avg_review_score", 0),
+                "last_commit_at": row.get("last_commit_at"),
+                "last_polled_at": row.get("last_polled_at"),
+                "coding_score": score,
+            })
+
+        return {
+            "agent_id": agent_id,
+            "repos": activities,
+            "coding_score": activities[0]["coding_score"] if activities else 0.0,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching GitHub activity for agent #{agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/health")
 async def health():
     """Oracle health check."""

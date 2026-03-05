@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     celo_rpc_url: str = ""
     monad_rpc_url: str = ""
     abstract_rpc_url: str = ""
+    taiko_rpc_url: str = ""
+    megaeth_rpc_url: str = ""
+    skale_rpc_url: str = ""
+    xlayer_rpc_url: str = ""
+    soneium_rpc_url: str = ""
+    metis_rpc_url: str = ""
 
     # Solana (non-EVM)
     solana_rpc_url: str = ""

@@ -118,9 +118,11 @@ def calculate_composite_score(
     uptime_pct: float = -1.0,
     deployer_score: float = 50.0,
     uri_change_count: int = 0,
+    coding_score: float = -1.0,
 ) -> tuple[float, ScoreBreakdown]:
     """
-    Composite score (0-100) with 8 signals.
+    Composite score (0-100) with 8 base signals + optional coding signal.
+    When coding_score >= 0, weights rebalance to include it at 10%.
     Returns (score, breakdown) so the oracle can expose component scores.
     """
     prior_rating = 50.0
@@ -161,16 +163,33 @@ def calculate_composite_score(
     uri_stability = _calculate_uri_stability_score(uri_change_count)
     freshness = _calculate_freshness_multiplier(account_age_days)
 
-    composite = (
-        rating_score * 0.30
-        + volume_score * 0.10
-        + consistency_score * 0.10
-        + validation_score * 0.15
-        + age_score * 0.12
-        + uptime_score * 0.10
-        + deployer_score * 0.08
-        + uri_stability * 0.05
-    )
+    has_coding = coding_score >= 0
+
+    if has_coding:
+        # Rebalanced weights when coding signal is available (total = 1.0)
+        composite = (
+            rating_score * 0.27
+            + volume_score * 0.09
+            + consistency_score * 0.09
+            + validation_score * 0.13
+            + age_score * 0.11
+            + uptime_score * 0.09
+            + deployer_score * 0.07
+            + uri_stability * 0.05
+            + coding_score * 0.10
+        )
+    else:
+        # Original weights (total = 1.0)
+        composite = (
+            rating_score * 0.30
+            + volume_score * 0.10
+            + consistency_score * 0.10
+            + validation_score * 0.15
+            + age_score * 0.12
+            + uptime_score * 0.10
+            + deployer_score * 0.08
+            + uri_stability * 0.05
+        )
 
     # Apply freshness penalty
     composite *= freshness
@@ -184,6 +203,7 @@ def calculate_composite_score(
         uptime_score=round(uptime_score, 2),
         deployer_score=round(deployer_score, 2),
         uri_stability_score=round(uri_stability, 2),
+        coding_score=round(coding_score, 2) if has_coding else None,
     )
 
     return round(max(0.0, min(100.0, composite)), 2), breakdown
@@ -433,6 +453,23 @@ class TrustService:
         # URI change count
         uri_changes = int(agent.get("uri_change_count", 0) or 0)
 
+        # Coding score from GitHub activity
+        coding = -1.0
+        try:
+            git_result = (
+                db.table("git_activity")
+                .select("total_prs, merged_prs, reverted_prs, avg_review_score, last_commit_at")
+                .eq("agent_id", agent_id)
+                .order("updated_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if git_result.data and git_result.data[0].get("total_prs", 0):
+                from services.github_poller import compute_coding_score
+                coding = compute_coding_score(git_result.data[0])
+        except Exception:
+            pass
+
         # Compute score
         composite, breakdown = calculate_composite_score(
             average_rating=avg_rating,
@@ -443,6 +480,7 @@ class TrustService:
             uptime_pct=uptime_pct,
             deployer_score=dep_score,
             uri_change_count=uri_changes,
+            coding_score=coding,
         )
         tier = determine_tier(composite, feedback_count)
 

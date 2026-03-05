@@ -46,6 +46,7 @@ class ScoreBreakdown(BaseModel):
     uptime_score: float = 0.0
     deployer_score: float = 0.0
     uri_stability_score: float = 0.0
+    coding_score: float | None = None
 
 
 class TrustEvaluation(BaseModel):

@@ -23,6 +23,7 @@ interface OverviewData {
   average_score: number;
   protocol_breakdown?: Record<string, number>;
   tier_distribution?: Record<string, number>;
+  category_breakdown?: Record<string, number>;
 }
 
 interface AgentData {
@@ -317,29 +318,39 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Categories */}
-      <section>
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          <Activity className="w-5 h-5 text-emerald-400" />
-          Browse by Category
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {CATEGORIES.map((cat) => (
-            <Link
-              key={cat.slug}
-              href={`/agents?category=${cat.slug}`}
-              className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center hover:border-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/5 group"
-            >
-              <div className="flex justify-center mb-2">
-                <CategoryBadge category={cat.slug} showLabel={false} />
-              </div>
-              <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                {cat.name.replace(" Agents", "")}
-              </p>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* Categories — only show categories that have agents */}
+      {(() => {
+        const catCounts = overview?.category_breakdown || {};
+        const activeCategories = CATEGORIES.filter((cat) => (catCounts[cat.slug] || 0) > 0);
+        if (activeCategories.length === 0) return null;
+        return (
+          <section>
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-emerald-400" />
+              Browse by Category
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {activeCategories.map((cat) => (
+                <Link
+                  key={cat.slug}
+                  href={`/agents?category=${cat.slug}`}
+                  className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center hover:border-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/5 group"
+                >
+                  <div className="flex justify-center mb-2">
+                    <CategoryBadge category={cat.slug} showLabel={false} />
+                  </div>
+                  <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+                    {cat.name.replace(" Agents", "")}
+                  </p>
+                  <p className="text-[10px] font-mono text-gray-600 mt-1">
+                    {formatNumber(catCounts[cat.slug] || 0)} agents
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Bottom CTA */}
       <section className="text-center py-12 bg-gray-900/30 border border-gray-800 rounded-xl">

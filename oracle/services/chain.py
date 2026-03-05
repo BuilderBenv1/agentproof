@@ -272,79 +272,64 @@ class _ChainBackend:
             return None
 
 
+# All EVM chains with ERC-8004 CREATE2 deployments.
+# Same contract addresses on every chain — only RPC URL and chain ID differ.
+# Order determines feedback routing priority (cheapest gas first).
+_CREATE2_IDENTITY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+_CREATE2_REPUTATION = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
+
+EVM_CHAINS = [
+    {"name": "avalanche",  "chain_id": 43114,       "rpc_attr": "avalanche_rpc_url",  "poa": True},
+    {"name": "base",       "chain_id": 8453,        "rpc_attr": "base_rpc_url",       "poa": False},
+    {"name": "linea",      "chain_id": 59144,       "rpc_attr": "linea_rpc_url",      "poa": False},
+    {"name": "polygon",    "chain_id": 137,         "rpc_attr": "polygon_rpc_url",    "poa": True},
+    {"name": "bsc",        "chain_id": 56,          "rpc_attr": "bsc_rpc_url",        "poa": True},
+    {"name": "gnosis",     "chain_id": 100,         "rpc_attr": "gnosis_rpc_url",     "poa": True},
+    {"name": "celo",       "chain_id": 42220,       "rpc_attr": "celo_rpc_url",       "poa": False},
+    {"name": "mantle",     "chain_id": 5000,        "rpc_attr": "mantle_rpc_url",     "poa": False},
+    {"name": "scroll",     "chain_id": 534352,      "rpc_attr": "scroll_rpc_url",     "poa": False},
+    {"name": "arbitrum",   "chain_id": 42161,       "rpc_attr": "arbitrum_rpc_url",   "poa": False},
+    {"name": "optimism",   "chain_id": 10,          "rpc_attr": "optimism_rpc_url",   "poa": False},
+    {"name": "monad",      "chain_id": 143,         "rpc_attr": "monad_rpc_url",      "poa": False},
+    {"name": "abstract",   "chain_id": 2741,        "rpc_attr": "abstract_rpc_url",   "poa": False},
+    {"name": "taiko",      "chain_id": 167000,      "rpc_attr": "taiko_rpc_url",      "poa": False},
+    {"name": "megaeth",    "chain_id": 4326,        "rpc_attr": "megaeth_rpc_url",    "poa": False},
+    {"name": "skale",      "chain_id": 1187947933,  "rpc_attr": "skale_rpc_url",      "poa": False},
+    {"name": "xlayer",     "chain_id": 196,         "rpc_attr": "xlayer_rpc_url",     "poa": False},
+    {"name": "soneium",    "chain_id": 1868,        "rpc_attr": "soneium_rpc_url",    "poa": False},
+    {"name": "metis",      "chain_id": 1088,        "rpc_attr": "metis_rpc_url",      "poa": False},
+    {"name": "ethereum",   "chain_id": 1,           "rpc_attr": "ethereum_rpc_url",   "poa": False},  # last — expensive gas
+]
+
+
 class ChainService:
-    """Multi-chain feedback service. Routes to Avalanche, Base, Ethereum, or Solana automatically."""
+    """Multi-chain feedback service. Routes to all configured EVM chains + Solana."""
 
     def __init__(self):
         settings = get_settings()
 
-        # Avalanche backend (always initialized)
-        self._avax = _ChainBackend(
-            chain_name="avalanche",
-            rpc_url=settings.avalanche_rpc_url,
-            chain_id=43114,
-            identity_registry_addr=settings.erc8004_identity_registry,
-            reputation_registry_addr=settings.reputation_registry,
-            private_key=settings.private_key,
-            poa_middleware=True,
-        )
-
-        # Ethereum backend (optional — only if ETHEREUM_RPC_URL is set)
-        self._eth: _ChainBackend | None = None
-        if settings.ethereum_rpc_url:
+        # Initialize EVM backends from the chain table
+        self._evm_backends: list[_ChainBackend] = []
+        for chain_cfg in EVM_CHAINS:
+            rpc_url = getattr(settings, chain_cfg["rpc_attr"], "")
+            if not rpc_url:
+                continue
             try:
-                self._eth = _ChainBackend(
-                    chain_name="ethereum",
-                    rpc_url=settings.ethereum_rpc_url,
-                    chain_id=1,
-                    identity_registry_addr=settings.eth_identity_registry,
-                    reputation_registry_addr=settings.eth_reputation_registry,
+                backend = _ChainBackend(
+                    chain_name=chain_cfg["name"],
+                    rpc_url=rpc_url,
+                    chain_id=chain_cfg["chain_id"],
+                    identity_registry_addr=_CREATE2_IDENTITY,
+                    reputation_registry_addr=_CREATE2_REPUTATION,
                     private_key=settings.private_key,
-                    poa_middleware=False,
+                    poa_middleware=chain_cfg.get("poa", False),
                 )
+                self._evm_backends.append(backend)
             except Exception as e:
-                logger.error(f"Ethereum backend init failed: {e}")
-                self._eth = None
-        else:
-            logger.info("ETHEREUM_RPC_URL not set — Ethereum feedback disabled")
+                logger.error(f"{chain_cfg['name']} backend init failed: {e}")
 
-        # Base backend (optional — only if BASE_RPC_URL is set)
-        self._base: _ChainBackend | None = None
-        if settings.base_rpc_url:
-            try:
-                self._base = _ChainBackend(
-                    chain_name="base",
-                    rpc_url=settings.base_rpc_url,
-                    chain_id=8453,
-                    identity_registry_addr=settings.base_identity_registry,
-                    reputation_registry_addr=settings.base_reputation_registry,
-                    private_key=settings.private_key,
-                    poa_middleware=False,
-                )
-            except Exception as e:
-                logger.error(f"Base backend init failed: {e}")
-                self._base = None
-        else:
-            logger.info("BASE_RPC_URL not set — Base feedback disabled")
-
-        # Linea backend (optional — only if LINEA_RPC_URL is set)
-        self._linea: _ChainBackend | None = None
-        if settings.linea_rpc_url:
-            try:
-                self._linea = _ChainBackend(
-                    chain_name="linea",
-                    rpc_url=settings.linea_rpc_url,
-                    chain_id=59144,
-                    identity_registry_addr=settings.linea_identity_registry,
-                    reputation_registry_addr=settings.linea_reputation_registry,
-                    private_key=settings.private_key,
-                    poa_middleware=False,
-                )
-            except Exception as e:
-                logger.error(f"Linea backend init failed: {e}")
-                self._linea = None
-        else:
-            logger.info("LINEA_RPC_URL not set — Linea feedback disabled")
+        # Legacy accessors for get_oracle_agent_id (uses Avalanche)
+        self._avax = next((b for b in self._evm_backends if b.chain_name == "avalanche"), None)
 
         # Solana backend (optional — only if SOLANA_RPC_URL is set)
         self._solana = None
@@ -364,12 +349,10 @@ class ChainService:
 
         self._cached_oracle_agent_id: int | None = None
 
+        evm_names = [b.chain_name for b in self._evm_backends]
         logger.info(
-            f"ChainService initialized — avax={settings.reputation_registry}, "
-            f"eth={'enabled' if self._eth else 'disabled'}, "
-            f"base={'enabled' if self._base else 'disabled'}, "
-            f"linea={'enabled' if self._linea else 'disabled'}, "
-            f"solana={'enabled' if self._solana else 'disabled'}"
+            f"ChainService initialized — {len(self._evm_backends)} EVM chains: "
+            f"{', '.join(evm_names)}, solana={'enabled' if self._solana else 'disabled'}"
         )
 
     def get_oracle_agent_id(self) -> int | None:
@@ -384,6 +367,10 @@ class ChainService:
             self._cached_oracle_agent_id = settings.oracle_agent_id
             logger.info(f"Oracle agent ID from config: {settings.oracle_agent_id}")
             return settings.oracle_agent_id
+
+        if self._avax is None:
+            logger.warning("Avalanche backend not configured — cannot resolve oracle agent ID")
+            return None
 
         try:
             balance = self._avax._identity_registry.functions.balanceOf(
@@ -441,55 +428,30 @@ class ChainService:
         """
         Submit reputation feedback, auto-routing to the correct chain.
 
-        Tries Avalanche first, then Base, then Ethereum.
+        Tries all configured EVM chains in priority order, then Solana.
         Returns transaction hash hex string on success, None on failure.
         """
-        # Try Avalanche first
-        result = self._avax.submit_feedback(agent_id, score, comment, tag1, tag2)
-        if result is not None:
-            return result
-
-        # Try Base (18,710 agents, cheap gas)
-        if self._base is not None:
-            logger.info(
-                f"Agent {agent_id} not on Avalanche — trying Base"
-            )
-            result = self._base.submit_feedback(agent_id, score, comment, tag1, tag2)
+        tried: list[str] = []
+        for backend in self._evm_backends:
+            result = backend.submit_feedback(agent_id, score, comment, tag1, tag2)
             if result is not None:
                 return result
+            tried.append(backend.chain_name)
 
-        # Try Linea (cheap gas)
-        if self._linea is not None:
+        if tried:
             logger.info(
-                f"Agent {agent_id} not on Avalanche/Base — trying Linea"
+                f"Agent {agent_id} not found on {'/'.join(tried)} — trying Solana"
             )
-            result = self._linea.submit_feedback(agent_id, score, comment, tag1, tag2)
-            if result is not None:
-                return result
-
-        # Try Ethereum (expensive gas)
-        if self._eth is not None:
-            logger.info(
-                f"Agent {agent_id} not on Avalanche/Base/Linea — trying Ethereum"
-            )
-            result = self._eth.submit_feedback(agent_id, score, comment, tag1, tag2)
-            if result is not None:
-                return result
 
         # Try Solana last (non-EVM)
         if self._solana is not None:
-            logger.info(
-                f"Agent {agent_id} not on any EVM chain — trying Solana"
-            )
             return self._solana.submit_feedback(agent_id, score, comment, tag1, tag2)
 
         return None
 
     def get_agent_onchain_data(self, agent_id: int) -> dict | None:
-        """Read agent owner + URI from chain (tries EVM chains, then Solana)."""
-        for backend in [self._avax, self._base, self._linea, self._eth]:
-            if backend is None:
-                continue
+        """Read agent owner + URI from chain (tries all EVM chains, then Solana)."""
+        for backend in self._evm_backends:
             try:
                 owner = backend._identity_registry.functions.ownerOf(agent_id).call()
                 uri = backend._identity_registry.functions.tokenURI(agent_id).call()
