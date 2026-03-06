@@ -51,19 +51,23 @@ class AgentScreener:
             "verify_agent_liveness": 0,
             "publish_network_report": 0,
             "sync_github_activity": 0,
+            "sync_delegation_events": 0,
+            "compute_failure_metrics": 0,
         }
         self.last_errors: dict[str, str] = {}
 
     async def start(self):
         """Launch all background jobs as asyncio tasks."""
         self._running = True
-        logger.info("AgentScreener starting — 5 background jobs")
+        logger.info("AgentScreener starting — 7 background jobs")
         self._tasks = [
             asyncio.create_task(self._loop("screen_new_agents", self._screen_new_agents, 300)),
             asyncio.create_task(self._loop("monitor_anomalies", self._monitor_anomalies, 900)),
             asyncio.create_task(self._loop("verify_agent_liveness", self._verify_agent_liveness, 3600)),
             asyncio.create_task(self._loop("publish_network_report", self._publish_network_report, 21600)),
             asyncio.create_task(self._loop("sync_github_activity", self._sync_github_activity, 600)),
+            asyncio.create_task(self._loop("sync_delegation_events", self._sync_delegation_events, 600)),
+            asyncio.create_task(self._loop("compute_failure_metrics", self._compute_failure_metrics, 1800)),
         ]
 
     async def stop(self):
@@ -99,6 +103,8 @@ class AgentScreener:
             "verify_agent_liveness": 60,
             "publish_network_report": 120,
             "sync_github_activity": 150,
+            "sync_delegation_events": 180,
+            "compute_failure_metrics": 240,
         }
         await asyncio.sleep(delays.get(name, 5))
 
@@ -459,6 +465,19 @@ class AgentScreener:
                                 "details": f"Score swung {swing:.1f} points in 24h ({min(scores):.1f}-{max(scores):.1f})",
                                 "created_at": now.isoformat(),
                             })
+                        # Record score crash as failure event
+                        if swing > 30:
+                            try:
+                                db.table("failure_events").insert({
+                                    "agent_id": aid,
+                                    "failure_type": "score_crash",
+                                    "severity": "critical" if swing > 40 else "high",
+                                    "details": {"swing": round(swing, 1), "min": min(scores), "max": max(scores)},
+                                    "source": "anomaly-monitor",
+                                    "created_at": now.isoformat(),
+                                }).execute()
+                            except Exception:
+                                pass
         except Exception as e:
             logger.warning(f"[monitor_anomalies] Score history check failed: {e}")
 
@@ -597,13 +616,61 @@ class AgentScreener:
 
                 liveness_results.append((agent_id, reachable, uri))
 
-                # Webhook for unreachable agents
+                # Record/resolve failure events for liveness
                 if not reachable:
+                    # Check if there's already an unresolved endpoint_down for this agent
+                    try:
+                        existing = (
+                            db.table("failure_events")
+                            .select("id")
+                            .eq("agent_id", agent_id)
+                            .eq("failure_type", "endpoint_down")
+                            .is_("resolved_at", "null")
+                            .limit(1)
+                            .execute()
+                        )
+                        if not existing.data:
+                            db.table("failure_events").insert({
+                                "agent_id": agent_id,
+                                "failure_type": "endpoint_down",
+                                "severity": "high",
+                                "details": {"endpoint": uri[:500]},
+                                "source": "uptime-check",
+                                "created_at": now.isoformat(),
+                            }).execute()
+                    except Exception:
+                        pass
+
                     try:
                         deliver_event("unreachable", agent_id, {
                             "agent_uri": uri,
                             "reachable": False,
                         })
+                    except Exception:
+                        pass
+                else:
+                    # Resolve any open endpoint_down failures
+                    try:
+                        open_failures = (
+                            db.table("failure_events")
+                            .select("id, created_at")
+                            .eq("agent_id", agent_id)
+                            .eq("failure_type", "endpoint_down")
+                            .is_("resolved_at", "null")
+                            .execute()
+                        )
+                        for f in (open_failures.data or []):
+                            try:
+                                created = datetime.fromisoformat(
+                                    f["created_at"].replace("Z", "+00:00")
+                                )
+                                resolution_seconds = int((now - created).total_seconds())
+                            except Exception:
+                                resolution_seconds = None
+                            db.table("failure_events").update({
+                                "resolved_at": now.isoformat(),
+                                "resolution_time_seconds": resolution_seconds,
+                            }).eq("id", f["id"]).execute()
                     except Exception:
                         pass
 
@@ -763,6 +830,223 @@ class AgentScreener:
                 logger.info(f"[github] Updated git activity for {count} agents")
         finally:
             poller.close()
+
+    # ─── Job 6: Sync Delegation Events (every 10 min) ────────────────
+
+    def _sync_delegation_events(self):
+        """Infer delegation relationships from marketplace tasks and agent reviews."""
+        db = get_supabase()
+        now = datetime.now(timezone.utc)
+        inserted = 0
+
+        # Phase 1: Infer from marketplace_tasks with client_agent_id
+        try:
+            tasks = (
+                db.table("marketplace_tasks")
+                .select("task_id, agent_id, client_agent_id, status, task_hash, deadline, created_at, completed_at")
+                .not_.is_("client_agent_id", "null")
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute()
+            )
+        except Exception as e:
+            logger.debug(f"[sync_delegation] marketplace_tasks query failed: {e}")
+            tasks = type("R", (), {"data": []})()
+
+        for task in (tasks.data or []):
+            delegator = task.get("client_agent_id")
+            delegate = task.get("agent_id")
+            if not delegator or not delegate:
+                continue
+
+            # Check if already recorded
+            try:
+                existing = (
+                    db.table("delegation_events")
+                    .select("id")
+                    .eq("delegator_agent_id", delegator)
+                    .eq("delegate_agent_id", delegate)
+                    .eq("task_hash", task.get("task_hash") or str(task.get("task_id")))
+                    .limit(1)
+                    .execute()
+                )
+                if existing.data:
+                    continue
+            except Exception:
+                continue
+
+            # Map status to outcome
+            status = (task.get("status") or "pending").lower()
+            if status == "completed":
+                outcome = "success"
+            elif status in ("cancelled", "disputed"):
+                outcome = "failure"
+            elif task.get("deadline"):
+                try:
+                    deadline = datetime.fromisoformat(
+                        task["deadline"].replace("Z", "+00:00")
+                    )
+                    outcome = "timeout" if now > deadline else "pending"
+                except Exception:
+                    outcome = "pending"
+            else:
+                outcome = "pending"
+
+            try:
+                db.table("delegation_events").insert({
+                    "delegator_agent_id": delegator,
+                    "delegate_agent_id": delegate,
+                    "task_scope": None,
+                    "task_hash": task.get("task_hash") or str(task.get("task_id")),
+                    "outcome": outcome,
+                    "started_at": task.get("created_at", now.isoformat()),
+                    "completed_at": task.get("completed_at"),
+                    "source_chain": "avalanche",
+                    "source": "marketplace",
+                    "created_at": now.isoformat(),
+                }).execute()
+                inserted += 1
+
+                # Record delegation failures
+                if outcome in ("failure", "timeout"):
+                    try:
+                        db.table("failure_events").insert({
+                            "agent_id": delegate,
+                            "failure_type": "delegation_break",
+                            "severity": "medium",
+                            "details": {"delegator": delegator, "task_hash": task.get("task_hash"), "outcome": outcome},
+                            "source": "delegation",
+                            "created_at": now.isoformat(),
+                        }).execute()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Phase 2: Infer from agent-review feedback (peer delegations)
+        try:
+            peer_reviews = (
+                db.table("reputation_events")
+                .select("agent_id, reviewer_address, created_at, rating")
+                .eq("tag2", "agent-review")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+            for review in (peer_reviews.data or []):
+                reviewer_addr = review.get("reviewer_address", "")
+                # Look up if reviewer is a registered agent
+                try:
+                    reviewer_agent = (
+                        db.table("agents")
+                        .select("agent_id")
+                        .eq("owner_address", reviewer_addr)
+                        .limit(1)
+                        .execute()
+                    )
+                    if not reviewer_agent.data:
+                        continue
+                    delegator_id = reviewer_agent.data[0]["agent_id"]
+                    delegate_id = review["agent_id"]
+
+                    # Check if already recorded
+                    existing = (
+                        db.table("delegation_events")
+                        .select("id")
+                        .eq("delegator_agent_id", delegator_id)
+                        .eq("delegate_agent_id", delegate_id)
+                        .eq("source", "agent-review")
+                        .limit(1)
+                        .execute()
+                    )
+                    if existing.data:
+                        continue
+
+                    outcome = "success" if review.get("rating", 50) >= 50 else "failure"
+                    db.table("delegation_events").insert({
+                        "delegator_agent_id": delegator_id,
+                        "delegate_agent_id": delegate_id,
+                        "task_scope": None,
+                        "task_hash": None,
+                        "outcome": outcome,
+                        "started_at": review.get("created_at", now.isoformat()),
+                        "completed_at": review.get("created_at"),
+                        "source_chain": "avalanche",
+                        "source": "agent-review",
+                        "created_at": now.isoformat(),
+                    }).execute()
+                    inserted += 1
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"[sync_delegation] agent-review scan failed: {e}")
+
+        if inserted:
+            logger.info(f"[sync_delegation] Inserted {inserted} delegation events")
+
+    # ─── Job 7: Compute Failure Metrics (every 30 min) ───────────────
+
+    def _compute_failure_metrics(self):
+        """Compute failure counts and MTTR, update agents table cache."""
+        db = get_supabase()
+
+        # Get distinct agents with failure events
+        try:
+            recent = (
+                db.table("failure_events")
+                .select("agent_id")
+                .order("created_at", desc=True)
+                .limit(500)
+                .execute()
+            )
+        except Exception as e:
+            logger.debug(f"[failure_metrics] Query failed: {e}")
+            return
+
+        agent_ids = list(set(r["agent_id"] for r in (recent.data or [])))
+        if not agent_ids:
+            return
+
+        updated = 0
+        for agent_id in agent_ids[:100]:
+            try:
+                failures = (
+                    db.table("failure_events")
+                    .select("resolution_time_seconds, resolved_at, created_at")
+                    .eq("agent_id", agent_id)
+                    .execute()
+                )
+                if not failures.data:
+                    continue
+
+                total = len(failures.data)
+                resolved = [
+                    f for f in failures.data
+                    if f.get("resolution_time_seconds") is not None
+                ]
+                mttr = None
+                if resolved:
+                    mttr = int(
+                        sum(f["resolution_time_seconds"] for f in resolved)
+                        / len(resolved)
+                    )
+
+                last_failure = max(
+                    (f["created_at"] for f in failures.data),
+                    default=None,
+                )
+
+                db.table("agents").update({
+                    "failure_count": total,
+                    "mttr_seconds": mttr,
+                    "last_failure_at": last_failure,
+                }).eq("agent_id", agent_id).execute()
+                updated += 1
+            except Exception:
+                pass
+
+        if updated:
+            logger.info(f"[failure_metrics] Updated metrics for {updated} agents")
 
 
 # Singleton

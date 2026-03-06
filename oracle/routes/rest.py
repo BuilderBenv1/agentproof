@@ -185,6 +185,127 @@ async def get_agent_github_activity(agent_id: int):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/agents/{agent_id}/delegations")
+async def get_agent_delegations(
+    agent_id: int,
+    role: str | None = Query(None, description="Filter: 'delegator' or 'delegate'"),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Delegation history for an agent — as delegator and as delegate."""
+    from database import get_supabase
+
+    try:
+        db = get_supabase()
+
+        as_delegator = {"total": 0, "success_rate": None, "recent": []}
+        as_delegate = {"total": 0, "success_rate": None, "recent": []}
+
+        if role != "delegate":
+            result = (
+                db.table("delegation_events")
+                .select("*")
+                .eq("delegator_agent_id", agent_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            rows = result.data or []
+            completed = [r for r in rows if r.get("outcome") != "pending"]
+            successes = sum(1 for r in completed if r.get("outcome") == "success")
+            as_delegator = {
+                "total": len(rows),
+                "success_rate": round(successes / len(completed) * 100, 2) if completed else None,
+                "recent": rows[:10],
+            }
+
+        if role != "delegator":
+            result = (
+                db.table("delegation_events")
+                .select("*")
+                .eq("delegate_agent_id", agent_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            rows = result.data or []
+            completed = [r for r in rows if r.get("outcome") != "pending"]
+            successes = sum(1 for r in completed if r.get("outcome") == "success")
+            as_delegate = {
+                "total": len(rows),
+                "success_rate": round(successes / len(completed) * 100, 2) if completed else None,
+                "recent": rows[:10],
+            }
+
+        return {
+            "agent_id": agent_id,
+            "as_delegator": as_delegator,
+            "as_delegate": as_delegate,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching delegations for agent #{agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/agents/{agent_id}/failures")
+async def get_agent_failures(
+    agent_id: int,
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Failure event history for an agent."""
+    from database import get_supabase
+
+    try:
+        db = get_supabase()
+
+        result = (
+            db.table("failure_events")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        events = result.data or []
+
+        active = sum(1 for e in events if e.get("resolved_at") is None)
+        resolved = [e for e in events if e.get("resolution_time_seconds") is not None]
+        mttr = None
+        if resolved:
+            mttr = int(sum(e["resolution_time_seconds"] for e in resolved) / len(resolved))
+
+        return {
+            "agent_id": agent_id,
+            "failure_count": len(events),
+            "active_failures": active,
+            "mttr_seconds": mttr,
+            "events": events,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching failures for agent #{agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/trust/{agent_id}/dimensions")
+async def get_dimensional_scores(
+    agent_id: int,
+    chain: str | None = Query(None, description="Source chain filter"),
+):
+    """Per-tag1 dimensional trust scores for an agent."""
+    from database import get_supabase
+    from services.trust import calculate_scoped_scores
+
+    try:
+        db = get_supabase()
+        scores = calculate_scoped_scores(db, agent_id, chain)
+        return {
+            "agent_id": agent_id,
+            "dimensions": scores,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dimensional scores for agent #{agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/health")
 async def health():
     """Oracle health check."""

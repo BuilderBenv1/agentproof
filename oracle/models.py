@@ -25,6 +25,9 @@ class RiskFlag(str, Enum):
     SERIAL_DEPLOYER = "SERIAL_DEPLOYER"
     FREQUENT_URI_CHANGES = "FREQUENT_URI_CHANGES"
     NEW_IDENTITY = "NEW_IDENTITY"
+    HIGH_FAILURE_RATE = "HIGH_FAILURE_RATE"
+    SLOW_RECOVERY = "SLOW_RECOVERY"
+    ACTIVE_FAILURE = "ACTIVE_FAILURE"
 
 
 class RiskLevel(str, Enum):
@@ -47,6 +50,13 @@ class ScoreBreakdown(BaseModel):
     deployer_score: float = 0.0
     uri_stability_score: float = 0.0
     coding_score: float | None = None
+    delegation_score: float | None = None
+
+
+class DimensionalScore(BaseModel):
+    score: float
+    count: int
+    avg_rating: float
 
 
 class TrustEvaluation(BaseModel):
@@ -63,6 +73,13 @@ class TrustEvaluation(BaseModel):
     account_age_days: int = 0
     uptime_pct: float = -1.0
     evaluated_at: datetime
+    # DeepMind delegation framework signals
+    scoped_scores: dict[str, dict] | None = None
+    delegation_success_rate: float | None = None
+    delegation_count: int = 0
+    failure_count: int = 0
+    mttr_seconds: int | None = None
+    last_failure_at: datetime | None = None
 
 
 class TrustedAgent(BaseModel):

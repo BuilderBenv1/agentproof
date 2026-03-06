@@ -240,6 +240,69 @@ def calculate_account_age_days(registered_at: datetime) -> int:
     return max(0, delta.days)
 
 
+# ─── Scoped / dimensional scoring ────────────────────────────────────
+
+
+def calculate_scoped_scores(
+    db, agent_id: int, source_chain: str | None = None
+) -> dict[str, dict]:
+    """
+    Per-tag1 dimensional scores using Bayesian smoothing.
+    Returns {"trust": {"score": 72.5, "count": 15, "avg_rating": 74.2}, ...}
+    """
+    from collections import defaultdict
+
+    query = (
+        db.table("reputation_events")
+        .select("tag1, rating")
+        .eq("agent_id", agent_id)
+    )
+    if source_chain:
+        query = query.eq("source_chain", source_chain)
+
+    result = query.execute()
+    if not result.data:
+        return {}
+
+    tag_ratings: dict[str, list[int]] = defaultdict(list)
+    for row in result.data:
+        tag = row.get("tag1") or "trust"
+        tag_ratings[tag].append(row["rating"])
+
+    prior = 50.0
+    k = 3
+    scores = {}
+    for tag, ratings in tag_ratings.items():
+        count = len(ratings)
+        avg = sum(ratings) / count
+        smoothed = (avg * count + prior * k) / (count + k)
+        scores[tag] = {
+            "score": round(smoothed, 2),
+            "count": count,
+            "avg_rating": round(avg, 2),
+        }
+    return scores
+
+
+def _fetch_delegation_stats(db, agent_id: int) -> tuple[float, int]:
+    """Returns (delegation_success_rate, total_delegations) for an agent as delegate."""
+    try:
+        result = (
+            db.table("delegation_events")
+            .select("outcome")
+            .eq("delegate_agent_id", agent_id)
+            .neq("outcome", "pending")
+            .execute()
+        )
+    except Exception:
+        return -1.0, 0
+    if not result.data:
+        return -1.0, 0
+    total = len(result.data)
+    successes = sum(1 for r in result.data if r["outcome"] == "success")
+    return round(successes / total * 100, 2), total
+
+
 # ─── Recommendation & risk logic ──────────────────────────────────────
 
 
@@ -272,6 +335,9 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
         RiskFlag.NEW_IDENTITY: 2,
         RiskFlag.LOW_FEEDBACK: 1,
         RiskFlag.UNVERIFIED: 1,
+        RiskFlag.HIGH_FAILURE_RATE: 2,
+        RiskFlag.SLOW_RECOVERY: 2,
+        RiskFlag.ACTIVE_FAILURE: 3,
     }
     max_severity = max(severity.get(f, 1) for f in risk_flags)
     if max_severity >= 3:
@@ -508,6 +574,49 @@ class TrustService:
         if age_days < 7:
             risk_flags.append(RiskFlag.NEW_IDENTITY)
 
+        # Failure-based risk flags
+        failure_count = int(agent.get("failure_count") or 0)
+        mttr = agent.get("mttr_seconds")
+        last_failure_at_raw = agent.get("last_failure_at")
+        last_failure_at = None
+        if last_failure_at_raw:
+            try:
+                last_failure_at = datetime.fromisoformat(
+                    str(last_failure_at_raw).replace("Z", "+00:00")
+                )
+            except Exception:
+                pass
+
+        if failure_count >= 5:
+            risk_flags.append(RiskFlag.HIGH_FAILURE_RATE)
+        if mttr is not None and mttr > 86400:
+            risk_flags.append(RiskFlag.SLOW_RECOVERY)
+
+        # Check for active unresolved failures
+        try:
+            active = (
+                db.table("failure_events")
+                .select("id", count="exact")
+                .eq("agent_id", agent_id)
+                .is_("resolved_at", "null")
+                .limit(0)
+                .execute()
+            )
+            if (active.count or 0) > 0:
+                risk_flags.append(RiskFlag.ACTIVE_FAILURE)
+        except Exception:
+            pass
+
+        # Scoped per-dimension scores
+        scoped = {}
+        try:
+            scoped = calculate_scoped_scores(db, agent_id, agent_chain)
+        except Exception:
+            pass
+
+        # Delegation stats
+        delegation_rate, delegation_count = _fetch_delegation_stats(db, agent_id)
+
         recommendation = _determine_recommendation(
             composite, feedback_count, risk_flags
         )
@@ -526,6 +635,12 @@ class TrustService:
             account_age_days=age_days,
             uptime_pct=round(uptime_pct, 2),
             evaluated_at=datetime.now(timezone.utc),
+            scoped_scores=scoped or None,
+            delegation_success_rate=delegation_rate if delegation_rate >= 0 else None,
+            delegation_count=delegation_count,
+            failure_count=failure_count,
+            mttr_seconds=int(mttr) if mttr is not None else None,
+            last_failure_at=last_failure_at,
         )
 
         # Populate cache
@@ -637,6 +752,16 @@ class TrustService:
             details_parts.append(
                 "Agent identity is less than 7 days old — freshness penalty applied"
             )
+        if RiskFlag.HIGH_FAILURE_RATE in risk_flags:
+            details_parts.append(
+                f"Agent has {evaluation.failure_count} recorded failure events"
+            )
+        if RiskFlag.SLOW_RECOVERY in risk_flags:
+            details_parts.append(
+                f"Mean time to recovery is {evaluation.mttr_seconds}s (>86400s threshold)"
+            )
+        if RiskFlag.ACTIVE_FAILURE in risk_flags:
+            details_parts.append("Agent has unresolved active failure events")
 
         return RiskAssessment(
             agent_id=agent_id,
