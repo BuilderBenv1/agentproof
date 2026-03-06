@@ -423,25 +423,39 @@ class TrustService:
         _trust_cache.set(f"eval:{agent_id}", evaluation)
         return evaluation
 
-    def evaluate_agent(self, agent_id: int, bypass_cache: bool = False) -> TrustEvaluation:
+    def evaluate_agent(self, agent_id: int, bypass_cache: bool = False, chain: str | None = None) -> TrustEvaluation:
         # Check cache first
+        cache_key = f"eval:{agent_id}:{chain}" if chain else f"eval:{agent_id}"
         if not bypass_cache:
-            cached = _trust_cache.get(f"eval:{agent_id}")
+            cached = _trust_cache.get(cache_key)
             if cached is not None:
                 return cached
 
         db = get_supabase()
 
-        # Fetch agent
-        result = (
-            db.table("agents").select("*").eq("agent_id", agent_id).execute()
-        )
+        # Fetch agent — if chain specified, try to find the chain-specific row
+        if chain:
+            result = (
+                db.table("agents").select("*")
+                .eq("agent_id", agent_id)
+                .eq("source_chain", chain)
+                .execute()
+            )
+            if not result.data:
+                # Fall back to any row for this agent_id
+                result = (
+                    db.table("agents").select("*").eq("agent_id", agent_id).execute()
+                )
+        else:
+            result = (
+                db.table("agents").select("*").eq("agent_id", agent_id).execute()
+            )
         if not result.data:
             raise ValueError(f"Agent #{agent_id} not found")
         agent = result.data[0]
 
-        # Fetch ratings scoped to the agent's chain
-        agent_chain = agent.get("source_chain", "avalanche")
+        # Fetch ratings scoped to the requested chain (or agent's source_chain)
+        agent_chain = chain or agent.get("source_chain", "avalanche")
         ratings_query = (
             db.table("reputation_events")
             .select("rating, reviewer_address")
@@ -644,7 +658,7 @@ class TrustService:
         )
 
         # Populate cache
-        _trust_cache.set(f"eval:{agent_id}", evaluation)
+        _trust_cache.set(cache_key, evaluation)
         return evaluation
 
     def find_trusted_agents(

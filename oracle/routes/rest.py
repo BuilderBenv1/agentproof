@@ -15,15 +15,18 @@ router = APIRouter(prefix="/api/v1", tags=["REST API"])
 
 
 @router.get("/trust/{agent_id}", response_model=TrustEvaluation)
-async def evaluate_agent(agent_id: int):
+async def evaluate_agent(
+    agent_id: int,
+    chain: str | None = Query(None, description="Source chain to scope evaluation (e.g. base, avalanche)"),
+):
     """Get a full trust evaluation for an agent."""
     cache = get_trust_cache()
-    cache_key = f"eval:{agent_id}"
+    cache_key = f"eval:{agent_id}:{chain}" if chain else f"eval:{agent_id}"
     was_cached = cache.get(cache_key) is not None
 
     try:
         svc = get_trust_service()
-        result = svc.evaluate_agent(agent_id)
+        result = svc.evaluate_agent(agent_id, chain=chain)
         response = JSONResponse(content=result.model_dump(mode="json"))
         response.headers["X-Cache"] = "HIT" if was_cached else "MISS"
         return response
