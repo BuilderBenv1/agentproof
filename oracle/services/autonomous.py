@@ -581,15 +581,21 @@ class AgentScreener:
         checked = 0
         liveness_results: list[tuple[int, bool, str]] = []
 
-        with httpx.Client(timeout=LIVENESS_TIMEOUT, follow_redirects=True) as client:
+        with httpx.Client(timeout=LIVENESS_TIMEOUT, follow_redirects=False) as client:
             for agent in agents_to_check:
                 agent_id = agent["agent_id"]
                 uri = agent["agent_uri"]
                 reachable = False
 
                 try:
+                    from services.url_safety import is_safe_url
                     parsed = urlparse(uri)
                     base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+                    if not is_safe_url(base_url):
+                        reachable = False
+                        liveness_results.append((agent_id, False, uri))
+                        continue
 
                     # Try /.well-known/agent.json first
                     try:

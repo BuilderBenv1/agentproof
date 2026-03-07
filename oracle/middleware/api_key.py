@@ -26,9 +26,8 @@ logger = logging.getLogger(__name__)
 FREE_PATH_PREFIXES = (
     "/api/v1/network/",
     "/api/v1/integrations/",
-    "/api/v1/webhooks/",
+    "/api/v1/webhooks",
     "/api/v1/feed",
-    "/api/v1/categories",
     "/integrate",
     "/health",
     "/.well-known/",

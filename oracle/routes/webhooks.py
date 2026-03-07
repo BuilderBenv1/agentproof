@@ -73,6 +73,13 @@ async def register_webhook(request: Request, body: WebhookCreate):
                 detail=f"Webhook limit reached for {tier} tier ({limit}). Upgrade to add more.",
             )
 
+    from services.url_safety import is_safe_url
+    if not is_safe_url(str(body.webhook_url)):
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook URL must be a public http(s) endpoint (no private IPs or localhost)",
+        )
+
     secret = secrets.token_hex(32)
 
     row = {

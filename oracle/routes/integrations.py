@@ -36,10 +36,13 @@ def _check_register_rate_limit(client_ip: str) -> bool:
             return False
         attempts.append(now)
         _register_attempts[client_ip] = attempts
-        # Evict stale IPs periodically
+        # Evict stale IPs periodically (keep entries with recent attempts)
         if len(_register_attempts) > 10_000:
             cutoff = now - _REGISTER_WINDOW
-            _register_attempts.clear()
+            stale = [ip for ip, times in _register_attempts.items()
+                     if not any(t >= cutoff for t in times)]
+            for ip in stale:
+                del _register_attempts[ip]
         return True
 
 

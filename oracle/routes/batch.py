@@ -8,7 +8,7 @@ reducing HTTP overhead for high-volume integrations.
 import logging
 
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 router = APIRouter(prefix="/api/v1/trust", tags=["trust"])
 logger = logging.getLogger(__name__)
@@ -27,6 +27,14 @@ TIER_BATCH_LIMITS = {
 class BatchRequest(BaseModel):
     agent_ids: list[int]
     chain: str | None = None
+
+    @field_validator("agent_ids")
+    @classmethod
+    def validate_agent_ids(cls, v: list[int]) -> list[int]:
+        for aid in v:
+            if aid <= 0:
+                raise ValueError(f"agent_id must be positive, got {aid}")
+        return v
 
 
 @router.post("/batch")
