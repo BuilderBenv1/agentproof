@@ -128,6 +128,41 @@ async def register_api_key(request: Request, body: RegisterRequest):
         raise HTTPException(status_code=500, detail="Failed to create API key")
 
 
+@router.post("/register-partner")
+async def register_partner_key(request: Request, body: RegisterRequest):
+    """Register a partner API key (admin use only — no billing, unlimited)."""
+    from database import get_supabase
+    db = get_supabase()
+
+    raw_key = "ap_live_" + secrets.token_hex(16)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = raw_key[:16]
+
+    try:
+        result = db.table("api_keys").insert({
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "protocol_name": body.protocol_name[:200],
+            "contact_email": body.contact_email[:200],
+            "tier": "partner",
+            "monthly_limit": 999_999_999,
+        }).execute()
+
+        key_id = result.data[0]["id"] if result.data else "unknown"
+
+        return RegisterResponse(
+            api_key=raw_key,
+            key_id=key_id,
+            tier="partner",
+            monthly_limit=999_999_999,
+            price_per_call="$0.00",
+            message="Partner API key created. Unlimited calls, no billing.",
+        )
+    except Exception as e:
+        logger.error("Failed to register partner key: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create partner key")
+
+
 @router.get("/usage")
 async def get_usage(request: Request):
     """Get usage statistics for the authenticated API key."""
