@@ -26,6 +26,37 @@ from app.services.scoring import (
 
 logger = logging.getLogger(__name__)
 
+
+def _resilient_upsert(db, table: str, rows: list[dict], on_conflict: str, label: str):
+    """Batch upsert with automatic fallback to sub-batches, then individual rows."""
+    if not rows:
+        return
+    try:
+        db.table(table).upsert(rows, on_conflict=on_conflict).execute()
+        logger.info(f"[{label}] Batch upserted {len(rows)} rows")
+    except Exception as e:
+        logger.warning(f"[{label}] Batch upsert failed ({len(rows)} rows), falling back to sub-batches: {e}")
+        failed_rows = []
+        for i in range(0, len(rows), 50):
+            batch = rows[i:i + 50]
+            try:
+                db.table(table).upsert(batch, on_conflict=on_conflict).execute()
+            except Exception:
+                failed_rows.extend(batch)
+        # Retry failed rows individually
+        if failed_rows:
+            logger.warning(f"[{label}] {len(failed_rows)} rows failed in sub-batches, retrying individually")
+            dropped = 0
+            for row in failed_rows:
+                try:
+                    db.table(table).upsert([row], on_conflict=on_conflict).execute()
+                except Exception as e3:
+                    dropped += 1
+                    logger.error(f"[{label}] Dropped row agent_id={row.get('agent_id')}: {e3}")
+            if dropped:
+                logger.error(f"[{label}] PERMANENTLY DROPPED {dropped}/{len(rows)} rows")
+
+
 CONFIRMATION_BLOCKS = 3
 DEFAULT_START_BLOCK = 77_000_000
 ERC8004_IDENTITY_START_BLOCK = 77_389_000  # Avalanche contract deployed at this block
@@ -37,8 +68,10 @@ ETH_MAX_BLOCK_RANGE = 800    # Safe for all ETH RPCs (Alchemy PAYG=2000, publicn
 BASE_MAX_BLOCK_RANGE = 10000  # CDP RPC supports large ranges; speeds up catchup
 BASE_FEEDBACK_BLOCK_RANGE = 10000  # Now uses raw httpx (same as identity), supports 10K
 LINEA_MAX_BLOCK_RANGE = 2000
-# Maximum chunks to process per cycle during catchup (prevents one chain from starving others)
+# Maximum chunks to process per cycle (normal operation)
 MAX_CHUNKS_PER_CYCLE = 50
+# When far behind, allow more chunks to catch up faster
+MAX_CHUNKS_CATCHUP = 500
 
 
 def get_last_processed_block(contract_name: str, default_start: int = DEFAULT_START_BLOCK) -> int:
@@ -111,18 +144,7 @@ def process_agent_registered_events(from_block: int, to_block: int):
             "updated_at": now,
         })
 
-    # Batch upsert
-    try:
-        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
-        logger.info(f"Batch upserted {len(rows)} custom agents (avalanche)")
-    except Exception as e:
-        logger.error(f"Batch upsert failed ({len(rows)} custom agents): {e}")
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
-            try:
-                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
-            except Exception as e2:
-                logger.error(f"Sub-batch upsert failed: {e2}")
+    _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "avalanche-custom")
 
     return len(events)
 
@@ -156,18 +178,7 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
             "updated_at": now,
         })
 
-    # Batch upsert
-    try:
-        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
-        logger.info(f"[ERC-8004-AVAX] Batch upserted {len(rows)} agents")
-    except Exception as e:
-        logger.error(f"[ERC-8004-AVAX] Batch upsert failed ({len(rows)} rows): {e}")
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
-            try:
-                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
-            except Exception as e2:
-                logger.error(f"[ERC-8004-AVAX] Sub-batch upsert failed: {e2}")
+    _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "ERC-8004-AVAX")
 
     return len(events)
 
@@ -1314,13 +1325,17 @@ def _process_chunked(
         return 0
 
     behind = safe_block - last_block
-    if behind > chunk_size * 10:
+    # When far behind, increase chunk limit for faster catchup
+    if behind > chunk_size * 100:
+        max_chunks = MAX_CHUNKS_CATCHUP
+        logger.info(f"[{contract_name}] {behind:,} blocks behind — CATCHUP MODE: up to {max_chunks} chunks of {chunk_size}")
+    elif behind > chunk_size * 10:
         logger.info(f"[{contract_name}] {behind:,} blocks behind — processing up to {max_chunks} chunks of {chunk_size}")
 
     total_count = 0
     from_block = last_block + 1
     retries = 0
-    max_retries = 3
+    max_retries = 8  # More retries with exponential backoff (max ~4 min wait)
     current_chunk = chunk_size
     chunks_done = 0
 
@@ -1348,10 +1363,14 @@ def _process_chunked(
                 f"(attempt {retries}/{max_retries}): {e}"
             )
             if retries >= max_retries:
-                logger.error(f"Max retries reached for {contract_name}, stopping at block {from_block}")
+                logger.error(
+                    f"[{contract_name}] Max retries reached at block {from_block} — "
+                    f"will resume from here next cycle"
+                )
                 break
-            # Backoff before retry
-            time.sleep(2 ** retries)
+            # Exponential backoff with cap at 30s
+            backoff = min(30, 2 ** retries)
+            time.sleep(backoff)
             continue  # Retry same chunk, don't advance
         update_last_processed_block(contract_name, to_block)
         from_block = to_block + 1
@@ -1440,17 +1459,7 @@ def _process_generic_identity(chain_name: str, rpc_url: str, from_block: int, to
         })
 
     db = get_supabase()
-    try:
-        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
-        logger.info(f"[{chain_name}] Batch upserted {len(rows)} agents")
-    except Exception as e:
-        logger.error(f"[{chain_name}] Batch upsert failed ({len(rows)} rows): {e}")
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
-            try:
-                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
-            except Exception as e2:
-                logger.error(f"[{chain_name}] Sub-batch upsert failed: {e2}")
+    _resilient_upsert(db, "agents", rows, "agent_id,source_chain", chain_name)
 
     return len(events)
 
@@ -1645,6 +1654,15 @@ def run_indexer_cycle():
         logger.info(f"Processed {count} validation events")
 
     # --- Extra chains (generic indexer) ---
+    skipped_chains = []
+    for chain_cfg in EXTRA_CHAINS:
+        rpc_url = _get_extra_chain_rpc(chain_cfg)
+        if not rpc_url:
+            skipped_chains.append(chain_cfg["name"])
+            continue
+    if skipped_chains:
+        logger.warning(f"Skipping {len(skipped_chains)} chains with no RPC URL: {', '.join(skipped_chains)}")
+
     for chain_cfg in EXTRA_CHAINS:
         rpc_url = _get_extra_chain_rpc(chain_cfg)
         if not rpc_url:
@@ -1755,17 +1773,7 @@ def _process_solana_agents(rpc_url: str) -> int:
             "updated_at": now,
         })
 
-    try:
-        db.table("agents").upsert(rows, on_conflict="agent_id,source_chain").execute()
-        logger.info(f"[solana] Batch upserted {len(rows)} agents")
-    except Exception as e:
-        logger.error(f"[solana] Batch upsert failed ({len(rows)} rows): {e}")
-        for i in range(0, len(rows), 50):
-            batch = rows[i:i + 50]
-            try:
-                db.table("agents").upsert(batch, on_conflict="agent_id,source_chain").execute()
-            except Exception as e2:
-                logger.error(f"[solana] Sub-batch upsert failed: {e2}")
+    _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "solana")
 
     update_last_processed_block(contract_name, new_slot)
     return len(rows)

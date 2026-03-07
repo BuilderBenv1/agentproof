@@ -715,6 +715,19 @@ class AgentScreener:
         db = get_supabase()
         now = datetime.now(timezone.utc)
 
+        # Verify oracle_reports table exists
+        try:
+            db.table("oracle_reports").select("id", count="exact").limit(0).execute()
+        except Exception as e:
+            if "does not exist" in str(e) or "404" in str(e):
+                logger.warning("[publish_network_report] oracle_reports table not found — skipping")
+                return
+            # Other errors (e.g. Cloudflare HTML response) — skip gracefully
+            if "<html>" in str(e).lower():
+                logger.warning("[publish_network_report] Supabase returned HTML error — skipping")
+                return
+            raise
+
         # Determine period start — since last report, or 6h ago
         period_start = (now - timedelta(hours=6)).isoformat()
         try:
@@ -802,6 +815,20 @@ class AgentScreener:
             "agents_screened": screenings_count,
         }
 
+        # Ensure report payload stays under Cloudflare/Supabase body limits
+        import json
+        report_json = json.dumps(report_data)
+        if len(report_json) > 50_000:
+            logger.warning(f"[publish_network_report] Truncating oversized report ({len(report_json)} bytes)")
+            report_data = {
+                "total_agents": total_agents,
+                "new_agents": new_agents,
+                "avg_trust_score": avg_score,
+                "tier_distribution": {k: v for k, v in sorted(tier_dist.items(), key=lambda x: -x[1])[:20]},
+                "alerts_issued": alerts_count,
+                "agents_screened": screenings_count,
+            }
+
         try:
             db.table("oracle_reports").insert({
                 "report_data": report_data,
@@ -814,7 +841,10 @@ class AgentScreener:
                 f"{new_agents} new, {alerts_count} alerts, {screenings_count} screened"
             )
         except Exception as e:
-            logger.error(f"[publish_network_report] Failed to insert report: {e}")
+            logger.error(
+                f"[publish_network_report] Failed to insert report: {e} | "
+                f"payload_size={len(json.dumps(report_data))} bytes"
+            )
 
     # ─── Job 5: Sync GitHub Activity (every 10 min) ────────────────────
 
