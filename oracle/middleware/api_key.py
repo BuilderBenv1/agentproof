@@ -132,7 +132,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 db = get_supabase()
                 result = (
                     db.table("api_keys")
-                    .select("id, protocol_name, tier, daily_limit, is_active, metadata")
+                    .select("id, protocol_name, tier, monthly_limit, is_active, metadata")
                     .eq("key_hash", key_hash)
                     .limit(1)
                     .execute()
