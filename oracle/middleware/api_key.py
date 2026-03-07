@@ -3,8 +3,8 @@ API key authentication and rate limiting middleware.
 
 Flow:
 1. Check X-Api-Key header (or ?api_key query param)
-2. If no key: pass through as anonymous (backwards compatible)
-3. If key present: validate, check daily limit, attach metadata to request.state
+2. If no key: reject with 401 on billable endpoints, pass through on free paths
+3. If key present: validate, check monthly limit, attach metadata to request.state
 4. Increment in-memory usage counter
 
 Key format: "ap_live_" + 32 hex chars
@@ -22,8 +22,25 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
+# Paths that are free (no API key required)
+FREE_PATH_PREFIXES = (
+    "/api/v1/network/",
+    "/api/v1/integrations/",
+    "/api/v1/webhooks/",
+    "/api/v1/feed",
+    "/api/v1/categories",
+    "/integrate",
+    "/health",
+    "/.well-known/",
+    "/docs",
+    "/openapi.json",
+    "/a2a",
+    "/mcp",
+)
+
 # Monthly call limits per tier (tracked via rolling 30-day window)
 TIER_MONTHLY_LIMITS = {
+    "partner": 999_999_999, # free — co-marketing / data exchange partners
     "paygo": 999_999_999,   # unlimited, billed per call at $0.05
     "starter": 10_000,      # $250/mo
     "growth": 25_000,       # $500/mo
@@ -80,8 +97,18 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         # Extract API key from header or query param
         raw_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
 
-        # No key: pass through as anonymous
+        # No key: check if this is a free endpoint
         if not raw_key:
+            path = request.url.path
+            is_free = path == "/" or any(path.startswith(p) for p in FREE_PATH_PREFIXES)
+            if not is_free:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "detail": "API key required. Register at https://oracle.agentproof.sh/integrate",
+                        "docs": "https://agentproof.sh/pricing",
+                    },
+                )
             request.state.api_key_id = None
             request.state.tier = None
             request.state.protocol_name = None
@@ -140,7 +167,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         monthly_limit = key_row.get("monthly_limit") or TIER_MONTHLY_LIMITS.get(tier, 10_000)
 
         # Over limit on a subscription tier → spill to pay-per-call (never block)
-        overage = tier != "paygo" and monthly_count >= monthly_limit
+        # Partner tier is never billed
+        overage = tier not in ("paygo", "partner") and monthly_count >= monthly_limit
 
         # Attach metadata to request state
         request.state.api_key_id = api_key_id

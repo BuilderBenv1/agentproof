@@ -64,6 +64,7 @@ class UpgradeRequest(BaseModel):
 
 # Tier definitions: monthly_limit, price_cents_per_month, price_per_call
 TIERS = {
+    "partner":    {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "$0.00"},
     "paygo":      {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "$0.05"},
     "starter":    {"monthly_limit": 10_000,      "price_cents": 25_000,  "per_call": "$0.025"},
     "growth":     {"monthly_limit": 25_000,      "price_cents": 50_000,  "per_call": "$0.02"},

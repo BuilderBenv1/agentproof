@@ -14,8 +14,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["REST API"])
 
 
+def _add_ratelimit_headers(response, request: Request):
+    """Attach X-RateLimit-* headers so integrators can track their usage."""
+    tier = getattr(request.state, "tier", None)
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if not api_key_id:
+        return response
+    from middleware.api_key import TIER_MONTHLY_LIMITS
+    from services.usage import get_usage_tracker
+    tracker = get_usage_tracker()
+    limit = TIER_MONTHLY_LIMITS.get(tier, 10_000)
+    used = tracker.get_monthly_count(api_key_id)
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(max(0, limit - used))
+    response.headers["X-RateLimit-Tier"] = tier or "unknown"
+    return response
+
+
 @router.get("/trust/{agent_id}", response_model=TrustEvaluation)
 async def evaluate_agent(
+    request: Request,
     agent_id: int,
     chain: str | None = Query(None, description="Source chain to scope evaluation (e.g. base, avalanche)"),
 ):
@@ -29,7 +47,7 @@ async def evaluate_agent(
         result = svc.evaluate_agent(agent_id, chain=chain)
         response = JSONResponse(content=result.model_dump(mode="json"))
         response.headers["X-Cache"] = "HIT" if was_cached else "MISS"
-        return response
+        return _add_ratelimit_headers(response, request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -38,11 +56,13 @@ async def evaluate_agent(
 
 
 @router.get("/trust/{agent_id}/risk", response_model=RiskAssessment)
-async def risk_check(agent_id: int):
+async def risk_check(request: Request, agent_id: int):
     """Get a risk assessment for an agent."""
     try:
         svc = get_trust_service()
-        return svc.risk_check(agent_id)
+        result = svc.risk_check(agent_id)
+        response = JSONResponse(content=result.model_dump(mode="json"))
+        return _add_ratelimit_headers(response, request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

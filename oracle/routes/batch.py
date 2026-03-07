@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Batch size limits per tier
 TIER_BATCH_LIMITS = {
+    "partner": 500,
     "paygo": 50,
     "starter": 100,
     "growth": 200,
