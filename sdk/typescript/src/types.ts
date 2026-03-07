@@ -167,6 +167,76 @@ export interface CategoryStats {
   tier_distribution: Record<string, number>;
 }
 
+// ─── Oracle trust evaluation types ────────────────────────────
+
+export interface ScoreBreakdown {
+  rating_score: number;
+  volume_score: number;
+  consistency_score: number;
+  validation_score: number;
+  age_score: number;
+  uptime_score: number;
+  deployer_score: number;
+  uri_stability_score: number;
+  coding_score: number | null;
+  delegation_score: number | null;
+}
+
+export interface TrustEvaluation {
+  agent_id: number;
+  name: string | null;
+  composite_score: number;
+  tier: string;
+  recommendation: "TRUSTED" | "CAUTION" | "HIGH_RISK" | "UNVERIFIED";
+  risk_flags: string[];
+  score_breakdown: ScoreBreakdown;
+  feedback_count: number;
+  average_rating: number;
+  validation_success_rate: number;
+  account_age_days: number;
+  uptime_pct: number;
+  evaluated_at: string;
+  scoped_scores: Record<string, { score: number; count: number; avg_rating: number }> | null;
+  delegation_success_rate: number | null;
+  delegation_count: number;
+  failure_count: number;
+  mttr_seconds: number | null;
+  last_failure_at: string | null;
+}
+
+export interface RiskAssessment {
+  agent_id: number;
+  recommendation: string;
+  risk_flags: string[];
+  risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  details: Record<string, unknown>;
+}
+
+export interface TrustedAgent {
+  agent_id: number;
+  name: string | null;
+  composite_score: number;
+  tier: string;
+  category: string;
+  feedback_count: number;
+  source_chain: string | null;
+}
+
+export interface NetworkStats {
+  total_agents: number;
+  avg_score: number;
+  tier_distribution: Record<string, number>;
+  total_feedback: number;
+  total_validations: number;
+  total_liveness: number;
+}
+
+export interface BatchResult {
+  evaluations: TrustEvaluation[];
+  errors: { agent_id: number; error: string }[] | null;
+  count: number;
+}
+
 // ─── Query parameter types ─────────────────────────────────────
 
 export interface AgentListParams {

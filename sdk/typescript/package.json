@@ -1,6 +1,6 @@
 {
   "name": "@agentproof/sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Official AgentProof SDK — query trust scores, reputation data, and agent intelligence from the ERC-8004 trust oracle.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

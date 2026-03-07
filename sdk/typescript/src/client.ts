@@ -3,6 +3,7 @@ import type {
   AgentProfile,
   AgentListParams,
   AnalyticsOverview,
+  BatchResult,
   CategoryStats,
   DeployerProfile,
   DiscoverParams,
@@ -13,17 +14,21 @@ import type {
   MaxExposure,
   MonitoringOverview,
   Mover,
+  NetworkStats,
   Paginated,
   ReputationSummary,
+  RiskAssessment,
   ScoreSnapshot,
   TrendingAgent,
+  TrustEvaluation,
+  TrustedAgent,
   ValidationRecord,
 } from "./types";
 
 export interface AgentProofConfig {
-  /** Your API key from https://agentproof.xyz/developers */
+  /** Your API key from https://agentproof.sh/integrate */
   apiKey: string;
-  /** Base URL override (default: https://api.agentproof.xyz/api) */
+  /** Base URL override (default: https://oracle.agentproof.sh/api/v1) */
   baseUrl?: string;
   /** Request timeout in ms (default: 15000) */
   timeout?: number;
@@ -44,7 +49,7 @@ export class AgentProof {
 
   constructor(config: AgentProofConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl || "https://api.agentproof.xyz/api").replace(/\/+$/, "");
+    this.baseUrl = (config.baseUrl || "https://oracle.agentproof.sh/api/v1").replace(/\/+$/, "");
     this.timeout = config.timeout ?? 15_000;
   }
 
@@ -77,6 +82,73 @@ export class AgentProof {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-API-Key": this.apiKey,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new AgentProofError(res.status, text || res.statusText, path);
+      }
+
+      return (await res.json()) as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // ─── Trust (Oracle) ──────────────────────────────────────────
+
+  /** Get a full trust evaluation for an agent (billable) */
+  async evaluateTrust(agentId: number, chain?: string): Promise<TrustEvaluation> {
+    return this.request<TrustEvaluation>(`/trust/${agentId}`, { chain });
+  }
+
+  /** Get a risk assessment for an agent (billable) */
+  async riskCheck(agentId: number): Promise<RiskAssessment> {
+    return this.request<RiskAssessment>(`/trust/${agentId}/risk`);
+  }
+
+  /** Get per-dimension trust scores for an agent (billable) */
+  async dimensions(agentId: number, chain?: string): Promise<{ agent_id: number; dimensions: Record<string, unknown> }> {
+    return this.request(`/trust/${agentId}/dimensions`, { chain });
+  }
+
+  /** Evaluate multiple agents in one request (billable, each agent counts as 1 call) */
+  async batchEvaluate(agentIds: number[], chain?: string): Promise<BatchResult> {
+    return this.post<BatchResult>("/trust/batch", { agent_ids: agentIds, chain });
+  }
+
+  /** Find trusted agents matching criteria (billable) */
+  async findTrusted(params?: {
+    category?: string;
+    min_score?: number;
+    min_feedback?: number;
+    tier?: string;
+    chain?: string;
+    limit?: number;
+  }): Promise<TrustedAgent[]> {
+    return this.request<TrustedAgent[]>("/agents/trusted", params as Record<string, unknown>);
+  }
+
+  /** Get network-wide trust statistics (free) */
+  async networkStats(): Promise<NetworkStats> {
+    return this.request<NetworkStats>("/network/stats");
   }
 
   // ─── Agents ────────────────────────────────────────────────
