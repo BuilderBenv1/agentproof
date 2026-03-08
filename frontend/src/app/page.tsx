@@ -11,7 +11,7 @@ import StatCard from "@/components/ui/StatCard";
 import AgentCard from "@/components/agents/AgentCard";
 import CategoryBadge from "@/components/reputation/CategoryBadge";
 import SearchBar from "@/components/ui/SearchBar";
-import EvidenceWall from "@/components/sections/EvidenceWall";
+import { EvidencePreview } from "@/components/sections/EvidenceWall";
 import { CATEGORIES } from "@/lib/constants";
 import { apiFetch } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -319,8 +319,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* The Evidence */}
-      <EvidenceWall />
+      {/* The Evidence — preview with link to full page */}
+      <EvidencePreview />
 
       {/* Categories — only show categories that have agents */}
       {(() => {

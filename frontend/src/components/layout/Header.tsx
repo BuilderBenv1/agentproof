@@ -13,9 +13,9 @@ const NAV_LINKS = [
   { href: "/register", label: "Register" },
   { href: "/mcp", label: "MCP" },
   { href: "/pricing", label: "API Pricing" },
+  { href: "/evidence", label: "Evidence" },
   { href: "/whitepaper", label: "Whitepaper" },
   { href: "/docs", label: "Docs" },
-  { href: "/intelligence", label: "Intelligence" },
 ];
 
 export default function Header() {
