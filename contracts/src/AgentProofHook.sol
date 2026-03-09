@@ -3,27 +3,35 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IACPHook.sol";
+import "./interfaces/IACP.sol";
 import "./interfaces/ITrustScoreOracle.sol";
 import "./interfaces/IIdentityRegistry.sol";
 import "./interfaces/IAttestationProvider.sol";
 
 /**
- * @title AgentProofHook — ERC-8183 Reputation-Gated Jobs
+ * @title AgentProofHook — ERC-ACP Profile A Reputation Gate
  * @notice An IACPHook implementation that gates provider assignment based on
  *         AgentProof trust scores and tracks job outcomes for off-chain indexing.
  *
- * Integration point: ERC-8183 (Agentic Commerce) + ERC-8004 (Agent Identity) + AgentProof Oracle
+ *         Conforms to the canonical ERC-ACP hook data encoding:
+ *         https://github.com/dcrapis/ERC-ACP
+ *
+ * Integration point: ERC-ACP (Agentic Commerce) + ERC-8004 (Agent Identity) + AgentProof Oracle
  *
  * beforeAction on setProvider:
+ *   data = abi.encode(address provider, bytes optParams)
  *   1. Resolves provider address → ERC-8004 agent ID via IdentityRegistry
  *   2. Reads trust score from TrustScoreOracle.viewScore()
  *   3. Reverts if score is stale (updatedAt + maxScoreAge < now)
  *   4. Reverts if score < minScore OR tier < minTier
  *   5. (Optional) Verifies credential attestation via IAttestationProvider
+ *   6. Caches provider address for afterAction resolution
  *
  * afterAction on complete/reject:
- *   1. Records job outcome (completed/rejected) per agent
- *   2. Emits JobOutcomeRecorded for off-chain indexing
+ *   data = abi.encode(bytes32 reason, bytes optParams)
+ *   1. Resolves provider via jobProviders cache or IACP.getJob()
+ *   2. Records job outcome (completed/rejected) per agent
+ *   3. Emits JobOutcomeRecorded for off-chain indexing
  */
 contract AgentProofHook is IACPHook, Ownable {
 
@@ -32,6 +40,7 @@ contract AgentProofHook is IACPHook, Ownable {
     ITrustScoreOracle public oracle;
     IIdentityRegistry public identityRegistry;
     IAttestationProvider public attestationProvider; // address(0) = disabled
+    IACP public acp; // address(0) = provider resolution via cache only
 
     // ─── Configuration ─────────────────────────────────────────────
 
@@ -50,14 +59,20 @@ contract AgentProofHook is IACPHook, Ownable {
 
     mapping(uint256 => AgentJobStats) public agentStats;
 
-    // ─── ERC-8183 Function Selectors ───────────────────────────────
+    /// @notice Provider cache — populated by beforeAction(setProvider),
+    ///         read by afterAction(complete/reject) to resolve the provider
+    ///         without requiring a second call to the ACP contract.
+    mapping(uint256 => address) public jobProviders;
+
+    // ─── ERC-ACP Function Selectors ─────────────────────────────────
+    // Reference: https://github.com/dcrapis/ERC-ACP/blob/main/contracts/AgenticCommerce.sol
 
     // setProvider(uint256 jobId, address provider)
     bytes4 private constant SEL_SET_PROVIDER = bytes4(keccak256("setProvider(uint256,address)"));
-    // complete(uint256 jobId)
-    bytes4 private constant SEL_COMPLETE = bytes4(keccak256("complete(uint256)"));
-    // reject(uint256 jobId)
-    bytes4 private constant SEL_REJECT = bytes4(keccak256("reject(uint256)"));
+    // complete(uint256 jobId, bytes32 reason)
+    bytes4 private constant SEL_COMPLETE = bytes4(keccak256("complete(uint256,bytes32)"));
+    // reject(uint256 jobId, bytes32 reason)
+    bytes4 private constant SEL_REJECT = bytes4(keccak256("reject(uint256,bytes32)"));
 
     // ─── Events ────────────────────────────────────────────────────
 
@@ -70,6 +85,7 @@ contract AgentProofHook is IACPHook, Ownable {
     event AttestationProviderUpdated(address oldProvider, address newProvider);
     event RequiredAttestationUpdated(bytes32 oldHash, bytes32 newHash);
     event MaxScoreAgeUpdated(uint40 oldMaxAge, uint40 newMaxAge);
+    event ACPUpdated(address oldACP, address newACP);
 
     // ─── Errors ────────────────────────────────────────────────────
 
@@ -88,7 +104,8 @@ contract AgentProofHook is IACPHook, Ownable {
         address _identityRegistry,
         uint16 _minScore,
         uint8 _minTier,
-        uint40 _maxScoreAge
+        uint40 _maxScoreAge,
+        address _acp
     ) Ownable(msg.sender) {
         if (_oracle == address(0) || _identityRegistry == address(0)) revert ZeroAddress();
         oracle = ITrustScoreOracle(_oracle);
@@ -96,41 +113,72 @@ contract AgentProofHook is IACPHook, Ownable {
         minScore = _minScore;
         minTier = _minTier;
         maxScoreAge = _maxScoreAge;
+        acp = IACP(_acp); // address(0) = cache-only mode
     }
 
     // ─── IACPHook Implementation ───────────────────────────────────
 
     /**
      * @notice Called before a job action executes. Gates setProvider by trust score.
+     *
+     * ERC-ACP hook data encoding:
+     *   setProvider: abi.encode(address provider, bytes optParams)
      */
     function beforeAction(uint256 jobId, bytes4 selector, bytes calldata data) external override {
         if (selector == SEL_SET_PROVIDER) {
-            // data = abi.encode(jobId, provider) — provider is the second param
-            address provider = abi.decode(data[32:], (address));
-            _gateProvider(jobId, provider);
+            // ERC-ACP canonical encoding: abi.encode(address provider, bytes optParams)
+            // Provider is the first ABI-encoded param (bytes 0-31)
+            (address provider, ) = abi.decode(data, (address, bytes));
+            jobProviders[jobId] = provider;
+            _gateProvider(provider);
         }
         // All other actions (fund, submit, claimRefund) pass through
     }
 
     /**
      * @notice Called after a job action executes. Records outcomes for complete/reject.
+     *
+     * ERC-ACP hook data encoding:
+     *   complete: abi.encode(bytes32 reason, bytes optParams)
+     *   reject:   abi.encode(bytes32 reason, bytes optParams)
+     *
+     * Provider is resolved from jobProviders cache (set during setProvider)
+     * or via IACP.getJob() if an ACP contract reference is configured.
      */
-    function afterAction(uint256 jobId, bytes4 selector, bytes calldata data) external override {
+    function afterAction(uint256 jobId, bytes4 selector, bytes calldata) external override {
         if (selector == SEL_COMPLETE) {
-            address provider = abi.decode(data[32:], (address));
-            _recordOutcome(jobId, provider, true);
+            address provider = _resolveProvider(jobId);
+            if (provider != address(0)) {
+                _recordOutcome(jobId, provider, true);
+            }
         } else if (selector == SEL_REJECT) {
-            address provider = abi.decode(data[32:], (address));
-            _recordOutcome(jobId, provider, false);
+            address provider = _resolveProvider(jobId);
+            if (provider != address(0)) {
+                _recordOutcome(jobId, provider, false);
+            }
         }
     }
 
     // ─── Internal ──────────────────────────────────────────────────
 
     /**
+     * @dev Resolve the provider for a job — cache first, then ACP fallback.
+     */
+    function _resolveProvider(uint256 jobId) internal view returns (address) {
+        address provider = jobProviders[jobId];
+        if (provider != address(0)) return provider;
+
+        // Fallback: query ACP contract if configured
+        if (address(acp) != address(0)) {
+            (, , provider, , , , , ) = acp.getJob(jobId);
+        }
+        return provider;
+    }
+
+    /**
      * @dev Gate a provider assignment by checking their AgentProof trust score.
      */
-    function _gateProvider(uint256 /* jobId */, address provider) internal view {
+    function _gateProvider(address provider) internal view {
         // Resolve provider address → ERC-8004 agent ID
         uint256 balance = identityRegistry.balanceOf(provider);
         if (balance == 0) revert AgentNotRegistered(provider);
@@ -253,5 +301,11 @@ contract AgentProofHook is IACPHook, Ownable {
         bytes32 old = requiredAttestation;
         requiredAttestation = _conditionHash;
         emit RequiredAttestationUpdated(old, _conditionHash);
+    }
+
+    function setACP(address _acp) external onlyOwner {
+        address old = address(acp);
+        acp = IACP(_acp); // address(0) = cache-only mode
+        emit ACPUpdated(old, _acp);
     }
 }

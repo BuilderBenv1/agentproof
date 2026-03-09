@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("AgentProofHook", function () {
-  let hook, oracle, identityRegistry;
+  let hook, oracle, identityRegistry, mockACP;
   let owner, escrow, provider, provider2, unregistered;
 
   const AGENT_ID = 1;
@@ -11,13 +11,33 @@ describe("AgentProofHook", function () {
   const MIN_SCORE = 3000; // 30.00
   const MIN_TIER = 1;     // bronze
   const MAX_SCORE_AGE = 0; // 0 = no expiry (default for most tests)
+  const ACP_ZERO = ethers.ZeroAddress; // no ACP reference by default
 
-  // ERC-8183 function selectors
+  // ERC-ACP function selectors (canonical spec)
+  // Reference: https://github.com/dcrapis/ERC-ACP
   const SEL_SET_PROVIDER = ethers.id("setProvider(uint256,address)").slice(0, 10);
-  const SEL_COMPLETE = ethers.id("complete(uint256)").slice(0, 10);
-  const SEL_REJECT = ethers.id("reject(uint256)").slice(0, 10);
-  const SEL_FUND = ethers.id("fund(uint256)").slice(0, 10);
-  const SEL_SUBMIT = ethers.id("submit(uint256,bytes)").slice(0, 10);
+  const SEL_COMPLETE = ethers.id("complete(uint256,bytes32)").slice(0, 10);
+  const SEL_REJECT = ethers.id("reject(uint256,bytes32)").slice(0, 10);
+  const SEL_FUND = ethers.id("fund(uint256,uint256)").slice(0, 10);
+  const SEL_SUBMIT = ethers.id("submit(uint256,bytes32)").slice(0, 10);
+
+  // ─── ERC-ACP canonical hook data encoding helpers ──────────────
+
+  /** setProvider hook data: abi.encode(address provider, bytes optParams) */
+  function encodeSetProvider(providerAddr, optParams = "0x") {
+    return ethers.AbiCoder.defaultAbiCoder().encode(
+      ["address", "bytes"],
+      [providerAddr, optParams]
+    );
+  }
+
+  /** complete/reject hook data: abi.encode(bytes32 reason, bytes optParams) */
+  function encodeOutcome(reason = ethers.ZeroHash, optParams = "0x") {
+    return ethers.AbiCoder.defaultAbiCoder().encode(
+      ["bytes32", "bytes"],
+      [reason, optParams]
+    );
+  }
 
   beforeEach(async function () {
     [owner, escrow, provider, provider2, unregistered] = await ethers.getSigners();
@@ -32,6 +52,11 @@ describe("AgentProofHook", function () {
     identityRegistry = await MockRegistry.deploy();
     await identityRegistry.waitForDeployment();
 
+    // Deploy mock ACP
+    const MockACPFactory = await ethers.getContractFactory("MockACP");
+    mockACP = await MockACPFactory.deploy();
+    await mockACP.waitForDeployment();
+
     // Register provider → agent ID 1
     await identityRegistry.registerAgent(provider.address, AGENT_ID);
     // Register provider2 → agent ID 2
@@ -41,14 +66,15 @@ describe("AgentProofHook", function () {
     await oracle.setScore(AGENT_ID, 6500, 3); // 65.00, gold
     await oracle.setScore(AGENT_ID_2, 2000, 0); // 20.00, unranked
 
-    // Deploy AgentProofHook
+    // Deploy AgentProofHook (no ACP reference by default — cache-only mode)
     const Hook = await ethers.getContractFactory("AgentProofHook");
     hook = await Hook.deploy(
       await oracle.getAddress(),
       await identityRegistry.getAddress(),
       MIN_SCORE,
       MIN_TIER,
-      MAX_SCORE_AGE
+      MAX_SCORE_AGE,
+      ACP_ZERO
     );
     await hook.waitForDeployment();
   });
@@ -74,36 +100,39 @@ describe("AgentProofHook", function () {
       expect(await hook.maxScoreAge()).to.equal(MAX_SCORE_AGE);
     });
 
+    it("should set correct acp (zero = cache-only)", async function () {
+      expect(await hook.acp()).to.equal(ethers.ZeroAddress);
+    });
+
     it("should revert with zero oracle address", async function () {
       const Hook = await ethers.getContractFactory("AgentProofHook");
       await expect(
-        Hook.deploy(ethers.ZeroAddress, await identityRegistry.getAddress(), MIN_SCORE, MIN_TIER, MAX_SCORE_AGE)
+        Hook.deploy(ethers.ZeroAddress, await identityRegistry.getAddress(), MIN_SCORE, MIN_TIER, MAX_SCORE_AGE, ACP_ZERO)
       ).to.be.revertedWithCustomError(hook, "ZeroAddress");
     });
 
     it("should revert with zero registry address", async function () {
       const Hook = await ethers.getContractFactory("AgentProofHook");
       await expect(
-        Hook.deploy(await oracle.getAddress(), ethers.ZeroAddress, MIN_SCORE, MIN_TIER, MAX_SCORE_AGE)
+        Hook.deploy(await oracle.getAddress(), ethers.ZeroAddress, MIN_SCORE, MIN_TIER, MAX_SCORE_AGE, ACP_ZERO)
       ).to.be.revertedWithCustomError(hook, "ZeroAddress");
     });
   });
 
-  describe("beforeAction — Provider Gating", function () {
+  describe("beforeAction — Provider Gating (ERC-ACP canonical encoding)", function () {
     it("should allow provider with sufficient score and tier", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      // Should not revert
+      const data = encodeSetProvider(provider.address);
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
 
+    it("should cache provider address for afterAction resolution", async function () {
+      const data = encodeSetProvider(provider.address);
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+      expect(await hook.jobProviders(JOB_ID)).to.equal(provider.address);
+    });
+
     it("should revert when provider score is below minScore", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider2.address]
-      );
+      const data = encodeSetProvider(provider2.address);
       await expect(
         hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(hook, "ScoreTooLow")
@@ -111,12 +140,8 @@ describe("AgentProofHook", function () {
     });
 
     it("should revert when provider tier is below minTier", async function () {
-      // Set score high but tier still 0 (unranked)
       await oracle.setScore(AGENT_ID_2, 5000, 0);
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider2.address]
-      );
+      const data = encodeSetProvider(provider2.address);
       await expect(
         hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(hook, "TierTooLow")
@@ -124,10 +149,7 @@ describe("AgentProofHook", function () {
     });
 
     it("should revert when provider is not registered", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, unregistered.address]
-      );
+      const data = encodeSetProvider(unregistered.address);
       await expect(
         hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(hook, "AgentNotRegistered")
@@ -135,13 +157,9 @@ describe("AgentProofHook", function () {
     });
 
     it("should revert when provider has no score", async function () {
-      // Register a new agent with no score
       const newAgent = 99;
       await identityRegistry.registerAgent(unregistered.address, newAgent);
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, unregistered.address]
-      );
+      const data = encodeSetProvider(unregistered.address);
       await expect(
         hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(hook, "AgentNotScored")
@@ -149,20 +167,30 @@ describe("AgentProofHook", function () {
     });
 
     it("should pass through non-setProvider actions (fund, submit)", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [JOB_ID]);
-      // fund — should not revert
-      await hook.connect(escrow).beforeAction(JOB_ID, SEL_FUND, data);
-      // submit — should not revert
-      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SUBMIT, data);
+      const fundData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes"], ["0x"]);
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_FUND, fundData);
+      const submitData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes32", "bytes"], [ethers.ZeroHash, "0x"]);
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SUBMIT, submitData);
+    });
+
+    it("should handle optParams in setProvider data", async function () {
+      // Pass extra optParams — hook should still extract provider correctly
+      const optParams = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [42]);
+      const data = encodeSetProvider(provider.address, optParams);
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
   });
 
-  describe("afterAction — Job Outcome Recording", function () {
-    it("should record completed job and emit event", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+  describe("afterAction — Job Outcome Recording (ERC-ACP canonical encoding)", function () {
+    beforeEach(async function () {
+      // Cache provider via beforeAction (simulates normal ACP flow)
+      const data = encodeSetProvider(provider.address);
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+
+    it("should record completed job using cached provider", async function () {
+      const reason = ethers.id("good work");
+      const data = encodeOutcome(reason);
       await expect(hook.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, data))
         .to.emit(hook, "JobOutcomeRecorded")
         .withArgs(AGENT_ID, JOB_ID, true);
@@ -173,11 +201,8 @@ describe("AgentProofHook", function () {
       expect(lastJobAt).to.be.gt(0);
     });
 
-    it("should record rejected job and emit event", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+    it("should record rejected job using cached provider", async function () {
+      const data = encodeOutcome();
       await expect(hook.connect(escrow).afterAction(JOB_ID, SEL_REJECT, data))
         .to.emit(hook, "JobOutcomeRecorded")
         .withArgs(AGENT_ID, JOB_ID, false);
@@ -188,31 +213,87 @@ describe("AgentProofHook", function () {
     });
 
     it("should accumulate stats across multiple jobs", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      await hook.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(JOB_ID + 1, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(JOB_ID + 2, SEL_REJECT, data);
+      // Cache providers for additional jobs
+      const data = encodeSetProvider(provider.address);
+      await hook.connect(escrow).beforeAction(JOB_ID + 1, SEL_SET_PROVIDER, data);
+      await hook.connect(escrow).beforeAction(JOB_ID + 2, SEL_SET_PROVIDER, data);
+
+      const outcomeData = encodeOutcome();
+      await hook.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, outcomeData);
+      await hook.connect(escrow).afterAction(JOB_ID + 1, SEL_COMPLETE, outcomeData);
+      await hook.connect(escrow).afterAction(JOB_ID + 2, SEL_REJECT, outcomeData);
 
       const [completed, rejected] = await hook.getAgentJobStats(AGENT_ID);
       expect(completed).to.equal(2);
       expect(rejected).to.equal(1);
     });
 
-    it("should silently skip unregistered provider on outcome", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, unregistered.address]
-      );
-      // Should not revert — silently skips
-      await hook.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, data);
+    it("should silently skip when provider not in cache and no ACP", async function () {
+      // Job 999 was never seen in beforeAction — no cached provider
+      const data = encodeOutcome();
+      await hook.connect(escrow).afterAction(999, SEL_COMPLETE, data);
+      // Should not revert, just skip
     });
 
     it("should pass through non-outcome actions (fund)", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [JOB_ID]);
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(["bytes"], ["0x"]);
       await hook.connect(escrow).afterAction(JOB_ID, SEL_FUND, data);
+    });
+  });
+
+  describe("afterAction — ACP Fallback Resolution", function () {
+    let hookWithACP;
+
+    beforeEach(async function () {
+      // Deploy hook WITH ACP reference
+      const Hook = await ethers.getContractFactory("AgentProofHook");
+      hookWithACP = await Hook.deploy(
+        await oracle.getAddress(),
+        await identityRegistry.getAddress(),
+        MIN_SCORE,
+        MIN_TIER,
+        MAX_SCORE_AGE,
+        await mockACP.getAddress()
+      );
+      await hookWithACP.waitForDeployment();
+
+      // Register job in mock ACP (provider set at createJob, not via setProvider)
+      await mockACP.setJob(JOB_ID, owner.address, provider.address, escrow.address);
+    });
+
+    it("should resolve provider from ACP when not in cache", async function () {
+      // No beforeAction(setProvider) — provider was set at createJob
+      const data = encodeOutcome();
+      await expect(hookWithACP.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, data))
+        .to.emit(hookWithACP, "JobOutcomeRecorded")
+        .withArgs(AGENT_ID, JOB_ID, true);
+    });
+
+    it("should prefer cache over ACP when both available", async function () {
+      // Cache provider2 but ACP has provider
+      const setData = encodeSetProvider(provider2.address);
+      // Need provider2 to pass gate — set high score
+      await oracle.setScore(AGENT_ID_2, 8000, 3);
+      await hookWithACP.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, setData);
+
+      const data = encodeOutcome();
+      await hookWithACP.connect(escrow).afterAction(JOB_ID, SEL_COMPLETE, data);
+
+      // Should use cached provider2, not ACP's provider
+      const [completed2] = await hookWithACP.getAgentJobStats(AGENT_ID_2);
+      expect(completed2).to.equal(1);
+
+      const [completed1] = await hookWithACP.getAgentJobStats(AGENT_ID);
+      expect(completed1).to.equal(0);
+    });
+
+    it("should handle ACP returning unregistered provider gracefully", async function () {
+      // Set ACP job with unregistered provider
+      await mockACP.setJob(200, owner.address, unregistered.address, escrow.address);
+
+      const data = encodeOutcome();
+      // Should not revert — _recordOutcome silently skips unregistered
+      await hookWithACP.connect(escrow).afterAction(200, SEL_COMPLETE, data);
     });
   });
 
@@ -224,15 +305,15 @@ describe("AgentProofHook", function () {
     });
 
     it("should calculate correct completion rate", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      // Cache provider for all jobs
+      for (let i = 1; i <= 4; i++) {
+        await hook.connect(escrow).beforeAction(i, SEL_SET_PROVIDER, encodeSetProvider(provider.address));
+      }
       // 3 completed, 1 rejected = 75%
-      await hook.connect(escrow).afterAction(1, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(2, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(3, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(4, SEL_REJECT, data);
+      await hook.connect(escrow).afterAction(1, SEL_COMPLETE, encodeOutcome());
+      await hook.connect(escrow).afterAction(2, SEL_COMPLETE, encodeOutcome());
+      await hook.connect(escrow).afterAction(3, SEL_COMPLETE, encodeOutcome());
+      await hook.connect(escrow).afterAction(4, SEL_REJECT, encodeOutcome());
 
       const [rate, total] = await hook.getCompletionRate(AGENT_ID);
       expect(rate).to.equal(7500); // 75.00%
@@ -240,12 +321,11 @@ describe("AgentProofHook", function () {
     });
 
     it("should return 10000 for 100% completion", async function () {
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      await hook.connect(escrow).afterAction(1, SEL_COMPLETE, data);
-      await hook.connect(escrow).afterAction(2, SEL_COMPLETE, data);
+      for (let i = 1; i <= 2; i++) {
+        await hook.connect(escrow).beforeAction(i, SEL_SET_PROVIDER, encodeSetProvider(provider.address));
+      }
+      await hook.connect(escrow).afterAction(1, SEL_COMPLETE, encodeOutcome());
+      await hook.connect(escrow).afterAction(2, SEL_COMPLETE, encodeOutcome());
 
       const [rate, total] = await hook.getCompletionRate(AGENT_ID);
       expect(rate).to.equal(10000);
@@ -328,6 +408,14 @@ describe("AgentProofHook", function () {
       await hook.setAttestationProvider(ethers.ZeroAddress);
       expect(await hook.attestationProvider()).to.equal(ethers.ZeroAddress);
     });
+
+    it("should allow owner to set ACP reference", async function () {
+      const acpAddr = await mockACP.getAddress();
+      await expect(hook.setACP(acpAddr))
+        .to.emit(hook, "ACPUpdated")
+        .withArgs(ethers.ZeroAddress, acpAddr);
+      expect(await hook.acp()).to.equal(acpAddr);
+    });
   });
 
   describe("Attestation Provider Gating", function () {
@@ -335,44 +423,30 @@ describe("AgentProofHook", function () {
     const CONDITION_HASH = ethers.id("holds >= 1 USDC on avalanche");
 
     beforeEach(async function () {
-      // Deploy mock attestation provider
       const MockAttestation = await ethers.getContractFactory("MockAttestationProvider");
       attestationProvider = await MockAttestation.deploy();
       await attestationProvider.waitForDeployment();
     });
 
     it("should pass through when no attestation provider is set", async function () {
-      // No attestation provider configured — backward compatible
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      const data = encodeSetProvider(provider.address);
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
 
     it("should allow provider that passes attestation", async function () {
-      // Configure attestation
       await hook.setAttestationProvider(await attestationProvider.getAddress());
       await hook.setRequiredAttestation(CONDITION_HASH);
       await attestationProvider.setResult(provider.address, true);
 
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      // Should not revert
+      const data = encodeSetProvider(provider.address);
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
 
     it("should revert when provider fails attestation", async function () {
       await hook.setAttestationProvider(await attestationProvider.getAddress());
       await hook.setRequiredAttestation(CONDITION_HASH);
-      // provider passes trust score but NOT attestation (default is false)
 
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      const data = encodeSetProvider(provider.address);
       await expect(
         hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(hook, "AttestationFailed")
@@ -380,16 +454,11 @@ describe("AgentProofHook", function () {
     });
 
     it("should skip attestation check after provider is set back to address(0)", async function () {
-      // Enable then disable
       await hook.setAttestationProvider(await attestationProvider.getAddress());
       await hook.setRequiredAttestation(CONDITION_HASH);
       await hook.setAttestationProvider(ethers.ZeroAddress);
 
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      // Should pass — attestation disabled
+      const data = encodeSetProvider(provider.address);
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
   });
@@ -398,22 +467,15 @@ describe("AgentProofHook", function () {
     const ONE_HOUR = 3600;
 
     it("should allow fresh score when maxScoreAge is set", async function () {
-      // Deploy hook with 1-hour max age
       const Hook = await ethers.getContractFactory("AgentProofHook");
       const freshHook = await Hook.deploy(
         await oracle.getAddress(),
         await identityRegistry.getAddress(),
-        MIN_SCORE,
-        MIN_TIER,
-        ONE_HOUR
+        MIN_SCORE, MIN_TIER, ONE_HOUR, ACP_ZERO
       );
       await freshHook.waitForDeployment();
 
-      // Score was just set in beforeEach — it's fresh
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      const data = encodeSetProvider(provider.address);
       await freshHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
 
@@ -422,21 +484,15 @@ describe("AgentProofHook", function () {
       const staleHook = await Hook.deploy(
         await oracle.getAddress(),
         await identityRegistry.getAddress(),
-        MIN_SCORE,
-        MIN_TIER,
-        ONE_HOUR
+        MIN_SCORE, MIN_TIER, ONE_HOUR, ACP_ZERO
       );
       await staleHook.waitForDeployment();
 
-      // Set score with an old timestamp (2 hours ago)
       const block = await ethers.provider.getBlock("latest");
       const staleTime = block.timestamp - (ONE_HOUR * 2);
       await oracle.setScoreAt(AGENT_ID, 6500, 3, staleTime);
 
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      const data = encodeSetProvider(provider.address);
       await expect(
         staleHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
       ).to.be.revertedWithCustomError(staleHook, "ScoreExpired")
@@ -444,16 +500,10 @@ describe("AgentProofHook", function () {
     });
 
     it("should skip staleness check when maxScoreAge is 0", async function () {
-      // Default hook has maxScoreAge = 0
       expect(await hook.maxScoreAge()).to.equal(0);
-
-      // Set an old score — should still pass because staleness is disabled
       await oracle.setScoreAt(AGENT_ID, 6500, 3, 1);
 
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
+      const data = encodeSetProvider(provider.address);
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
 
@@ -462,24 +512,15 @@ describe("AgentProofHook", function () {
       const staleHook = await Hook.deploy(
         await oracle.getAddress(),
         await identityRegistry.getAddress(),
-        MIN_SCORE,
-        MIN_TIER,
-        ONE_HOUR
+        MIN_SCORE, MIN_TIER, ONE_HOUR, ACP_ZERO
       );
       await staleHook.waitForDeployment();
 
-      // Set stale score
       const block = await ethers.provider.getBlock("latest");
       await oracle.setScoreAt(AGENT_ID, 6500, 3, block.timestamp - (ONE_HOUR * 2));
+      await oracle.setScore(AGENT_ID, 6500, 3); // refresh
 
-      // Refresh it
-      await oracle.setScore(AGENT_ID, 6500, 3);
-
-      const data = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address"],
-        [JOB_ID, provider.address]
-      );
-      // Should pass now — score is fresh
+      const data = encodeSetProvider(provider.address);
       await staleHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
     });
   });
@@ -511,7 +552,6 @@ describe("AgentProofHook", function () {
     });
 
     it("should check meetsThreshold correctly", async function () {
-      // provider has score 6500
       expect(await resolver.meetsThreshold(provider.address, 3000)).to.be.true;
       expect(await resolver.meetsThreshold(provider.address, 6500)).to.be.true;
       expect(await resolver.meetsThreshold(provider.address, 6501)).to.be.false;
