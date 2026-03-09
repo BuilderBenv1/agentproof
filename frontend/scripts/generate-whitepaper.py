@@ -111,8 +111,8 @@ def build():
     pdf.body_text(
         "Scalar reputation systems are failing the agent economy. AgentProof replaces static scores "
         "with adaptive, probabilistic trust -- treating every agent as a probability distribution, not a number. "
-        "The oracle indexes 54,000+ agents across 21 chains, evaluates trust through a 10-signal composite "
-        "scoring model with Bayesian smoothing, detects risk through 12 automated flags, and provides "
+        "The oracle indexes 54,000+ agents across 21 chains, evaluates trust through an 11-signal composite "
+        "scoring model with Bayesian smoothing, detects risk through 14 automated flags, and provides "
         "dollar-denominated max exposure ceilings for insurance underwriting. This paper documents the "
         "architecture, methodology, evidence base, and commercial model."
     )
@@ -120,7 +120,7 @@ def build():
     # Stats line
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(0, 180, 130)
-    pdf.cell(0, 7, "21 Chains  |  54K+ Agents  |  10 Scoring Signals  |  12 Risk Flags  |  6 Pricing Tiers", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, "21 Chains  |  54K+ Agents  |  11 Scoring Signals  |  14 Risk Flags  |  6 Pricing Tiers", align="C", new_x="LMARGIN", new_y="NEXT")
 
     # ── Section 1: The Crisis of Static Trust ──────────────────
     pdf.add_page()
@@ -255,11 +255,14 @@ def build():
 
     # ── Section 3: ERC-8004 Standard ──────────────────────────
     pdf.add_page()
-    pdf.section_title(3, "The ERC-8004 Standard")
+    pdf.section_title(3, "ERC-8004 + ERC-8183")
 
     pdf.body_text(
         "ERC-8004 establishes three on-chain registries for AI agents, published by Ava Labs and deployed "
-        "across 21 EVM-compatible chains via deterministic CREATE2 addresses, plus native Solana program indexing."
+        "across 21 EVM-compatible chains via deterministic CREATE2 addresses, plus native Solana program indexing. "
+        "ERC-8183 (Agentic Commerce Protocol), co-developed by Virtuals Protocol and the Ethereum Foundation dAI "
+        "team, adds job escrow with a Client-Provider-Evaluator lifecycle. AgentProof composes with both standards "
+        "via the AgentProofHook -- an IACPHook that gates provider assignment by trust score."
     )
 
     pdf.sub_section("3.1 Identity Registry")
@@ -307,7 +310,7 @@ def build():
 
     pdf.sub_section("Layer 2: Evaluation")
     pdf.small_text(
-        "10-signal composite scoring with Bayesian smoothing, freshness multiplier, 12 automated risk flags, "
+        "11-signal composite scoring with Bayesian smoothing, freshness multiplier, 14 automated risk flags, "
         "and tier classification. Evaluation results cached in-memory with 300-second TTL. Scoped scores "
         "computed per-dimension (tag1) with independent Bayesian smoothing per scope."
     )
@@ -324,9 +327,9 @@ def build():
     pdf.section_title(5, "Scoring Methodology")
 
     pdf.body_text(
-        "The composite score (0-100) blends up to 10 weighted signals, Bayesian-smoothed to prevent "
+        "The composite score (0-100) blends up to 11 weighted signals, Bayesian-smoothed to prevent "
         "new agents with a single perfect rating from dominating the leaderboard. Weights dynamically "
-        "rebalance when optional signals (coding reputation) become available."
+        "rebalance when optional signals (coding reputation, ERC-8183 job completion) become available."
     )
 
     pdf.sub_section("5.1 Signal Weights")
@@ -334,9 +337,11 @@ def build():
     # Table header
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(0, 180, 130)
-    pdf.cell(60, 6, "Signal")
-    pdf.cell(30, 6, "With Coding")
-    pdf.cell(30, 6, "Without Coding")
+    pdf.cell(45, 6, "Signal")
+    pdf.cell(18, 6, "All")
+    pdf.cell(18, 6, "Code")
+    pdf.cell(18, 6, "Job")
+    pdf.cell(18, 6, "Base")
     pdf.cell(0, 6, "Description")
     pdf.ln()
     pdf.set_draw_color(180, 180, 180)
@@ -344,33 +349,39 @@ def build():
     pdf.ln(1)
 
     signals = [
-        ("Rating Score", "27%", "30%", "Bayesian-smoothed average (prior=50, k=3)"),
-        ("Validation Score", "13%", "15%", "On-chain validation success rate"),
-        ("Account Age", "11%", "12%", "Logarithmic maturity curve"),
-        ("Coding Score", "10%", "--", "GitHub PR merge rate, review quality"),
-        ("Volume Score", "9%", "10%", "Logarithmic feedback count"),
-        ("Consistency Score", "9%", "10%", "Inverse standard deviation of ratings"),
-        ("Uptime Score", "9%", "10%", "Liveness probe success rate"),
-        ("Deployer Score", "7%", "8%", "Deployer wallet reputation lineage"),
-        ("URI Stability", "5%", "5%", "Metadata mutation frequency"),
+        ("Rating Score", "25%", "27%", "28%", "30%", "Bayesian-smoothed avg (prior=50, k=3)"),
+        ("Validation Score", "11%", "13%", "14%", "15%", "On-chain validation success rate"),
+        ("Account Age", "10%", "11%", "11%", "12%", "Logarithmic maturity curve"),
+        ("Coding Score", "10%", "10%", "--", "--", "GitHub PR merge rate, review quality"),
+        ("Volume Score", "8%", "9%", "9%", "10%", "Logarithmic feedback count"),
+        ("Consistency Score", "8%", "9%", "9%", "10%", "Inverse std dev of ratings"),
+        ("Uptime Score", "8%", "9%", "9%", "10%", "Liveness probe success rate"),
+        ("Job Completion", "8%", "--", "8%", "--", "ERC-8183 job completion rate"),
+        ("Deployer Score", "6%", "7%", "7%", "8%", "Deployer wallet reputation lineage"),
+        ("URI Stability", "6%", "5%", "5%", "5%", "Metadata mutation frequency"),
     ]
 
-    for sig, w1, w2, desc in signals:
-        pdf.set_font("Helvetica", "", 8)
-        pdf.set_text_color(40, 40, 40)
-        pdf.cell(60, 5.5, sig)
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.cell(30, 5.5, w1)
-        pdf.cell(30, 5.5, w2)
+    for sig, w_all, w_code, w_job, w_base, desc in signals:
         pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(45, 5.5, sig)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.cell(18, 5.5, w_all)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.cell(18, 5.5, w_code)
+        pdf.cell(18, 5.5, w_job)
+        pdf.cell(18, 5.5, w_base)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(0, 5.5, desc)
         pdf.ln()
+    pdf.small_text("All = coding + job active. Code = coding only. Job = job only. Base = neither.")
 
     pdf.ln(3)
 
     pdf.sub_section("5.2 Additional Tracked Signals")
     pdf.small_text(
+        "ERC-8183 Job Outcomes -- job completion rate, total jobs as provider, abandonment detection. "
+        "Indexed from AgentProofHook JobOutcomeRecorded events. Weighted at 8% when available. "
         "Delegation Tracking -- success rate, total count, and MTTR (Mean Time To Recovery) when acting as "
         "delegate. Reported in evaluations but not yet weighted in composite score. "
         "Failure Metrics -- failure count, active unresolved failures, recovery time tracking."
@@ -424,7 +435,7 @@ def build():
         "underwriting."
     )
 
-    pdf.sub_section("6.1 Risk Flags (12)", (220, 60, 60))
+    pdf.sub_section("6.1 Risk Flags (14)", (220, 60, 60))
     flags = [
         ("HIGH_RISK_SCORE", "Composite score below safety threshold"),
         ("CONCENTRATED_FEEDBACK", "Majority of feedback from single reviewer"),
@@ -438,6 +449,8 @@ def build():
         ("HIGH_FAILURE_RATE", "Delegation failure rate above threshold"),
         ("SLOW_RECOVERY", "MTTR exceeds acceptable recovery window"),
         ("ACTIVE_FAILURE", "Unresolved failure event currently active"),
+        ("HIGH_JOB_FAILURE_RATE", "ERC-8183 job completion rate <60% with 3+ jobs"),
+        ("JOB_ABANDONMENT", "Multiple rejected/expired jobs as provider"),
     ]
     for flag, desc in flags:
         pdf.set_font("Helvetica", "B", 7)
@@ -533,7 +546,7 @@ def build():
     pdf.section_title(10, "Autonomous Oracle Operations")
 
     pdf.body_text(
-        "The oracle runs 7 autonomous background jobs on continuous schedules, maintaining real-time "
+        "The oracle runs 8 autonomous background jobs on continuous schedules, maintaining real-time "
         "scoring accuracy without manual intervention."
     )
 
@@ -544,6 +557,7 @@ def build():
         ("Failure Metrics", "300s", "Aggregates failure events, calculates MTTR, identifies active unresolved failures"),
         ("Network Report", "600s", "Publishes ecosystem stats via event feed (tier distribution, category averages)"),
         ("Delegation Sync", "600s", "Tracks delegation success/failure rates, updates MTTR metrics"),
+        ("Job Outcomes", "600s", "Syncs ERC-8183 job completion rates, updates job_score signal"),
         ("GitHub Sync", "3600s", "Fetches GitHub stats, computes coding_score from PR merge rate and review quality"),
     ]
 
@@ -642,12 +656,13 @@ def build():
     roadmap = [
         ("Q1 2026 (Complete)", [
             "21-chain indexing with 54K+ agents",
-            "10-signal composite scoring with Bayesian smoothing",
-            "12 risk flags and 4 risk levels",
+            "11-signal composite scoring with Bayesian smoothing",
+            "14 risk flags and 4 risk levels",
+            "ERC-8183 reputation-gated jobs hook (AgentProofHook)",
             "REST API, A2A, MCP server, webhooks",
             "TypeScript SDK v1.1.0",
             "API key gating with 6 pricing tiers",
-            "Autonomous oracle (7 background jobs)",
+            "Autonomous oracle (8 background jobs)",
             "GitHub coding reputation integration",
             "Delegation tracking and failure metrics",
         ]),
@@ -703,7 +718,7 @@ def build():
     pdf.cell(0, 8, "agentproof.sh  |  oracle.agentproof.sh/api/v1  |  @agentproof/sdk", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 7, "ERC-8004  |  21 Chains  |  54K+ Agents  |  10 Signals  |  12 Risk Flags", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, "ERC-8004 + ERC-8183  |  21 Chains  |  54K+ Agents  |  11 Signals  |  14 Risk Flags", align="C", new_x="LMARGIN", new_y="NEXT")
 
     # Save
     pdf.output(OUTPUT)
