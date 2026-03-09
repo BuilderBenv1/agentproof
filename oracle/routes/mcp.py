@@ -83,6 +83,46 @@ MCP_TOOLS = [
             required=[],
         ),
     ),
+    MCPToolDefinition(
+        name="hook_gate_check",
+        description="Pre-check whether an agent would pass the AgentProofHook (ERC-8183) reputation gate. Simulates on-chain _gateProvider() logic: score threshold, tier minimum, score freshness. Returns allowed/rejected with reason.",
+        inputSchema=MCPToolInputSchema(
+            type="object",
+            properties={
+                "agent_id": {
+                    "type": "integer",
+                    "description": "The ERC-8004 agent ID to check",
+                },
+                "min_score": {
+                    "type": "number",
+                    "description": "Minimum score threshold (0-100, default 30)",
+                },
+                "min_tier": {
+                    "type": "integer",
+                    "description": "Minimum tier (0=unranked, 1=bronze, ..., 5=diamond, default 1)",
+                },
+                "max_score_age": {
+                    "type": "integer",
+                    "description": "Max score age in seconds (0=no expiry, default 3600)",
+                },
+            },
+            required=["agent_id"],
+        ),
+    ),
+    MCPToolDefinition(
+        name="resolve_address",
+        description="Resolve a wallet address to its ERC-8004 agent ID and trust score. Mirrors the on-chain AddressResolver contract.",
+        inputSchema=MCPToolInputSchema(
+            type="object",
+            properties={
+                "address": {
+                    "type": "string",
+                    "description": "The wallet address to resolve (0x...)",
+                },
+            },
+            required=["address"],
+        ),
+    ),
 ]
 
 
@@ -115,6 +155,25 @@ def _execute_tool(name: str, arguments: dict) -> Any:
 
     elif name == "network_stats":
         return svc.network_stats().model_dump(mode="json")
+
+    elif name == "hook_gate_check":
+        agent_id = arguments.get("agent_id")
+        if agent_id is None:
+            raise ValueError("agent_id is required")
+        from routes.hook import _check_agent_gate
+        return _check_agent_gate(
+            agent_id=int(agent_id),
+            min_score=float(arguments.get("min_score", 30)),
+            min_tier=int(arguments.get("min_tier", 1)),
+            max_score_age=int(arguments.get("max_score_age", 3600)),
+        )
+
+    elif name == "resolve_address":
+        addr = arguments.get("address")
+        if not addr:
+            raise ValueError("address is required")
+        from routes.hook import _resolve_address
+        return _resolve_address(addr)
 
     else:
         raise ValueError(f"Unknown tool: {name}")

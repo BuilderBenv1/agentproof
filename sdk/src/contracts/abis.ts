@@ -144,6 +144,51 @@ export const AGENT_SPLITS_ABI = [
   "event SplitDistributed(uint256 indexed splitPaymentId, uint256 indexed splitId, uint256[] amounts)",
 ] as const;
 
+// ─── AgentProofHook ABI (ERC-8183 Reputation-Gated Jobs) ────────────
+export const AGENTPROOF_HOOK_ABI = [
+  "function beforeAction(uint256 jobId, bytes4 selector, bytes data) external",
+  "function afterAction(uint256 jobId, bytes4 selector, bytes data) external",
+  "function oracle() external view returns (address)",
+  "function identityRegistry() external view returns (address)",
+  "function attestationProvider() external view returns (address)",
+  "function minScore() external view returns (uint16)",
+  "function minTier() external view returns (uint8)",
+  "function maxScoreAge() external view returns (uint40)",
+  "function requiredAttestation() external view returns (bytes32)",
+  "function getAgentJobStats(uint256 agentId) external view returns (uint32 completed, uint32 rejected, uint40 lastJobAt)",
+  "function getCompletionRate(uint256 agentId) external view returns (uint16 rate, uint32 totalJobs)",
+  "function setMinScore(uint16 minScore) external",
+  "function setMinTier(uint8 minTier) external",
+  "function setMaxScoreAge(uint40 maxScoreAge) external",
+  "function setOracle(address oracle) external",
+  "function setIdentityRegistry(address registry) external",
+  "function setAttestationProvider(address provider) external",
+  "function setRequiredAttestation(bytes32 conditionHash) external",
+  "event JobOutcomeRecorded(uint256 indexed agentId, uint256 indexed jobId, bool completed)",
+  "event ProviderGated(uint256 indexed agentId, uint256 indexed jobId, uint16 score, uint8 tier)",
+  "event MinScoreUpdated(uint16 oldMinScore, uint16 newMinScore)",
+  "event MinTierUpdated(uint8 oldMinTier, uint8 newMinTier)",
+  "event MaxScoreAgeUpdated(uint40 oldMaxAge, uint40 newMaxAge)",
+  "event OracleUpdated(address oldOracle, address newOracle)",
+  "event AttestationProviderUpdated(address oldProvider, address newProvider)",
+  "error ScoreTooLow(uint256 agentId, uint16 score, uint16 required)",
+  "error TierTooLow(uint256 agentId, uint8 tier, uint8 required)",
+  "error ScoreExpired(uint256 agentId, uint40 updatedAt, uint40 maxAge)",
+  "error AgentNotRegistered(address provider)",
+  "error AgentNotScored(uint256 agentId)",
+  "error AttestationFailed(address provider, bytes32 conditionHash)",
+] as const;
+
+// ─── AddressResolver ABI (address → agentId bridge) ─────────────────
+export const ADDRESS_RESOLVER_ABI = [
+  "function oracle() external view returns (address)",
+  "function registry() external view returns (address)",
+  "function getTrustScore(address account) external view returns (uint16 compositeScore, uint8 tier, uint40 updatedAt)",
+  "function meetsThreshold(address account, uint16 minScore) external view returns (bool)",
+  "function resolveAgentId(address account) external view returns (uint256)",
+  "error NotRegistered(address account)",
+] as const;
+
 // ─── AgentProof Core ABI (custom aggregation contract) ─────────────
 export const AGENTPROOF_CORE_ABI = [
   "function getAgentProfile(uint256 agentId) external view returns (tuple(uint256 agentId, address owner, string agentURI, uint256 feedbackCount, uint256 averageRating, uint256 validationSuccessRate, uint256 totalValidations, uint256 completedValidations, uint256 successfulValidations))",

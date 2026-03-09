@@ -242,6 +242,40 @@ export interface BatchResult {
   count: number;
 }
 
+// ─── ERC-8183 Hook gate check types ────────────────────────────
+
+export interface HookGateCheck {
+  agent_id: number;
+  address: string;
+  allowed: boolean;
+  score: number;
+  tier: string;
+  tier_num: number;
+  score_age_seconds: number;
+  checks: {
+    registered: boolean;
+    scored: boolean;
+    score_meets_minimum: boolean;
+    tier_meets_minimum: boolean;
+    score_fresh: boolean;
+  };
+  hook_config: {
+    min_score: number;
+    min_tier: number;
+    max_score_age: number;
+  };
+  rejection_reason: string | null;
+}
+
+export interface AddressResolution {
+  address: string;
+  agent_id: number;
+  score: number;
+  tier: string;
+  tier_num: number;
+  updated_at: string;
+}
+
 // ─── Query parameter types ─────────────────────────────────────
 
 export interface AgentListParams {

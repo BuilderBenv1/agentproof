@@ -10,6 +10,9 @@ export interface ContractAddresses {
   // Phase 4 contracts (optional — populated after deployment)
   agentMonitor?: string;
   agentSplits?: string;
+  // ERC-8183 hook contracts (optional — populated after deployment)
+  agentProofHook?: string;
+  addressResolver?: string;
 }
 
 // Official ERC-8004 registries deployed by Ava Labs

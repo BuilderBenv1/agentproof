@@ -69,6 +69,20 @@ def _build_agent_card() -> dict:
                 tags=["stats", "analytics", "network"],
                 examples=["How many agents are registered?", "Network overview"],
             ),
+            A2ASkill(
+                id="hook_gate_check",
+                name="Hook Gate Check",
+                description="Pre-check whether an agent would pass the AgentProofHook (ERC-8183) reputation gate. Simulates on-chain gating: score threshold, tier minimum, score freshness.",
+                tags=["hook", "gate", "erc8183", "check"],
+                examples=["Would agent 42 pass the hook?", "Check if agent 100 meets bronze tier"],
+            ),
+            A2ASkill(
+                id="resolve_address",
+                name="Resolve Address",
+                description="Resolve a wallet address to its ERC-8004 agent ID and trust score. Mirrors the on-chain AddressResolver contract.",
+                tags=["address", "resolve", "identity"],
+                examples=["Resolve 0x1234... to agent ID", "What agent owns this wallet?"],
+            ),
         ],
         provider=A2AProvider(
             organization="AgentProof",
@@ -111,6 +125,16 @@ def _parse_skill_request(message: dict) -> tuple[str, dict]:
         return "risk_check", {"agent_id": agent_id} if agent_id else {}
     elif "stats" in text_lower or "network" in text_lower or "overview" in text_lower:
         return "network_stats", {}
+    elif "hook" in text_lower or "gate" in text_lower or "pass" in text_lower:
+        agent_id = _extract_agent_id(text)
+        return "hook_gate_check", {"agent_id": agent_id} if agent_id else {}
+    elif "resolve" in text_lower or "address" in text_lower or "wallet" in text_lower:
+        # Try to extract 0x address
+        import re
+        addr_match = re.search(r"(0x[a-fA-F0-9]{40})", text)
+        if addr_match:
+            return "resolve_address", {"address": addr_match.group(1)}
+        return "resolve_address", {}
 
     return "", {}
 
@@ -157,6 +181,28 @@ def _execute_skill(skill_id: str, params: dict) -> Any:
 
     elif skill_id == "network_stats":
         return svc.network_stats().model_dump(mode="json")
+
+    elif skill_id == "hook_gate_check":
+        agent_id = params.get("agent_id")
+        if not agent_id:
+            return {"error": "agent_id is required"}
+        from routes.hook import _check_agent_gate
+        return _check_agent_gate(
+            agent_id=int(agent_id),
+            min_score=float(params.get("min_score", 30)),
+            min_tier=int(params.get("min_tier", 1)),
+            max_score_age=int(params.get("max_score_age", 3600)),
+        )
+
+    elif skill_id == "resolve_address":
+        address = params.get("address")
+        if not address:
+            return {"error": "address is required"}
+        from routes.hook import _resolve_address
+        try:
+            return _resolve_address(address)
+        except ValueError as e:
+            return {"error": str(e)}
 
     else:
         return {"error": f"Unknown skill: {skill_id}"}
