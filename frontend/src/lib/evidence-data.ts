@@ -199,6 +199,12 @@ export const EVIDENCE: EvidenceGroupData[] = [
         link: "https://x.com/TheAIAssembly",
       },
       {
+        title: "Goat Network \u2014 \u201CThe Agent Standard: Sound Money for Autonomous Machines\u201D",
+        description:
+          "A Bitcoin L2 published a foundational thesis arguing that autonomous agents require a different monetary architecture than humans. They name the core unsolved problem directly: agents have no legal identity, no liability framework, and are therefore \u201Cuninsurable under traditional risk models.\u201D Their solution addresses payments and settlement. It does not address reputation. An agent economy built on sound money but without verifiable agent behaviour is sound rails with no signal on who\u2019s trustworthy enough to ride them.",
+        link: "https://www.goat.network/blog/the-agent-standard---a-thesis-on-sound-money-for-autonomous-machines",
+      },
+      {
         title: "Kite AI \u2014 \u201CThe First AI Payment Blockchain\u201D",
         description:
           "Building an agent marketplace where users shop, transact, and coordinate through autonomous agents. Their four core pillars are Identity, Reputation, Spending, and Security. On reputation: \u201CBuild a track record for every agent through signed usage logs and attestations. Others can verify this history to decide how and when to interact or transact.\u201D A consumer-facing agent economy being built from scratch is explicitly architecting reputation as load-bearing infrastructure \u2014 not optional. The agent store is launching on Claude first.",
