@@ -56,6 +56,13 @@ export const EVIDENCE: EvidenceGroupData[] = [
     iconName: "AlertTriangle",
     cards: [
       {
+        title: "President Trump\u2019s Cyber Strategy for America \u2014 White House, March 2026",
+        description:
+          "The US government\u2019s national cybersecurity strategy explicitly names agentic AI as a priority threat surface. Pillar 5: \u201CWe will rapidly adopt and promote agentic AI in ways that securely scale network defense and disruption\u201D and calls for securing \u201Cthe AI technology stack\u201D and promoting \u201Cinnovation in AI security.\u201D The strategy also commits to supporting the security of blockchain technologies. This is not a think tank report \u2014 it is sitting US government policy identifying agentic AI security as a national priority.",
+        link: "https://www.whitehouse.gov/wp-content/uploads/2026/03/President-Trumps-Cyber-Strategy-for-America.pdf",
+        featured: true,
+      },
+      {
         title: "NIST CAISI \u2014 Securing AI Agent Systems",
         description:
           "The US Department of Commerce formally solicited industry input on AI agent security (Jan 2026). A government RFI is the clearest possible signal that this is a solved-problem-waiting-to-happen.",
@@ -159,6 +166,12 @@ export const EVIDENCE: EvidenceGroupData[] = [
     bgColor: "bg-cyan-500/10",
     iconName: "TrendingUp",
     cards: [
+      {
+        title: "LinkedIn Economic Graph \u2014 AI Skills Report 2026",
+        description:
+          "Data from over one billion professionals shows AI Agents as one of the fastest-growing skills globally. As autonomous agents enter the workforce at scale, LinkedIn\u2019s own research flags the core problem: capability claims are increasingly unverifiable. \u201CAs resumes become easier to embellish and skills evolve rapidly, leaders must verify real capability beyond titles and tenure.\u201D The same verification gap exists for agents \u2014 and unlike humans, agents have no CV, no references, and no employment history. Just a wallet address.",
+        link: "https://economicgraph.linkedin.com/research/ai-skills-resources",
+      },
       {
         title: "Aaron Levie, CEO of Box \u2014 \u201CBuilding for Trillions of Agents\u201D",
         description:

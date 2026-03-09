@@ -98,7 +98,7 @@ const PREVIEW_CARDS: { card: EvidenceCardData; groupColor: string; groupBorderCo
     icon: ICON_MAP.Quote,
   },
   {
-    card: EVIDENCE[4].cards[0], // Aaron Levie / Box
+    card: EVIDENCE[4].cards[1], // Aaron Levie / Box
     groupColor: EVIDENCE[4].color,
     groupBorderColor: EVIDENCE[4].borderColor,
     groupLabel: EVIDENCE[4].label,
