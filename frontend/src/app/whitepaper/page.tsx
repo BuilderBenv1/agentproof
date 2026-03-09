@@ -6,9 +6,9 @@ import Link from "next/link";
 const SECTIONS = [
   { title: "The Crisis of Static Trust", description: "Why scalar reputation systems fail in high-speed agent economies: scalar blindness, exit scams, Sybil vulnerability, binary thinking, and agent-specific behavioural patterns." },
   { title: "The Evidence", description: "Stanford, Harvard, NIST, Google, CrowdStrike, WTW, and Box CEO Aaron Levie — the academic, government, and enterprise case for a trust oracle." },
-  { title: "ERC-8004 Standard", description: "The on-chain identity and reputation standard. Three registries — Identity, Reputation, Validation — deployed across 21 chains via deterministic CREATE2." },
-  { title: "Trust Oracle Architecture", description: "Three-layer system: indexing (21 chains, 54K+ agents), evaluation (10-signal composite scoring), and on-chain feedback loop." },
-  { title: "Scoring Methodology", description: "10-signal composite scoring with Bayesian smoothing: rating, volume, consistency, validation, age, uptime, deployer reputation, URI stability, coding reputation, and delegation tracking." },
+  { title: "ERC-8004 + ERC-8183", description: "The on-chain identity and reputation standard (ERC-8004) deployed across 21 chains, composed with agentic commerce escrow (ERC-8183) via reputation-gated hooks." },
+  { title: "Trust Oracle Architecture", description: "Three-layer system: indexing (21 chains, 54K+ agents), evaluation (11-signal composite scoring), and on-chain feedback loop." },
+  { title: "Scoring Methodology", description: "11-signal composite scoring with Bayesian smoothing: rating, volume, consistency, validation, age, uptime, deployer reputation, URI stability, coding reputation, job completion (ERC-8183), and delegation tracking." },
   { title: "Risk Detection System", description: "12 risk flags, 4 risk levels (LOW/MEDIUM/HIGH/CRITICAL), volatility detection, and max-exposure dollar ceilings for insurance underwriting." },
   { title: "Anti-Identity-Mutation", description: "Freshness penalties, deployer lineage tracking, and URI mutation detection to make identity abandonment economically irrational." },
   { title: "Multi-Chain Indexing", description: "21 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB Smart Chain, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, and Solana." },
@@ -123,22 +123,23 @@ export default function WhitepaperPage() {
           3. Scoring Methodology
         </h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          The composite score (0&ndash;100) blends up to 10 weighted signals, Bayesian-smoothed to prevent new agents with a single perfect rating from topping the leaderboard. The system dynamically rebalances weights when optional signals (coding reputation, delegation tracking) become available.
+          The composite score (0&ndash;100) blends up to 11 weighted signals, Bayesian-smoothed to prevent new agents with a single perfect rating from topping the leaderboard. The system dynamically rebalances weights when optional signals (coding reputation, ERC-8183 job completion, delegation tracking) become available.
         </p>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Signal Weights (with coding signal)</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Signal Weights (all signals active)</p>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { signal: "Rating Score", weight: "27%", desc: "Bayesian-smoothed average (prior=50, k=3)" },
-              { signal: "Validation Score", weight: "13%", desc: "On-chain validation success rate" },
-              { signal: "Account Age", weight: "11%", desc: "Logarithmic maturity curve" },
+              { signal: "Rating Score", weight: "25%", desc: "Bayesian-smoothed average (prior=50, k=3)" },
+              { signal: "Validation Score", weight: "11%", desc: "On-chain validation success rate" },
+              { signal: "Account Age", weight: "10%", desc: "Logarithmic maturity curve" },
               { signal: "Coding Score", weight: "10%", desc: "GitHub PR merge rate, review quality" },
-              { signal: "Volume Score", weight: "9%", desc: "Logarithmic feedback count" },
-              { signal: "Consistency Score", weight: "9%", desc: "Inverse standard deviation of ratings" },
-              { signal: "Uptime Score", weight: "9%", desc: "Liveness probe success rate" },
-              { signal: "Deployer Score", weight: "7%", desc: "Deployer reputation lineage" },
-              { signal: "URI Stability", weight: "5%", desc: "Metadata mutation frequency" },
+              { signal: "Volume Score", weight: "8%", desc: "Logarithmic feedback count" },
+              { signal: "Consistency Score", weight: "8%", desc: "Inverse standard deviation of ratings" },
+              { signal: "Uptime Score", weight: "8%", desc: "Liveness probe success rate" },
+              { signal: "Job Completion", weight: "8%", desc: "ERC-8183 job completion rate as provider" },
+              { signal: "Deployer Score", weight: "6%", desc: "Deployer reputation lineage" },
+              { signal: "URI Stability", weight: "6%", desc: "Metadata mutation frequency" },
             ].map((s) => (
               <div key={s.signal} className="bg-gray-800/50 rounded-lg p-3">
                 <div className="flex items-center justify-between">
@@ -149,12 +150,16 @@ export default function WhitepaperPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-600 italic">Without coding signal, weights rebalance: rating 30%, validation 15%, age 12%, volume 10%, consistency 10%, uptime 10%, deployer 8%, URI stability 5%.</p>
+          <p className="text-[10px] text-gray-600 italic">Weights rebalance dynamically based on available signals. Base (8 signals): rating 30%, validation 15%, age 12%, volume 10%, consistency 10%, uptime 10%, deployer 8%, URI 5%. With coding only: coding takes 10%, others reduce proportionally. With job only: job takes 8%.</p>
         </div>
 
         <div className="space-y-2">
           <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Additional Tracked Signals</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">ERC-8183 Jobs</span>
+              <p className="text-[10px] text-gray-600 mt-1">Job completion rate, total jobs, abandonment detection via AgentProofHook</p>
+            </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <span className="text-xs font-medium text-white">Delegation Tracking</span>
               <p className="text-[10px] text-gray-600 mt-1">Success rate, count, MTTR when acting as delegate</p>
@@ -204,13 +209,14 @@ export default function WhitepaperPage() {
         </p>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">12 Risk Flags</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">14 Risk Flags</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {[
               "HIGH_RISK_SCORE", "CONCENTRATED_FEEDBACK", "SERIAL_DEPLOYER",
               "SUSPICIOUS_VOLATILITY", "LOW_UPTIME", "FREQUENT_URI_CHANGES",
               "NEW_IDENTITY", "LOW_FEEDBACK", "UNVERIFIED",
               "HIGH_FAILURE_RATE", "SLOW_RECOVERY", "ACTIVE_FAILURE",
+              "HIGH_JOB_FAILURE_RATE", "JOB_ABANDONMENT",
             ].map((flag) => (
               <div key={flag} className="bg-red-500/5 border border-red-500/10 rounded px-2 py-1.5">
                 <span className="text-[10px] font-mono text-red-400">{flag}</span>
@@ -362,8 +368,8 @@ export default function WhitepaperPage() {
         {[
           { icon: Shield, label: "Chains", value: "21", sub: "AVAX \u00B7 ETH \u00B7 Base \u00B7 Solana + 17 more" },
           { icon: Globe, label: "Indexed", value: "54K+", sub: "Agent identities" },
-          { icon: BarChart3, label: "Signals", value: "10", sub: "Composite scoring dimensions" },
-          { icon: Lock, label: "Risk Flags", value: "12", sub: "Automated threat detection" },
+          { icon: BarChart3, label: "Signals", value: "11", sub: "Composite scoring dimensions" },
+          { icon: Lock, label: "Risk Flags", value: "14", sub: "Automated threat detection" },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-center">
             <stat.icon className="w-4 h-4 text-emerald-400 mx-auto mb-1" />

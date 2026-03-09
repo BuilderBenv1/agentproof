@@ -59,7 +59,7 @@ class AgentScreener:
     async def start(self):
         """Launch all background jobs as asyncio tasks."""
         self._running = True
-        logger.info("AgentScreener starting — 7 background jobs")
+        logger.info("AgentScreener starting — 8 background jobs")
         self._tasks = [
             asyncio.create_task(self._loop("screen_new_agents", self._screen_new_agents, 300)),
             asyncio.create_task(self._loop("monitor_anomalies", self._monitor_anomalies, 900)),
@@ -68,6 +68,7 @@ class AgentScreener:
             asyncio.create_task(self._loop("sync_github_activity", self._sync_github_activity, 600)),
             asyncio.create_task(self._loop("sync_delegation_events", self._sync_delegation_events, 600)),
             asyncio.create_task(self._loop("compute_failure_metrics", self._compute_failure_metrics, 1800)),
+            asyncio.create_task(self._loop("sync_job_outcomes", self._sync_job_outcomes, 600)),
         ]
 
     async def stop(self):
@@ -105,6 +106,7 @@ class AgentScreener:
             "sync_github_activity": 150,
             "sync_delegation_events": 180,
             "compute_failure_metrics": 240,
+            "sync_job_outcomes": 270,
         }
         await asyncio.sleep(delays.get(name, 5))
 
@@ -1083,6 +1085,58 @@ class AgentScreener:
 
         if updated:
             logger.info(f"[failure_metrics] Updated metrics for {updated} agents")
+
+
+    def _sync_job_outcomes(self):
+        """Sync ERC-8183 job outcomes and compute completion rates for scored agents."""
+        db = get_supabase()
+
+        # Fetch agents that have job outcome data
+        try:
+            result = (
+                db.table("job_outcomes")
+                .select("agent_id")
+                .order("created_at", desc=True)
+                .limit(500)
+                .execute()
+            )
+        except Exception as e:
+            logger.debug(f"[job_outcomes] Query failed (table may not exist yet): {e}")
+            return
+
+        agent_ids = list(set(r["agent_id"] for r in (result.data or [])))
+        if not agent_ids:
+            return
+
+        updated = 0
+        for agent_id in agent_ids[:100]:
+            try:
+                jobs = (
+                    db.table("job_outcomes")
+                    .select("completed")
+                    .eq("agent_id", agent_id)
+                    .execute()
+                )
+                if not jobs.data:
+                    continue
+
+                total = len(jobs.data)
+                completed = sum(1 for j in jobs.data if j["completed"])
+                rate = round((completed / total) * 100, 2) if total > 0 else 0
+
+                db.table("agents").update({
+                    "job_completion_rate": rate,
+                    "job_count": total,
+                }).eq("agent_id", agent_id).execute()
+                updated += 1
+
+                # Invalidate trust cache for this agent
+                get_trust_cache().invalidate(f"eval:{agent_id}")
+            except Exception:
+                pass
+
+        if updated:
+            logger.info(f"[job_outcomes] Updated job metrics for {updated} agents")
 
 
 # Singleton

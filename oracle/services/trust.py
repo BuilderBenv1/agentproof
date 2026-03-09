@@ -119,10 +119,12 @@ def calculate_composite_score(
     deployer_score: float = 50.0,
     uri_change_count: int = 0,
     coding_score: float = -1.0,
+    job_score: float = -1.0,
 ) -> tuple[float, ScoreBreakdown]:
     """
-    Composite score (0-100) with 8 base signals + optional coding signal.
+    Composite score (0-100) with 8 base signals + optional coding + job signals.
     When coding_score >= 0, weights rebalance to include it at 10%.
+    When job_score >= 0, weights rebalance to include it at 8%.
     Returns (score, breakdown) so the oracle can expose component scores.
     """
     prior_rating = 50.0
@@ -164,9 +166,26 @@ def calculate_composite_score(
     freshness = _calculate_freshness_multiplier(account_age_days)
 
     has_coding = coding_score >= 0
+    has_job = job_score >= 0
 
-    if has_coding:
-        # Rebalanced weights when coding signal is available (total = 1.0)
+    # Weight selection based on which optional signals are available
+    # Each combination sums to 1.0
+    if has_coding and has_job:
+        # All signals: base 82% + coding 10% + job 8%
+        composite = (
+            rating_score * 0.25
+            + volume_score * 0.08
+            + consistency_score * 0.08
+            + validation_score * 0.11
+            + age_score * 0.10
+            + uptime_score * 0.08
+            + deployer_score * 0.06
+            + uri_stability * 0.06
+            + coding_score * 0.10
+            + job_score * 0.08
+        )
+    elif has_coding:
+        # Coding only: base 90% + coding 10%
         composite = (
             rating_score * 0.27
             + volume_score * 0.09
@@ -178,8 +197,21 @@ def calculate_composite_score(
             + uri_stability * 0.05
             + coding_score * 0.10
         )
+    elif has_job:
+        # Job only: base 92% + job 8%
+        composite = (
+            rating_score * 0.28
+            + volume_score * 0.09
+            + consistency_score * 0.09
+            + validation_score * 0.14
+            + age_score * 0.11
+            + uptime_score * 0.09
+            + deployer_score * 0.07
+            + uri_stability * 0.05
+            + job_score * 0.08
+        )
     else:
-        # Original weights (total = 1.0)
+        # Base signals only
         composite = (
             rating_score * 0.30
             + volume_score * 0.10
@@ -204,6 +236,7 @@ def calculate_composite_score(
         deployer_score=round(deployer_score, 2),
         uri_stability_score=round(uri_stability, 2),
         coding_score=round(coding_score, 2) if has_coding else None,
+        job_score=round(job_score, 2) if has_job else None,
     )
 
     return round(max(0.0, min(100.0, composite)), 2), breakdown
@@ -550,6 +583,25 @@ class TrustService:
         except Exception:
             pass
 
+        # ERC-8183 job completion score
+        job_score_val = -1.0
+        job_completion_rate = None
+        job_count = 0
+        try:
+            job_result = (
+                db.table("job_outcomes")
+                .select("completed")
+                .eq("agent_id", agent_id)
+                .execute()
+            )
+            if job_result.data:
+                job_count = len(job_result.data)
+                jobs_completed = sum(1 for j in job_result.data if j["completed"])
+                job_completion_rate = round((jobs_completed / job_count) * 100, 2)
+                job_score_val = job_completion_rate
+        except Exception:
+            pass
+
         # Compute score
         composite, breakdown = calculate_composite_score(
             average_rating=avg_rating,
@@ -561,6 +613,7 @@ class TrustService:
             deployer_score=dep_score,
             uri_change_count=uri_changes,
             coding_score=coding,
+            job_score=job_score_val,
         )
         tier = determine_tier(composite, feedback_count)
 
@@ -605,6 +658,24 @@ class TrustService:
             risk_flags.append(RiskFlag.HIGH_FAILURE_RATE)
         if mttr is not None and mttr > 86400:
             risk_flags.append(RiskFlag.SLOW_RECOVERY)
+
+        # ERC-8183 job risk flags
+        if job_completion_rate is not None and job_count >= 3 and job_completion_rate < 60:
+            risk_flags.append(RiskFlag.HIGH_JOB_FAILURE_RATE)
+        if job_count >= 3:
+            try:
+                expired_jobs = (
+                    db.table("job_outcomes")
+                    .select("id", count="exact")
+                    .eq("agent_id", agent_id)
+                    .eq("completed", False)
+                    .limit(0)
+                    .execute()
+                )
+                if (expired_jobs.count or 0) >= 3:
+                    risk_flags.append(RiskFlag.JOB_ABANDONMENT)
+            except Exception:
+                pass
 
         # Check for active unresolved failures
         try:
@@ -655,6 +726,8 @@ class TrustService:
             failure_count=failure_count,
             mttr_seconds=int(mttr) if mttr is not None else None,
             last_failure_at=last_failure_at,
+            job_completion_rate=job_completion_rate,
+            job_count=job_count,
         )
 
         # Populate cache

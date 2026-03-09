@@ -179,6 +179,7 @@ export interface ScoreBreakdown {
   deployer_score: number;
   uri_stability_score: number;
   coding_score: number | null;
+  job_score: number | null;
   delegation_score: number | null;
 }
 
@@ -202,6 +203,10 @@ export interface TrustEvaluation {
   failure_count: number;
   mttr_seconds: number | null;
   last_failure_at: string | null;
+  /** ERC-8183 job completion rate (0-100), null if no job data */
+  job_completion_rate: number | null;
+  /** Total ERC-8183 jobs as provider */
+  job_count: number;
 }
 
 export interface RiskAssessment {

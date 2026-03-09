@@ -28,6 +28,8 @@ class RiskFlag(str, Enum):
     HIGH_FAILURE_RATE = "HIGH_FAILURE_RATE"
     SLOW_RECOVERY = "SLOW_RECOVERY"
     ACTIVE_FAILURE = "ACTIVE_FAILURE"
+    HIGH_JOB_FAILURE_RATE = "HIGH_JOB_FAILURE_RATE"
+    JOB_ABANDONMENT = "JOB_ABANDONMENT"
 
 
 class RiskLevel(str, Enum):
@@ -50,6 +52,7 @@ class ScoreBreakdown(BaseModel):
     deployer_score: float = 0.0
     uri_stability_score: float = 0.0
     coding_score: float | None = None
+    job_score: float | None = None
     delegation_score: float | None = None
 
 
@@ -80,6 +83,9 @@ class TrustEvaluation(BaseModel):
     failure_count: int = 0
     mttr_seconds: int | None = None
     last_failure_at: datetime | None = None
+    # ERC-8183 job outcome signals
+    job_completion_rate: float | None = None
+    job_count: int = 0
 
 
 class TrustedAgent(BaseModel):

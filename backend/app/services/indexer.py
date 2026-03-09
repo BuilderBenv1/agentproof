@@ -912,6 +912,56 @@ def process_validation_events(from_block: int, to_block: int):
     return len(req_events) + len(sub_events)
 
 
+def process_job_outcome_events(from_block: int, to_block: int):
+    """Process JobOutcomeRecorded events from AgentProofHook (ERC-8183)."""
+    blockchain = get_blockchain_service()
+    db = get_supabase()
+
+    hook_address = os.environ.get("AGENTPROOF_HOOK_ADDRESS")
+    if not hook_address:
+        return 0
+
+    # JobOutcomeRecorded(uint256 indexed agentId, uint256 indexed jobId, bool completed)
+    JOB_OUTCOME_TOPIC = blockchain.w3.keccak(
+        text="JobOutcomeRecorded(uint256,uint256,bool)"
+    ).hex()
+
+    try:
+        logs = blockchain.w3.eth.get_logs({
+            "fromBlock": from_block,
+            "toBlock": to_block,
+            "address": blockchain.w3.to_checksum_address(hook_address),
+            "topics": ["0x" + JOB_OUTCOME_TOPIC if not JOB_OUTCOME_TOPIC.startswith("0x") else JOB_OUTCOME_TOPIC],
+        })
+    except Exception as e:
+        logger.error(f"Error fetching JobOutcomeRecorded events: {e}")
+        return 0
+
+    if not logs:
+        return 0
+
+    rows = []
+    for log in logs:
+        agent_id = int(log["topics"][1].hex(), 16)
+        job_id = str(int(log["topics"][2].hex(), 16))
+        # completed is the non-indexed bool parameter in data
+        completed = int(log["data"].hex()[-1]) == 1 if log["data"] else True
+
+        rows.append({
+            "agent_id": agent_id,
+            "job_id": job_id,
+            "completed": completed,
+            "source_chain": "avalanche",
+            "tx_hash": log["transactionHash"].hex(),
+            "block_number": log["blockNumber"],
+        })
+
+    if rows:
+        _resilient_upsert(db, "job_outcomes", rows, "tx_hash", "job_outcomes")
+
+    return len(rows)
+
+
 def recalculate_deployer_scores():
     """Group agents by owner_address and compute deployer reputation scores."""
     db = get_supabase()
@@ -1652,6 +1702,12 @@ def run_indexer_cycle():
     count = _process_chunked("validation", process_validation_events, safe_block)
     if count > 0:
         logger.info(f"Processed {count} validation events")
+
+    # Process ERC-8183 job outcome events (chunked)
+    if os.environ.get("AGENTPROOF_HOOK_ADDRESS"):
+        count = _process_chunked("job_outcomes", process_job_outcome_events, safe_block)
+        if count > 0:
+            logger.info(f"Processed {count} ERC-8183 job outcome events")
 
     # --- Extra chains (generic indexer) ---
     skipped_chains = []
