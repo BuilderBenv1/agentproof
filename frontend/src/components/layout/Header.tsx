@@ -8,12 +8,12 @@ import { useState } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
+  { href: "/evidence", label: "Evidence" },
   { href: "/discover", label: "Discover" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/register", label: "Register" },
   { href: "/mcp", label: "MCP" },
   { href: "/pricing", label: "API Pricing" },
-  { href: "/evidence", label: "Evidence" },
   { href: "/whitepaper", label: "Whitepaper" },
   { href: "/docs", label: "Docs" },
 ];

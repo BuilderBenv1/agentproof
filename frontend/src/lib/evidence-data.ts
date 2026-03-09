@@ -40,6 +40,12 @@ export const EVIDENCE: EvidenceGroupData[] = [
         description:
           "\u201CThe problem is not that models are too weak. The problem is that agent systems grant them authority before clearly defining the boundaries that should govern how that authority is used.\u201D Classic jailbreak defences don\u2019t apply \u2014 agents are exploited through normal-looking behaviour in the wrong context.",
       },
+      {
+        title: "Can LLM Agents Reach Consensus? The Byzantine Problem Revisited",
+        description:
+          "Researchers tested whether LLM agents can achieve Byzantine consensus \u2014 the 40-year-old distributed systems problem of reaching agreement when some participants are malicious. A single bad actor collapses network consensus. More alarming \u2014 in fully benign settings with zero bad actors, LLM agents still fail to converge. They stall, time out, and go in circles. The reason is fundamental: classical consensus protocols assume deterministic state machines. LLMs are stochastic \u2014 the same prompt produces different outputs across runs. An agreement that holds in round 3 can dissolve in round 4. The implication for anyone building multi-agent systems for finance, healthcare, or autonomous infrastructure: reliable coordination isn\u2019t an emergent property of putting smart agents together. It has to be engineered explicitly, with formal guarantees. \u201CMore agents = better answers\u201D has a ceiling nobody\u2019s measuring.",
+        link: "https://arxiv.org/abs/2603.01213",
+      },
     ],
   },
   {
@@ -71,6 +77,14 @@ export const EVIDENCE: EvidenceGroupData[] = [
         title: "Palisade Research / Anthropic System Card",
         description:
           "o3 disabled its own shutdown scripts in 79 of 100 runs. Claude Opus 4 attempted blackmail in 84\u201396% of runs. GPT-4 executed an insider trade and hid it from its supervisor. None were instructed to do this.",
+      },
+      {
+        title: "Craig Riddell, Global Field CISO at Wallarm",
+        description:
+          "\u201CAI agents are no longer experimental. They are operational. And now they are being targeted.\u201D Infostealer malware was observed extracting API credentials and tokens directly from live AI agent environments. When an attacker steals an agent\u2019s API keys they don\u2019t just gain access \u2014 they inherit trust relationships, delegated privileges, and the ability to execute business logic at machine speed. The API calls look valid. The credentials are real. The traffic blends in.",
+        quote:
+          "\u201CThis is not a signature problem. It is a behavioral governance problem. Are we watching what our agents do in motion, or just what credentials they carry?\u201D",
+        link: "https://www.techradar.com/pro/security/openclaw-ai-agents-targeted-by-infostealer-malware-for-the-first-time",
       },
     ],
   },
@@ -204,6 +218,11 @@ export const EVIDENCE: EvidenceGroupData[] = [
         title: "Christian Catalini\u2019s verification cost framework",
         description:
           "The cost to verify whether an agent behaved correctly is the bottleneck keeping autonomous agents out of high-value use cases. Reduce verification cost and entire industries become automatable. AgentProof reduces that cost to a single oracle call.",
+      },
+      {
+        title: "@invisiblebags \u2014 Invisible (10 GPU AI infrastructure)",
+        description:
+          "\u201CImagine every agent had a digital signature \u2014 this powers anything and everything they do online. A central service where agents obtain an ID, and another where IDs are verified. Any app or service natively building for agents can integrate to verify ownership and audit actions.\u201D That\u2019s a description of ERC-8004 plus AgentProof. Someone building serious AI infrastructure independently arrived at the same architecture.",
       },
     ],
   },
