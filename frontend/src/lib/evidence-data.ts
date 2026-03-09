@@ -127,6 +127,13 @@ export const EVIDENCE: EvidenceGroupData[] = [
         link: "https://www.growthepie.com/quick-bites/eip-8004",
       },
       {
+        title: "ERC-8183 \u2014 Agentic Commerce (Virtuals Protocol + Ethereum Foundation dAI)",
+        description:
+          "The job escrow primitive for agent commerce, co-developed by Virtuals Protocol and the Ethereum Foundation\u2019s dAI team. Defines a Client \u2192 Provider \u2192 Evaluator lifecycle with on-chain escrow, deliverable submission, and evaluator attestation. Explicitly composable with ERC-8004 and x402. The spec names \u201CReputation-Gated Jobs\u201D as a hook use case: \u201CA hook queries ERC-8004 before allowing actions, blocking low-reputation providers or requiring stricter terms for unproven agents.\u201D That hook is AgentProof. The announcement states: \u201CWithout verifiable history, there is no portable reputation. Without portable reputation, every agent interaction starts from zero trust.\u201D",
+        link: "https://eips.ethereum.org/EIPS/eip-8183",
+        featured: true,
+      },
+      {
         title: "vybe3labs",
         description:
           "\u201CWhat stops an AI agent from farming its own reputation score on ERC-8004? Because if the answer is \u2018nothing yet\u2019, we just built a trustless system that trusts the wrong thing.\u201D",
