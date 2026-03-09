@@ -72,7 +72,7 @@ export const EVIDENCE: EvidenceGroupData[] = [
         title: "Google Cybersecurity Forecast 2026",
         description:
           "Identifies \u201CShadow Agent Risk\u201D as a priority threat: employees deploying autonomous agents without approval, invisible data pipelines nobody controls. Recommends continuous trust evaluation and dynamic reputation scoring.",
-        link: "https://services.google.com/fh/files/misc/google-cybersecurity-forecast-2026.pdf",
+        link: "https://services.google.com/fh/files/misc/cybersecurity-forecast-2026-en.pdf",
       },
       {
         title: "CrowdStrike Global Threat Report 2026",
