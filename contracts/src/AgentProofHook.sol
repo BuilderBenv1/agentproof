@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IACPHook.sol";
 import "./interfaces/ITrustScoreOracle.sol";
 import "./interfaces/IIdentityRegistry.sol";
+import "./interfaces/IAttestationProvider.sol";
 
 /**
  * @title AgentProofHook — ERC-8183 Reputation-Gated Jobs
@@ -17,6 +18,7 @@ import "./interfaces/IIdentityRegistry.sol";
  *   1. Resolves provider address → ERC-8004 agent ID via IdentityRegistry
  *   2. Reads trust score from TrustScoreOracle.viewScore()
  *   3. Reverts if score < minScore OR tier < minTier
+ *   4. (Optional) Verifies credential attestation via IAttestationProvider
  *
  * afterAction on complete/reject:
  *   1. Records job outcome (completed/rejected) per agent
@@ -28,11 +30,13 @@ contract AgentProofHook is IACPHook, Ownable {
 
     ITrustScoreOracle public oracle;
     IIdentityRegistry public identityRegistry;
+    IAttestationProvider public attestationProvider; // address(0) = disabled
 
     // ─── Configuration ─────────────────────────────────────────────
 
     uint16 public minScore;  // 0-10000 (e.g. 3000 = 30.00)
     uint8 public minTier;    // 0-5 (e.g. 1 = bronze minimum)
+    bytes32 public requiredAttestation; // condition hash for attestation check
 
     // ─── Job Outcome Tracking ──────────────────────────────────────
 
@@ -61,6 +65,8 @@ contract AgentProofHook is IACPHook, Ownable {
     event MinTierUpdated(uint8 oldMinTier, uint8 newMinTier);
     event OracleUpdated(address oldOracle, address newOracle);
     event IdentityRegistryUpdated(address oldRegistry, address newRegistry);
+    event AttestationProviderUpdated(address oldProvider, address newProvider);
+    event RequiredAttestationUpdated(bytes32 oldHash, bytes32 newHash);
 
     // ─── Errors ────────────────────────────────────────────────────
 
@@ -68,6 +74,7 @@ contract AgentProofHook is IACPHook, Ownable {
     error TierTooLow(uint256 agentId, uint8 tier, uint8 required);
     error AgentNotRegistered(address provider);
     error AgentNotScored(uint256 agentId);
+    error AttestationFailed(address provider, bytes32 conditionHash);
     error ZeroAddress();
 
     // ─── Constructor ───────────────────────────────────────────────
@@ -136,8 +143,12 @@ contract AgentProofHook is IACPHook, Ownable {
         // Enforce minimum tier
         if (tier < minTier) revert TierTooLow(agentId, tier, minTier);
 
-        // Note: ProviderGated event not emitted in view context
-        // The escrow contract will emit its own setProvider event
+        // Optional attestation check (e.g. InsumerAPI credential verification)
+        if (address(attestationProvider) != address(0)) {
+            if (!attestationProvider.verify(provider, requiredAttestation)) {
+                revert AttestationFailed(provider, requiredAttestation);
+            }
+        }
     }
 
     /**
@@ -213,5 +224,17 @@ contract AgentProofHook is IACPHook, Ownable {
         address old = address(identityRegistry);
         identityRegistry = IIdentityRegistry(_identityRegistry);
         emit IdentityRegistryUpdated(old, _identityRegistry);
+    }
+
+    function setAttestationProvider(address _provider) external onlyOwner {
+        address old = address(attestationProvider);
+        attestationProvider = IAttestationProvider(_provider); // address(0) disables
+        emit AttestationProviderUpdated(old, _provider);
+    }
+
+    function setRequiredAttestation(bytes32 _conditionHash) external onlyOwner {
+        bytes32 old = requiredAttestation;
+        requiredAttestation = _conditionHash;
+        emit RequiredAttestationUpdated(old, _conditionHash);
     }
 }

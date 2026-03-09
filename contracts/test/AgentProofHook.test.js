@@ -293,5 +293,91 @@ describe("AgentProofHook", function () {
       await expect(hook.connect(provider).setOracle(provider.address))
         .to.be.revertedWithCustomError(hook, "OwnableUnauthorizedAccount");
     });
+
+    it("should allow owner to set attestation provider", async function () {
+      const addr = provider2.address;
+      await expect(hook.setAttestationProvider(addr))
+        .to.emit(hook, "AttestationProviderUpdated")
+        .withArgs(ethers.ZeroAddress, addr);
+      expect(await hook.attestationProvider()).to.equal(addr);
+    });
+
+    it("should allow owner to set required attestation", async function () {
+      const hash = ethers.id("holds >= 1 USDC on avalanche");
+      await expect(hook.setRequiredAttestation(hash))
+        .to.emit(hook, "RequiredAttestationUpdated")
+        .withArgs(ethers.ZeroHash, hash);
+      expect(await hook.requiredAttestation()).to.equal(hash);
+    });
+
+    it("should allow owner to disable attestation by setting address(0)", async function () {
+      await hook.setAttestationProvider(provider2.address);
+      await hook.setAttestationProvider(ethers.ZeroAddress);
+      expect(await hook.attestationProvider()).to.equal(ethers.ZeroAddress);
+    });
+  });
+
+  describe("Attestation Provider Gating", function () {
+    let attestationProvider;
+    const CONDITION_HASH = ethers.id("holds >= 1 USDC on avalanche");
+
+    beforeEach(async function () {
+      // Deploy mock attestation provider
+      const MockAttestation = await ethers.getContractFactory("MockAttestationProvider");
+      attestationProvider = await MockAttestation.deploy();
+      await attestationProvider.waitForDeployment();
+    });
+
+    it("should pass through when no attestation provider is set", async function () {
+      // No attestation provider configured — backward compatible
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+
+    it("should allow provider that passes attestation", async function () {
+      // Configure attestation
+      await hook.setAttestationProvider(await attestationProvider.getAddress());
+      await hook.setRequiredAttestation(CONDITION_HASH);
+      await attestationProvider.setResult(provider.address, true);
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      // Should not revert
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+
+    it("should revert when provider fails attestation", async function () {
+      await hook.setAttestationProvider(await attestationProvider.getAddress());
+      await hook.setRequiredAttestation(CONDITION_HASH);
+      // provider passes trust score but NOT attestation (default is false)
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      await expect(
+        hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
+      ).to.be.revertedWithCustomError(hook, "AttestationFailed")
+        .withArgs(provider.address, CONDITION_HASH);
+    });
+
+    it("should skip attestation check after provider is set back to address(0)", async function () {
+      // Enable then disable
+      await hook.setAttestationProvider(await attestationProvider.getAddress());
+      await hook.setRequiredAttestation(CONDITION_HASH);
+      await hook.setAttestationProvider(ethers.ZeroAddress);
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      // Should pass — attestation disabled
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
   });
 });
