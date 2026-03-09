@@ -17,8 +17,9 @@ import "./interfaces/IAttestationProvider.sol";
  * beforeAction on setProvider:
  *   1. Resolves provider address → ERC-8004 agent ID via IdentityRegistry
  *   2. Reads trust score from TrustScoreOracle.viewScore()
- *   3. Reverts if score < minScore OR tier < minTier
- *   4. (Optional) Verifies credential attestation via IAttestationProvider
+ *   3. Reverts if score is stale (updatedAt + maxScoreAge < now)
+ *   4. Reverts if score < minScore OR tier < minTier
+ *   5. (Optional) Verifies credential attestation via IAttestationProvider
  *
  * afterAction on complete/reject:
  *   1. Records job outcome (completed/rejected) per agent
@@ -36,6 +37,7 @@ contract AgentProofHook is IACPHook, Ownable {
 
     uint16 public minScore;  // 0-10000 (e.g. 3000 = 30.00)
     uint8 public minTier;    // 0-5 (e.g. 1 = bronze minimum)
+    uint40 public maxScoreAge; // seconds — 0 = no expiry check
     bytes32 public requiredAttestation; // condition hash for attestation check
 
     // ─── Job Outcome Tracking ──────────────────────────────────────
@@ -67,6 +69,7 @@ contract AgentProofHook is IACPHook, Ownable {
     event IdentityRegistryUpdated(address oldRegistry, address newRegistry);
     event AttestationProviderUpdated(address oldProvider, address newProvider);
     event RequiredAttestationUpdated(bytes32 oldHash, bytes32 newHash);
+    event MaxScoreAgeUpdated(uint40 oldMaxAge, uint40 newMaxAge);
 
     // ─── Errors ────────────────────────────────────────────────────
 
@@ -75,6 +78,7 @@ contract AgentProofHook is IACPHook, Ownable {
     error AgentNotRegistered(address provider);
     error AgentNotScored(uint256 agentId);
     error AttestationFailed(address provider, bytes32 conditionHash);
+    error ScoreExpired(uint256 agentId, uint40 updatedAt, uint40 maxAge);
     error ZeroAddress();
 
     // ─── Constructor ───────────────────────────────────────────────
@@ -83,13 +87,15 @@ contract AgentProofHook is IACPHook, Ownable {
         address _oracle,
         address _identityRegistry,
         uint16 _minScore,
-        uint8 _minTier
+        uint8 _minTier,
+        uint40 _maxScoreAge
     ) Ownable(msg.sender) {
         if (_oracle == address(0) || _identityRegistry == address(0)) revert ZeroAddress();
         oracle = ITrustScoreOracle(_oracle);
         identityRegistry = IIdentityRegistry(_identityRegistry);
         minScore = _minScore;
         minTier = _minTier;
+        maxScoreAge = _maxScoreAge;
     }
 
     // ─── IACPHook Implementation ───────────────────────────────────
@@ -135,7 +141,12 @@ contract AgentProofHook is IACPHook, Ownable {
         if (!oracle.hasScore(agentId)) revert AgentNotScored(agentId);
 
         // Read consensus score (free view call — no gas overhead)
-        (uint16 score, uint8 tier, ) = oracle.viewScore(agentId);
+        (uint16 score, uint8 tier, uint40 updatedAt) = oracle.viewScore(agentId);
+
+        // Enforce score freshness (0 = no expiry check)
+        if (maxScoreAge > 0 && block.timestamp - updatedAt > maxScoreAge) {
+            revert ScoreExpired(agentId, updatedAt, maxScoreAge);
+        }
 
         // Enforce minimum score
         if (score < minScore) revert ScoreTooLow(agentId, score, minScore);
@@ -224,6 +235,12 @@ contract AgentProofHook is IACPHook, Ownable {
         address old = address(identityRegistry);
         identityRegistry = IIdentityRegistry(_identityRegistry);
         emit IdentityRegistryUpdated(old, _identityRegistry);
+    }
+
+    function setMaxScoreAge(uint40 _maxScoreAge) external onlyOwner {
+        uint40 old = maxScoreAge;
+        maxScoreAge = _maxScoreAge;
+        emit MaxScoreAgeUpdated(old, _maxScoreAge);
     }
 
     function setAttestationProvider(address _provider) external onlyOwner {

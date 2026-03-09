@@ -20,6 +20,10 @@ contract MockTrustScoreOracle is ITrustScoreOracle {
         _scores[agentId] = Score(compositeScore, tier, uint40(block.timestamp), true);
     }
 
+    function setScoreAt(uint256 agentId, uint16 compositeScore, uint8 tier, uint40 updatedAt) external {
+        _scores[agentId] = Score(compositeScore, tier, updatedAt, true);
+    }
+
     function viewScore(uint256 agentId) external view override returns (
         uint16 compositeScore, uint8 tier, uint40 updatedAt
     ) {

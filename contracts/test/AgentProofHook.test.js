@@ -10,6 +10,7 @@ describe("AgentProofHook", function () {
   const JOB_ID = 100;
   const MIN_SCORE = 3000; // 30.00
   const MIN_TIER = 1;     // bronze
+  const MAX_SCORE_AGE = 0; // 0 = no expiry (default for most tests)
 
   // ERC-8183 function selectors
   const SEL_SET_PROVIDER = ethers.id("setProvider(uint256,address)").slice(0, 10);
@@ -46,7 +47,8 @@ describe("AgentProofHook", function () {
       await oracle.getAddress(),
       await identityRegistry.getAddress(),
       MIN_SCORE,
-      MIN_TIER
+      MIN_TIER,
+      MAX_SCORE_AGE
     );
     await hook.waitForDeployment();
   });
@@ -68,17 +70,21 @@ describe("AgentProofHook", function () {
       expect(await hook.minTier()).to.equal(MIN_TIER);
     });
 
+    it("should set correct maxScoreAge", async function () {
+      expect(await hook.maxScoreAge()).to.equal(MAX_SCORE_AGE);
+    });
+
     it("should revert with zero oracle address", async function () {
       const Hook = await ethers.getContractFactory("AgentProofHook");
       await expect(
-        Hook.deploy(ethers.ZeroAddress, await identityRegistry.getAddress(), MIN_SCORE, MIN_TIER)
+        Hook.deploy(ethers.ZeroAddress, await identityRegistry.getAddress(), MIN_SCORE, MIN_TIER, MAX_SCORE_AGE)
       ).to.be.revertedWithCustomError(hook, "ZeroAddress");
     });
 
     it("should revert with zero registry address", async function () {
       const Hook = await ethers.getContractFactory("AgentProofHook");
       await expect(
-        Hook.deploy(await oracle.getAddress(), ethers.ZeroAddress, MIN_SCORE, MIN_TIER)
+        Hook.deploy(await oracle.getAddress(), ethers.ZeroAddress, MIN_SCORE, MIN_TIER, MAX_SCORE_AGE)
       ).to.be.revertedWithCustomError(hook, "ZeroAddress");
     });
   });
@@ -294,6 +300,13 @@ describe("AgentProofHook", function () {
         .to.be.revertedWithCustomError(hook, "OwnableUnauthorizedAccount");
     });
 
+    it("should allow owner to update maxScoreAge", async function () {
+      await expect(hook.setMaxScoreAge(3600))
+        .to.emit(hook, "MaxScoreAgeUpdated")
+        .withArgs(0, 3600);
+      expect(await hook.maxScoreAge()).to.equal(3600);
+    });
+
     it("should allow owner to set attestation provider", async function () {
       const addr = provider2.address;
       await expect(hook.setAttestationProvider(addr))
@@ -378,6 +391,146 @@ describe("AgentProofHook", function () {
       );
       // Should pass — attestation disabled
       await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+  });
+
+  describe("Score Staleness", function () {
+    const ONE_HOUR = 3600;
+
+    it("should allow fresh score when maxScoreAge is set", async function () {
+      // Deploy hook with 1-hour max age
+      const Hook = await ethers.getContractFactory("AgentProofHook");
+      const freshHook = await Hook.deploy(
+        await oracle.getAddress(),
+        await identityRegistry.getAddress(),
+        MIN_SCORE,
+        MIN_TIER,
+        ONE_HOUR
+      );
+      await freshHook.waitForDeployment();
+
+      // Score was just set in beforeEach — it's fresh
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      await freshHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+
+    it("should revert when score is stale", async function () {
+      const Hook = await ethers.getContractFactory("AgentProofHook");
+      const staleHook = await Hook.deploy(
+        await oracle.getAddress(),
+        await identityRegistry.getAddress(),
+        MIN_SCORE,
+        MIN_TIER,
+        ONE_HOUR
+      );
+      await staleHook.waitForDeployment();
+
+      // Set score with an old timestamp (2 hours ago)
+      const block = await ethers.provider.getBlock("latest");
+      const staleTime = block.timestamp - (ONE_HOUR * 2);
+      await oracle.setScoreAt(AGENT_ID, 6500, 3, staleTime);
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      await expect(
+        staleHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data)
+      ).to.be.revertedWithCustomError(staleHook, "ScoreExpired")
+        .withArgs(AGENT_ID, staleTime, ONE_HOUR);
+    });
+
+    it("should skip staleness check when maxScoreAge is 0", async function () {
+      // Default hook has maxScoreAge = 0
+      expect(await hook.maxScoreAge()).to.equal(0);
+
+      // Set an old score — should still pass because staleness is disabled
+      await oracle.setScoreAt(AGENT_ID, 6500, 3, 1);
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      await hook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+
+    it("should allow after score is refreshed", async function () {
+      const Hook = await ethers.getContractFactory("AgentProofHook");
+      const staleHook = await Hook.deploy(
+        await oracle.getAddress(),
+        await identityRegistry.getAddress(),
+        MIN_SCORE,
+        MIN_TIER,
+        ONE_HOUR
+      );
+      await staleHook.waitForDeployment();
+
+      // Set stale score
+      const block = await ethers.provider.getBlock("latest");
+      await oracle.setScoreAt(AGENT_ID, 6500, 3, block.timestamp - (ONE_HOUR * 2));
+
+      // Refresh it
+      await oracle.setScore(AGENT_ID, 6500, 3);
+
+      const data = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint256", "address"],
+        [JOB_ID, provider.address]
+      );
+      // Should pass now — score is fresh
+      await staleHook.connect(escrow).beforeAction(JOB_ID, SEL_SET_PROVIDER, data);
+    });
+  });
+
+  describe("AddressResolver", function () {
+    let resolver;
+
+    beforeEach(async function () {
+      const Resolver = await ethers.getContractFactory("AddressResolver");
+      resolver = await Resolver.deploy(
+        await oracle.getAddress(),
+        await identityRegistry.getAddress()
+      );
+      await resolver.waitForDeployment();
+    });
+
+    it("should resolve address to trust score", async function () {
+      const [score, tier, updatedAt] = await resolver.getTrustScore(provider.address);
+      expect(score).to.equal(6500);
+      expect(tier).to.equal(3);
+      expect(updatedAt).to.be.gt(0);
+    });
+
+    it("should revert for unregistered address", async function () {
+      await expect(
+        resolver.getTrustScore(unregistered.address)
+      ).to.be.revertedWithCustomError(resolver, "NotRegistered")
+        .withArgs(unregistered.address);
+    });
+
+    it("should check meetsThreshold correctly", async function () {
+      // provider has score 6500
+      expect(await resolver.meetsThreshold(provider.address, 3000)).to.be.true;
+      expect(await resolver.meetsThreshold(provider.address, 6500)).to.be.true;
+      expect(await resolver.meetsThreshold(provider.address, 6501)).to.be.false;
+    });
+
+    it("should return false for unregistered address on meetsThreshold", async function () {
+      expect(await resolver.meetsThreshold(unregistered.address, 1000)).to.be.false;
+    });
+
+    it("should resolve agent ID from address", async function () {
+      expect(await resolver.resolveAgentId(provider.address)).to.equal(AGENT_ID);
+      expect(await resolver.resolveAgentId(provider2.address)).to.equal(AGENT_ID_2);
+    });
+
+    it("should revert resolveAgentId for unregistered address", async function () {
+      await expect(
+        resolver.resolveAgentId(unregistered.address)
+      ).to.be.revertedWithCustomError(resolver, "NotRegistered")
+        .withArgs(unregistered.address);
     });
   });
 });
