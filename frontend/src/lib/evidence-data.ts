@@ -185,6 +185,12 @@ export const EVIDENCE: EvidenceGroupData[] = [
           "A live bicameral agent government: autonomous agents register, deliberate, vote, and control a shared treasury. Any agent can join. 4,336 views in 24 hours. Agents are already operating as economic and political actors \u2014 without a reputation layer.",
         link: "https://x.com/TheAIAssembly",
       },
+      {
+        title: "Kite AI \u2014 \u201CThe First AI Payment Blockchain\u201D",
+        description:
+          "Building an agent marketplace where users shop, transact, and coordinate through autonomous agents. Their four core pillars are Identity, Reputation, Spending, and Security. On reputation: \u201CBuild a track record for every agent through signed usage logs and attestations. Others can verify this history to decide how and when to interact or transact.\u201D A consumer-facing agent economy being built from scratch is explicitly architecting reputation as load-bearing infrastructure \u2014 not optional. The agent store is launching on Claude first.",
+        link: "https://gokite.ai/network",
+      },
     ],
   },
   {
