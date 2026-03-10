@@ -1,22 +1,22 @@
 "use client";
 
-import { FileText, Download, ExternalLink, Shield, Globe, Lock, AlertTriangle, BarChart3, Activity } from "lucide-react";
+import { FileText, Download, ExternalLink, Shield, Globe, Lock, AlertTriangle, BarChart3, Activity, Layers, Zap, Link2 } from "lucide-react";
 import Link from "next/link";
 
 const SECTIONS = [
-  { title: "The Crisis of Static Trust", description: "Why scalar reputation systems fail in high-speed agent economies: scalar blindness, exit scams, Sybil vulnerability, binary thinking, and agent-specific behavioural patterns." },
+  { title: "The Infrastructure Gap", description: "55,000 agents registered on-chain. Zero trust infrastructure. The registries exist — the integrity layer doesn't." },
   { title: "The Evidence", description: "Stanford, Harvard, NIST, Google, CrowdStrike, WTW, and Box CEO Aaron Levie — the academic, government, and enterprise case for a trust oracle." },
-  { title: "ERC-8004 + ERC-8183", description: "The on-chain identity and reputation standard (ERC-8004) deployed across 21 chains, composed with agentic commerce escrow (ERC-8183) via reputation-gated hooks." },
-  { title: "Trust Oracle Architecture", description: "Three-layer system: indexing (21 chains, 54K+ agents), evaluation (11-signal composite scoring), and on-chain feedback loop." },
-  { title: "Scoring Methodology", description: "11-signal composite scoring with Bayesian smoothing: rating, volume, consistency, validation, age, uptime, deployer reputation, URI stability, coding reputation, job completion (ERC-8183), and delegation tracking." },
-  { title: "Risk Detection System", description: "12 risk flags, 4 risk levels (LOW/MEDIUM/HIGH/CRITICAL), volatility detection, and max-exposure dollar ceilings for insurance underwriting." },
-  { title: "Anti-Identity-Mutation", description: "Freshness penalties, deployer lineage tracking, and URI mutation detection to make identity abandonment economically irrational." },
-  { title: "Multi-Chain Indexing", description: "21 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB Smart Chain, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, and Solana." },
-  { title: "Sybil Resistance", description: "Bayesian smoothing (k=3), feedback diversity weighting, temporal consistency, deployer reputation tracking, and anomaly monitoring." },
-  { title: "Protocol Endpoints", description: "REST API with tiered pricing, A2A agent-to-agent protocol, MCP server for Claude/GPT, webhooks, batch evaluation, and SDK." },
-  { title: "Insurance & Max Exposure", description: "Dollar-denominated trust ceilings for underwriting. Confidence multipliers, age bonuses, validation bonuses. The actuarial bridge between on-chain reputation and real-world coverage." },
-  { title: "Monetization", description: "Tiered API access: Pay-as-you-go ($0.05/call), Starter ($250/mo), Growth ($500/mo), Scale ($1K/mo), Enterprise ($2K/mo). Rate limiting, API key gating, usage tracking." },
-  { title: "Roadmap", description: "Multi-oracle consensus, TEE + staking validation, context-aware per-skill trust scores, and the full insurance marketplace." },
+  { title: "What AgentProof Is", description: "Not a scoring model. Infrastructure. An on-chain oracle that other protocols query before delegating capital, hiring agents, or underwriting coverage." },
+  { title: "Commerce Integration (ERC-ACP)", description: "The AgentProofHook gates provider assignment in real job escrow flows. Untrusted agents are blocked at the smart contract level, not flagged after the fact." },
+  { title: "Multi-Oracle Consensus", description: "Multiple independent oracle operators push scores. The contract averages them, detects divergence, and flags disagreement on-chain. No single point of failure." },
+  { title: "Scoring Methodology", description: "11-signal composite with Bayesian smoothing. The signals are inputs to the oracle — not the product. The product is the infrastructure that makes scores queryable." },
+  { title: "Risk Detection & Max Exposure", description: "14 automated risk flags, 4 risk levels, and dollar-denominated trust ceilings for insurance underwriting." },
+  { title: "Multi-Chain Indexing", description: "21 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, Solana." },
+  { title: "Protocol Endpoints", description: "REST API, A2A agent-to-agent protocol, MCP server, webhooks, TypeScript SDK. Every interface an agent or protocol needs to query trust." },
+  { title: "Deployer Reputation", description: "Tracking who built the agent, not just the agent. Serial deployers who spawn and abandon agents are flagged across all future registrations." },
+  { title: "Autonomous Oracle Operations", description: "8 background jobs running continuously — screening, anomaly detection, liveness probing, failure tracking, delegation sync." },
+  { title: "Insurance & Actuarial Bridge", description: "Dollar-denominated max exposure ceilings. The data structure underwriters need to price agent risk tiers — validated by Willis Towers Watson." },
+  { title: "Roadmap", description: "TEE validation, context-aware per-skill scores, insurance marketplace, cross-protocol reputation portability." },
 ];
 
 export default function WhitepaperPage() {
@@ -26,57 +26,48 @@ export default function WhitepaperPage() {
       <div className="text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
           <FileText className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v2.0</span>
+          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v2.1</span>
         </div>
         <h1 className="text-3xl font-bold text-white">
-          The Trust Oracle for the ERC-8004 Agent Economy
+          Trust Infrastructure for the Agent Economy
         </h1>
         <p className="text-sm text-gray-400 max-w-xl mx-auto">
-          Scalar reputation systems are failing the agent economy. AgentProof replaces static
-          scores with adaptive, probabilistic trust &mdash; treating every agent as a probability
-          distribution, not a number.
+          55,000 agents are registered on-chain. Protocols need to know which ones to trust
+          before delegating capital. AgentProof is the oracle they query.
         </p>
       </div>
 
-      {/* Section 1: The Crisis of Static Trust */}
+      {/* Section 1: The Infrastructure Gap */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
-        <h2 className="text-xl font-bold text-white">1. The Crisis of Static Trust</h2>
+        <h2 className="text-xl font-bold text-white">1. The Infrastructure Gap</h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          As autonomous agents become economic participants &mdash; executing trades, processing claims, negotiating terms &mdash; they inherit reputation systems designed for human e-commerce. Star ratings. Thumbs up. Transaction counters. These systems are failing.
+          ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 55,000+ agents registered. The standard works.
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">
-          Current reputation models in ERC-8004 rely on <span className="text-white font-semibold">Scalar Accumulation</span>: simple counters that measure volume, not certainty. While this works for slow-moving human markets, it is catastrophically insufficient for high-speed agent economies where thousands of transactions occur per hour and a compromised agent can drain liquidity in minutes.
+          But the standard explicitly leaves the <span className="text-white font-semibold">integrity layer</span> as an exercise for the ecosystem. The registries store data. They don&rsquo;t evaluate it. A 5-star rating from a bot farm sits next to a 5-star rating from a verified counterparty. The contract can&rsquo;t tell the difference. Neither can the agent querying it at machine speed.
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">
-          There is a deeper problem: <span className="text-white font-semibold">agents cannot spot a fake review</span>. Humans have intuition, social context, and the ability to read between the lines of a suspicious 5-star rating. Agents have milliseconds and numbers. They will consume whatever score they are given and act on it at machine speed. If the reputation layer is wrong, the damage propagates through the network before any human can intervene. This makes the oracle not just useful but <em>existential infrastructure</em> &mdash; what DNS is to the internet, trust scoring is to the agent economy. Invisible, foundational, always-on.
+          This is the gap AgentProof fills. Not a better scoring model &mdash; <span className="text-white font-semibold">the infrastructure that makes trust queryable</span>. An on-chain oracle that protocols call before delegating capital. A hook that blocks untrusted agents at the smart contract level. An API that agents query before hiring other agents.
         </p>
 
         <div className="space-y-4 pl-4 border-l-2 border-emerald-500/30">
           <div>
-            <p className="text-sm font-semibold text-emerald-400">1.1 Scalar Blindness</p>
-            <p className="text-xs text-gray-500 mt-1">A new agent with 5 successful transactions often looks identical to a veteran with 5,000. Accumulative systems measure volume, not certainty. It is mathematically impossible to distinguish between &ldquo;High Potential&rdquo; and &ldquo;High Reliability&rdquo;, leading to misallocated capital and misplaced trust.</p>
+            <p className="text-sm font-semibold text-emerald-400">1.1 The Registries Exist. The Oracle Doesn&rsquo;t.</p>
+            <p className="text-xs text-gray-500 mt-1">ERC-8004 block explorers (8004scan, growthepie) display registration data. Developer SDKs (Agent0) make it easy to register and submit feedback. But nobody transforms that raw data into actionable trust signals that protocols can consume programmatically. 58% of registered agents have broken or invalid URIs. The data is there. The intelligence isn&rsquo;t.</p>
           </div>
           <div>
-            <p className="text-sm font-semibold text-emerald-400">1.2 The Exit Scam Problem</p>
-            <p className="text-xs text-gray-500 mt-1">Static scores are sticky. If an agent spends months building a perfect reputation and then turns malicious, a scalar system is too slow to react. Lifetime averages hide recent behaviour. A compromised agent can drain liquidity for days before their score drops. By then, the damage is done.</p>
+            <p className="text-sm font-semibold text-emerald-400">1.2 Agents Can&rsquo;t Read Between the Lines</p>
+            <p className="text-xs text-gray-500 mt-1">Humans have intuition, social context, the ability to spot a suspicious 5-star review. Agents have milliseconds and numbers. They consume whatever score they&rsquo;re given and act on it at machine speed. If the trust layer is wrong, the damage propagates through the network before any human can intervene. This makes the oracle existential infrastructure &mdash; what DNS is to the internet, trust scoring is to the agent economy.</p>
           </div>
           <div>
-            <p className="text-sm font-semibold text-emerald-400">1.3 The Sybil Vulnerability</p>
-            <p className="text-xs text-gray-500 mt-1">In a permissionless system, creating a new identity is nearly free. Bad actors can spin up thousands of bot wallets to wash-trade and artificially inflate scores. Most systems cannot distinguish between 100 reviews from 100 unique users and 100 reviews from a single bot farm.</p>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-emerald-400">1.4 Binary Thinking in a Probabilistic World</p>
-            <p className="text-xs text-gray-500 mt-1">Current systems ask: &ldquo;Is this agent good?&rdquo; This is the wrong question. An agent might be 99% reliable at token transfers but only 60% reliable at complex arbitrage. A single static score cannot capture this multidimensional reality. Trust decisions require probability distributions, not binary labels.</p>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-emerald-400">1.5 Agent-Specific Behavioural Patterns</p>
-            <p className="text-xs text-gray-500 mt-1">Research on LLM-driven agents shows they behave fundamentally differently to humans in trust scenarios. GPT-4 based agents are &ldquo;unforgiving&rdquo; &mdash; a single bad interaction can permanently alter their cooperation strategy. An agent that never cooperates again after one negative experience is a different archetype to one that forgives. Reputation systems must model these agent-specific behavioural clusters, not assume human-like forgiveness curves.</p>
+            <p className="text-sm font-semibold text-emerald-400">1.3 Commerce Is Already Here</p>
+            <p className="text-xs text-gray-500 mt-1">ERC-ACP (Agentic Commerce Protocol) by Virtuals Protocol adds job escrow with Client-Provider-Evaluator lifecycle. Circle and Stripe are building payment rails for agent commerce. x402 enables pay-per-call agent services. The commerce layer is live. The trust layer isn&rsquo;t. Every job assigned to an unvetted agent is a liability without a score.</p>
           </div>
         </div>
 
         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
           <p className="text-sm text-gray-300 leading-relaxed">
-            <span className="text-emerald-400 font-bold">We propose a shift from Accumulative Trust to Adaptive, Probabilistic Trust.</span> Instead of asking &ldquo;Is this agent good?&rdquo;, our system asks: <em>&ldquo;What is the probability that this agent will perform action X successfully in the next transaction, given their full behavioural history, the behaviour of similar agents, and the current state of the network?&rdquo;</em>
+            <span className="text-emerald-400 font-bold">AgentProof is not a scoring model. It is infrastructure.</span> The on-chain oracle that other contracts query. The hook that blocks untrusted providers. The API that agents call before delegating work. The data pipeline that underwriters use to price coverage. Scoring is an input. Infrastructure is the product.
           </p>
         </div>
       </div>
@@ -88,13 +79,13 @@ export default function WhitepaperPage() {
           2. The Evidence
         </h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          The need for a trust oracle is not theoretical. It is documented by academic institutions, confirmed by government bodies, quantified by threat intelligence firms, and validated by enterprise practitioners.
+          The need for trust infrastructure is documented by academic institutions, confirmed by government bodies, quantified by threat intelligence firms, and validated by enterprise practitioners.
         </p>
 
         <div className="space-y-4 pl-4 border-l-2 border-red-500/30">
           <div>
             <p className="text-sm font-semibold text-amber-400">Academic Research</p>
-            <p className="text-xs text-gray-500 mt-1"><span className="text-gray-300">Agents of Chaos</span> &mdash; Published by researchers from Stanford, Harvard, MIT, Carnegie Mellon, and six other institutions. 38 researchers red-teamed autonomous agents in live environments. Documented 11 failure modes through natural language alone. No technical exploits required. <span className="text-gray-300">Can LLM Agents Reach Consensus?</span> &mdash; A single bad actor collapses multi-agent network consensus. In fully benign settings, LLM agents still fail to converge. The proposed fix &mdash; weighted Byzantine fault tolerance based on agent trustworthiness &mdash; is structurally identical to what AgentProof provides.</p>
+            <p className="text-xs text-gray-500 mt-1"><span className="text-gray-300">Agents of Chaos</span> &mdash; Published by researchers from Stanford, Harvard, MIT, Carnegie Mellon, and six other institutions. 38 researchers red-teamed autonomous agents in live environments. Documented 11 failure modes through natural language alone. No technical exploits required. <span className="text-gray-300">Can LLM Agents Reach Consensus?</span> &mdash; A single bad actor collapses multi-agent network consensus. The proposed fix &mdash; weighted Byzantine fault tolerance based on agent trustworthiness &mdash; requires exactly the kind of queryable trust oracle AgentProof provides.</p>
           </div>
           <div>
             <p className="text-sm font-semibold text-red-400">Government &amp; Threat Intelligence</p>
@@ -116,14 +107,74 @@ export default function WhitepaperPage() {
         </div>
       </div>
 
-      {/* Section 3: Scoring Methodology */}
+      {/* Section 3: Commerce Integration (ERC-ACP) */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Link2 className="w-5 h-5 text-emerald-400" />
+          3. Commerce Integration (ERC-ACP Hooks)
+        </h2>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          Scoring an agent after a transaction fails is forensics. Blocking an untrusted agent before the transaction executes is infrastructure. AgentProof does the latter.
+        </p>
+
+        <div className="space-y-4 pl-4 border-l-2 border-emerald-500/30">
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">3.1 AgentProofHook (IACPHook)</p>
+            <p className="text-xs text-gray-500 mt-1">An on-chain hook conforming to the canonical ERC-ACP spec. When a protocol calls <code className="text-emerald-400/70">setProvider(jobId, provider)</code>, the hook fires <code className="text-emerald-400/70">beforeAction</code>: resolves the provider address to an ERC-8004 agent ID, reads their trust score from the on-chain oracle, and reverts the transaction if the score or tier is below threshold. The agent never gets hired. The capital never moves.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">3.2 Job Outcome Tracking</p>
+            <p className="text-xs text-gray-500 mt-1">On <code className="text-emerald-400/70">afterAction</code> for complete/reject, the hook records per-agent job stats &mdash; completion count, rejection count, last job timestamp. These feed back into the oracle&rsquo;s scoring pipeline as the <code className="text-emerald-400/70">job_completion</code> signal (8% weight). A closed feedback loop: trust gates commerce, commerce builds trust.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">3.3 Optional Attestation Gate</p>
+            <p className="text-xs text-gray-500 mt-1">Deployers can attach an <code className="text-emerald-400/70">IAttestationProvider</code> for credential verification alongside reputation. Example: &ldquo;provider must have score &ge; 30 AND hold a specific NFT.&rdquo; Works with InsumerAPI (32-chain attestation) or any compatible verifier. Composable, not monolithic.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">3.4 Score Staleness Enforcement</p>
+            <p className="text-xs text-gray-500 mt-1">Configurable <code className="text-emerald-400/70">maxScoreAge</code> (uint40, seconds). If the oracle hasn&rsquo;t updated a score within the window, the hook reverts with <code className="text-emerald-400/70">ScoreExpired</code>. Prevents stale scores from gating live commerce. Default: 3600 seconds (1 hour). Set to 0 to disable.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4: Multi-Oracle Consensus */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Layers className="w-5 h-5 text-emerald-400" />
+          4. Multi-Oracle Consensus
+        </h2>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          A single oracle is a single point of failure. A compromised oracle can manipulate scores silently. AgentProof V2 eliminates this by supporting multiple independent oracle operators.
+        </p>
+
+        <div className="space-y-4 pl-4 border-l-2 border-emerald-500/30">
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">4.1 Independent Operator Scores</p>
+            <p className="text-xs text-gray-500 mt-1">Each authorized oracle pushes scores independently. The contract stores per-oracle scores in <code className="text-emerald-400/70">oracleScores[agentId][oracle]</code>. Consumers can read individual operator scores or the consensus view. No operator can overwrite another&rsquo;s data.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">4.2 On-Chain Consensus</p>
+            <p className="text-xs text-gray-500 mt-1">The consensus score is the average across all operators who have scored that agent. Tier is auto-computed from the average via <code className="text-emerald-400/70">_scoreTier()</code>. Updated on every write. <code className="text-emerald-400/70">getConsensusScore()</code> returns: average score, consensus tier, oracle count, and a divergence flag.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">4.3 Divergence Detection</p>
+            <p className="text-xs text-gray-500 mt-1">When two oracles disagree by more than <code className="text-emerald-400/70">divergenceThreshold</code> (default: 10 points on 0-100 scale), the contract emits <code className="text-emerald-400/70">DivergenceDetected(agentId, minScore, maxScore)</code>. Consumers can check the <code className="text-emerald-400/70">divergent</code> flag before acting on a score. Disagreement is visible, not hidden.</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">4.4 Operator Management</p>
+            <p className="text-xs text-gray-500 mt-1">Contract owner can <code className="text-emerald-400/70">addOracle(address, name)</code> and <code className="text-emerald-400/70">removeOracle(address)</code>. Each operator is named on-chain. Removal revokes write access but preserves historical scores. Current operators: AgentProof (Operator #1), Agent402 (Operator #2).</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 5: Scoring Methodology */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-emerald-400" />
-          3. Scoring Methodology
+          5. Scoring Methodology
         </h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          The composite score (0&ndash;100) blends up to 11 weighted signals, Bayesian-smoothed to prevent new agents with a single perfect rating from topping the leaderboard. The system dynamically rebalances weights when optional signals (coding reputation, ERC-8183 job completion, delegation tracking) become available.
+          The composite score (0&ndash;100) blends up to 11 weighted signals, Bayesian-smoothed to prevent gaming. The scoring model is an input to the oracle infrastructure &mdash; it can be upgraded, replaced, or supplemented by additional oracle operators without changing the on-chain interface.
         </p>
 
         <div className="space-y-2">
@@ -137,7 +188,7 @@ export default function WhitepaperPage() {
               { signal: "Volume Score", weight: "8%", desc: "Logarithmic feedback count" },
               { signal: "Consistency Score", weight: "8%", desc: "Inverse standard deviation of ratings" },
               { signal: "Uptime Score", weight: "8%", desc: "Liveness probe success rate" },
-              { signal: "Job Completion", weight: "8%", desc: "ERC-8183 job completion rate as provider" },
+              { signal: "Job Completion", weight: "8%", desc: "ERC-ACP job completion rate as provider" },
               { signal: "Deployer Score", weight: "6%", desc: "Deployer reputation lineage" },
               { signal: "URI Stability", weight: "6%", desc: "Metadata mutation frequency" },
             ].map((s) => (
@@ -150,25 +201,7 @@ export default function WhitepaperPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-600 italic">Weights rebalance dynamically based on available signals. Base (8 signals): rating 30%, validation 15%, age 12%, volume 10%, consistency 10%, uptime 10%, deployer 8%, URI 5%. With coding only: coding takes 10%, others reduce proportionally. With job only: job takes 8%.</p>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Additional Tracked Signals</p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <span className="text-xs font-medium text-white">ERC-8183 Jobs</span>
-              <p className="text-[10px] text-gray-600 mt-1">Job completion rate, total jobs, abandonment detection via AgentProofHook</p>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <span className="text-xs font-medium text-white">Delegation Tracking</span>
-              <p className="text-[10px] text-gray-600 mt-1">Success rate, count, MTTR when acting as delegate</p>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <span className="text-xs font-medium text-white">Failure Metrics</span>
-              <p className="text-[10px] text-gray-600 mt-1">Failure count, mean time to recovery, active failures</p>
-            </div>
-          </div>
+          <p className="text-[10px] text-gray-600 italic">Weights rebalance dynamically based on available signals. Base (8 signals): rating 30%, validation 15%, age 12%, volume 10%, consistency 10%, uptime 10%, deployer 8%, URI 5%.</p>
         </div>
 
         <div className="space-y-2">
@@ -193,16 +226,33 @@ export default function WhitepaperPage() {
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Freshness Multiplier</p>
-          <p className="text-xs text-gray-500">All scores are penalised by account age to prevent new-agent gaming: &lt;7 days (0.70x), 7&ndash;30 days (0.85x), 30&ndash;90 days (0.95x), 90+ days (1.0x).</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Anti-Gaming Defenses</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Bayesian Smoothing</span>
+              <p className="text-[10px] text-gray-600 mt-1">Prior=50, k=3. A single perfect rating scores 62.5, not 100. Gaming requires sustained volume.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Freshness Penalty</span>
+              <p className="text-[10px] text-gray-600 mt-1">&lt;7d: 0.70x, 7-30d: 0.85x, 30-90d: 0.95x. Identity rotation costs 30% for a week.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Deployer Lineage</span>
+              <p className="text-[10px] text-gray-600 mt-1">Serial deployers who abandon agents taint all future registrations via deployer_score signal.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Anomaly Detection</span>
+              <p className="text-[10px] text-gray-600 mt-1">Autonomous job runs every 120s. &gt;20pt drops flagged as SUSPICIOUS_VOLATILITY.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Section 4: Risk Detection */}
+      {/* Section 6: Risk Detection */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-red-400" />
-          4. Risk Detection &amp; Max Exposure
+          6. Risk Detection &amp; Max Exposure
         </h2>
         <p className="text-sm text-gray-400 leading-relaxed">
           Every trust evaluation includes a risk assessment with specific flags, a risk level classification, and a dollar-denominated max exposure ceiling for insurance underwriting.
@@ -242,19 +292,37 @@ export default function WhitepaperPage() {
         </div>
 
         <div className="bg-gray-800/50 rounded-lg p-4">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-2">Max Exposure Model</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-2">Max Exposure Model (Insurance Bridge)</p>
           <p className="text-xs text-gray-500 leading-relaxed">
-            Dollar-denominated trust ceiling calculated from composite score, confidence multiplier (feedback volume), age bonus, and validation bonus. Provides the actuarial bridge between on-chain reputation and real-world insurance coverage. Underwriters can price agent risk tiers using: transaction volume and velocity, delegation scope, custody relationships, and loss event history with root cause classification.
+            Dollar-denominated trust ceiling calculated from composite score, confidence multiplier (feedback volume), age bonus, and validation bonus. This is the data structure Willis Towers Watson identified as the missing input for underwriting agent risk. Underwriters can price tiers using: transaction volume/velocity, delegation scope, custody relationships, and loss event history with root cause classification.
           </p>
         </div>
       </div>
 
-      {/* Section 5: Architecture & Endpoints */}
+      {/* Section 7: Architecture & Endpoints */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Activity className="w-5 h-5 text-emerald-400" />
-          5. Architecture &amp; Endpoints
+          7. Architecture &amp; Endpoints
         </h2>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Three-Layer Architecture</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-bold text-white">Layer 1: Indexing</span>
+              <p className="text-[10px] text-gray-600 mt-1">21-chain event indexer. AgentRegistered, FeedbackSubmitted, ValidationRequested events. Batch-to-individual fallback with exponential backoff.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-bold text-white">Layer 2: Evaluation</span>
+              <p className="text-[10px] text-gray-600 mt-1">11-signal composite scoring. 14 risk flags. In-memory cache (300s TTL). Scoped per-dimension scores with independent Bayesian smoothing.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-bold text-white">Layer 3: Feedback Loop</span>
+              <p className="text-[10px] text-gray-600 mt-1">Oracle writes evaluations back to ERC-8004 Reputation Registry as on-chain feedback. Verifiable audit trail.</p>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-2">
           <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Protocol Endpoints</p>
@@ -262,11 +330,11 @@ export default function WhitepaperPage() {
             {[
               { name: "REST API", desc: "GET /api/v1/trust/{id} — full evaluation with score breakdown, risk flags, delegation stats" },
               { name: "Batch Evaluation", desc: "POST /api/v1/trust/batch — evaluate up to 500 agents in a single request" },
-              { name: "Risk Check", desc: "GET /api/v1/trust/{id}/risk — focused risk assessment with flag details" },
-              { name: "Dimensions", desc: "GET /api/v1/trust/{id}/dimensions — per-dimension score breakdown" },
-              { name: "A2A (Agent-to-Agent)", desc: "POST /a2a — Google A2A protocol for agent-to-agent trust queries" },
+              { name: "Hook Gate Check", desc: "GET /api/v1/hook/check/{id} — pre-check if agent would pass the on-chain hook" },
+              { name: "Address Resolver", desc: "GET /api/v1/hook/resolve/{addr} — resolve wallet to agent ID and trust score" },
+              { name: "A2A (Agent-to-Agent)", desc: "POST /a2a — Google A2A protocol. Agent card at /.well-known/agent.json" },
               { name: "MCP Server", desc: "POST /mcp — Model Context Protocol for Claude, GPT, and other LLM agents" },
-              { name: "Webhooks", desc: "Register webhooks for real-time score change notifications" },
+              { name: "Webhooks", desc: "Real-time score change notifications with SSRF protection" },
               { name: "SDK", desc: "@agentproof/sdk v1.1.0 — TypeScript SDK with full oracle API support" },
             ].map((ep) => (
               <div key={ep.name} className="bg-gray-800/50 rounded-lg p-3">
@@ -276,6 +344,55 @@ export default function WhitepaperPage() {
             ))}
           </div>
         </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">On-Chain Oracle (TrustScoreOracle V2)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {[
+              { fn: "getScore(agentId)", desc: "Paid query — returns consensus score, tier, timestamp. Fee: 0.001 native token." },
+              { fn: "viewScore(agentId)", desc: "Free view — same data, for off-chain reads and UI display." },
+              { fn: "getConsensusScore(agentId)", desc: "Multi-oracle consensus — avg score, tier, oracle count, divergence flag." },
+              { fn: "getOracleScore(agentId, oracle)", desc: "Per-operator score — read any specific oracle's assessment." },
+            ].map((f) => (
+              <div key={f.fn} className="bg-gray-800/50 rounded-lg p-3">
+                <code className="text-[10px] font-mono text-emerald-400">{f.fn}</code>
+                <p className="text-[10px] text-gray-500 mt-1">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Autonomous Oracle Jobs</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {[
+              { job: "Agent Screening", interval: "60s", desc: "Compute evaluations for new agents, submit on-chain" },
+              { job: "Anomaly Monitor", interval: "120s", desc: "Detect >20pt score drops, flag volatility" },
+              { job: "Liveness Probing", interval: "300s", desc: "HTTP health checks to agent endpoints" },
+              { job: "Failure Metrics", interval: "300s", desc: "MTTR, active failures, recovery tracking" },
+              { job: "Network Report", interval: "600s", desc: "Publish ecosystem stats via event feed" },
+              { job: "Delegation Sync", interval: "600s", desc: "Track delegation success/failure rates" },
+              { job: "Job Outcomes", interval: "600s", desc: "Sync ERC-ACP job completion rates" },
+              { job: "GitHub Sync", interval: "3600s", desc: "Coding reputation from PR metrics" },
+            ].map((j) => (
+              <div key={j.job} className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">{j.job}</span>
+                  <span className="text-[10px] font-mono text-emerald-400">{j.interval}</span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">{j.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Section 8: API Pricing */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Zap className="w-5 h-5 text-emerald-400" />
+          8. Monetization
+        </h2>
 
         <div className="space-y-2">
           <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">API Pricing Tiers</p>
@@ -296,28 +413,7 @@ export default function WhitepaperPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Autonomous Oracle Jobs</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {[
-              { job: "Agent Screening", interval: "60s", desc: "Compute full evaluations for new agents" },
-              { job: "Anomaly Monitor", interval: "120s", desc: "Detect >20pt score drops, flag volatility" },
-              { job: "Liveness Probing", interval: "300s", desc: "HTTP health checks to agent endpoints" },
-              { job: "Network Report", interval: "600s", desc: "Publish ecosystem stats via event feed" },
-              { job: "Delegation Sync", interval: "600s", desc: "Track delegation success/failure rates" },
-              { job: "GitHub Sync", interval: "3600s", desc: "Compute coding reputation from PR metrics" },
-              { job: "Failure Metrics", interval: "300s", desc: "MTTR, active failures, recovery tracking" },
-            ].map((j) => (
-              <div key={j.job} className="bg-gray-800/50 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">{j.job}</span>
-                  <span className="text-[10px] font-mono text-emerald-400">{j.interval}</span>
-                </div>
-                <p className="text-[10px] text-gray-500 mt-1">{j.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="text-xs text-gray-500">On-chain queries pay a per-call fee to the TrustScoreOracle contract (0.001 native token). Off-chain API queries use API key authentication with monthly quotas. Both revenue streams compound with adoption.</p>
       </div>
 
       {/* Download Card */}
@@ -325,7 +421,7 @@ export default function WhitepaperPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-bold text-white">AgentProof Whitepaper</p>
-            <p className="text-xs text-gray-500 font-mono mt-1">March 2026 &middot; v2.0 &middot; PDF</p>
+            <p className="text-xs text-gray-500 font-mono mt-1">March 2026 &middot; v2.1 &middot; PDF</p>
           </div>
           <a
             href="/agentproof-whitepaper.pdf"
@@ -368,7 +464,7 @@ export default function WhitepaperPage() {
         {[
           { icon: Shield, label: "Chains", value: "21", sub: "AVAX \u00B7 ETH \u00B7 Base \u00B7 Solana + 17 more" },
           { icon: Globe, label: "Indexed", value: "54K+", sub: "Agent identities" },
-          { icon: BarChart3, label: "Signals", value: "11", sub: "Composite scoring dimensions" },
+          { icon: Layers, label: "Oracles", value: "2", sub: "Independent operators with consensus" },
           { icon: Lock, label: "Risk Flags", value: "14", sub: "Automated threat detection" },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-center">
