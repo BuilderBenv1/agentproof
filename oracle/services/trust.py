@@ -346,11 +346,11 @@ def _determine_recommendation(
         f in risk_flags
         for f in [RiskFlag.HIGH_RISK_SCORE, RiskFlag.CONCENTRATED_FEEDBACK]
     )
-    if has_high_risk_flag or composite_score < 50:
+    if has_high_risk_flag or composite_score < 40:
         return Recommendation.HIGH_RISK
-    if feedback_count < 5:
+    if feedback_count < 3:
         return Recommendation.UNVERIFIED
-    if composite_score >= 70 and feedback_count >= 10:
+    if composite_score >= 58 and feedback_count >= 5:
         return Recommendation.TRUSTED
     return Recommendation.CAUTION
 
