@@ -65,6 +65,35 @@ class AgentProof:
             raise AgentProofError(r.status_code, r.text, path)
         return r.json()
 
+    # ── Trust Resolution ─────────────────────────────────────
+
+    def get_score(self, address: str, chain: Optional[str] = None) -> dict:
+        """
+        Resolve an Ethereum address to its AgentProof trust score.
+
+        Returns::
+
+            {
+                "address": "0x...",
+                "agent_id": 42,
+                "score": 72.5,
+                "tier": "gold",
+                "tier_num": 3,
+                "updated_at": "2025-..."
+            }
+
+        Raises AgentProofError(404) if the address has no ERC-8004 identity.
+        """
+        params = {"chain": chain} if chain else {}
+        clean = {k: v for k, v in params.items() if v is not None}
+        r = self._client.get(
+            f"{self._base.replace('/api', '')}/api/v1/hook/resolve/{address}",
+            params=clean,
+        )
+        if r.status_code >= 400:
+            raise AgentProofError(r.status_code, r.text, f"/hook/resolve/{address}")
+        return r.json()
+
     # ── Agents ──────────────────────────────────────────────
 
     def list_agents(

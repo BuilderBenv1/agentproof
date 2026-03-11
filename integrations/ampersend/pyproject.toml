@@ -1,0 +1,22 @@
+[project]
+name = "agentproof-ampersend"
+version = "0.1.0"
+description = "AgentProof × Ampersend — reputation-gated x402 payments for AI agents"
+requires-python = ">=3.13"
+dependencies = [
+    "ampersend-sdk>=0.0.6",
+    "x402-a2a",
+    "httpx>=0.25.0",
+    "eth-account>=0.13.0",
+]
+
+[project.optional-dependencies]
+langchain = [
+    "langchain-ampersend",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
