@@ -27,10 +27,23 @@ from app.services.scoring import (
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_text(value: str | None) -> str | None:
+    """Strip null bytes (\x00) that PostgreSQL text columns reject."""
+    if value is None:
+        return None
+    return value.replace("\x00", "")
+
+
+def _sanitize_row(row: dict) -> dict:
+    """Strip null bytes from all string values in a row dict."""
+    return {k: _sanitize_text(v) if isinstance(v, str) else v for k, v in row.items()}
+
+
 def _resilient_upsert(db, table: str, rows: list[dict], on_conflict: str, label: str):
     """Batch upsert with automatic fallback to sub-batches, then individual rows."""
     if not rows:
         return
+    rows = [_sanitize_row(r) for r in rows]
     try:
         db.table(table).upsert(rows, on_conflict=on_conflict).execute()
         logger.info(f"[{label}] Batch upserted {len(rows)} rows")
@@ -135,14 +148,14 @@ def process_agent_registered_events(from_block: int, to_block: int):
             block_data = blockchain.w3.eth.get_block(block)
             block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
 
-        rows.append({
+        rows.append(_sanitize_row({
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
             "source_chain": "avalanche",
             "registered_at": block_ts_cache[block].isoformat(),
             "updated_at": now,
-        })
+        }))
 
     _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "avalanche-custom")
 
@@ -169,14 +182,14 @@ def process_erc8004_identity_events(from_block: int, to_block: int):
             block_data = blockchain.w3.eth.get_block(block)
             block_ts_cache[block] = datetime.fromtimestamp(block_data.timestamp, tz=timezone.utc)
 
-        rows.append({
+        rows.append(_sanitize_row({
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
             "source_chain": "avalanche",
             "registered_at": block_ts_cache[block].isoformat(),
             "updated_at": now,
-        })
+        }))
 
     _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "ERC-8004-AVAX")
 
@@ -209,14 +222,14 @@ def process_erc8004_eth_identity_events(from_block: int, to_block: int):
 
     rows = []
     for event in events:
-        rows.append({
+        rows.append(_sanitize_row({
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
             "source_chain": "ethereum",
             "registered_at": block_ts_cache[event.blockNumber].isoformat(),
             "updated_at": now,
-        })
+        }))
 
     # Batch upsert in chunks of 500 (Supabase has payload size limits)
     saved = 0
@@ -269,14 +282,14 @@ def process_erc8004_base_identity_events(from_block: int, to_block: int):
 
     rows = []
     for event in events:
-        rows.append({
+        rows.append(_sanitize_row({
             "agent_id": event.args.agentId,
             "owner_address": event.args.owner,
             "agent_uri": event.args.agentURI,
             "source_chain": "base",
             "registered_at": block_ts_cache[event.blockNumber].isoformat(),
             "updated_at": now,
-        })
+        }))
 
     # Batch upsert in chunks of 500 (Supabase has payload size limits)
     saved = 0

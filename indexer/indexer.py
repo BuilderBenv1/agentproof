@@ -91,6 +91,13 @@ AGENT_SPLITS_ABI = json.loads("""[
 ]""")
 
 
+def _sanitize_text(value: str | None) -> str | None:
+    """Strip null bytes (\\x00) that PostgreSQL text columns reject."""
+    if value is None:
+        return None
+    return value.replace("\x00", "")
+
+
 def parse_agent_uri(uri: str) -> dict:
     """Parse an agent metadata URI (base64 data URI, IPFS, or HTTPS) into a dict."""
     metadata = {}
@@ -272,11 +279,11 @@ class AgentProofIndexer:
                     {
                         "agent_id": agent_id,
                         "owner_address": owner,
-                        "agent_uri": uri,
-                        "name": metadata.get("name"),
-                        "description": metadata.get("description"),
+                        "agent_uri": _sanitize_text(uri),
+                        "name": _sanitize_text(metadata.get("name")),
+                        "description": _sanitize_text(metadata.get("description")),
                         "category": metadata.get("category", "general"),
-                        "image_url": metadata.get("image"),
+                        "image_url": _sanitize_text(metadata.get("image")),
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "erc8004",
@@ -300,15 +307,15 @@ class AgentProofIndexer:
                 metadata = parse_agent_uri(new_uri)
 
                 update = {
-                    "agent_uri": new_uri,
+                    "agent_uri": _sanitize_text(new_uri),
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
                 if metadata.get("name"):
-                    update["name"] = metadata["name"]
+                    update["name"] = _sanitize_text(metadata["name"])
                 if metadata.get("description"):
-                    update["description"] = metadata["description"]
+                    update["description"] = _sanitize_text(metadata["description"])
                 if metadata.get("image"):
-                    update["image_url"] = metadata["image"]
+                    update["image_url"] = _sanitize_text(metadata["image"])
 
                 self.db.table("agents").update(update).eq("agent_id", agent_id).execute()
                 logger.info(f"[ERC8004-ID] Agent #{agent_id} URI updated")
@@ -335,7 +342,7 @@ class AgentProofIndexer:
                     {
                         "agent_id": agent_id,
                         "owner_address": owner,
-                        "agent_uri": uri,
+                        "agent_uri": _sanitize_text(uri),
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "custom",
@@ -356,7 +363,7 @@ class AgentProofIndexer:
                 agent_id = event.args.agentId
                 new_uri = event.args.newURI
                 self.db.table("agents").update(
-                    {"agent_uri": new_uri, "updated_at": datetime.now(timezone.utc).isoformat()}
+                    {"agent_uri": _sanitize_text(new_uri), "updated_at": datetime.now(timezone.utc).isoformat()}
                 ).eq("agent_id", agent_id).execute()
                 logger.info(f"[CUSTOM-ID] Agent #{agent_id} URI updated")
                 count += 1

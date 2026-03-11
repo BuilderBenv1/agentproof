@@ -514,10 +514,13 @@ def ensure_oracle_agent_indexed() -> bool:
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
 
+        # Strip null bytes that PostgreSQL text columns reject
+        clean_uri = (onchain["agent_uri"] or "").replace("\x00", "")
+
         db.table("agents").insert({
             "agent_id": agent_id,
             "owner_address": onchain["owner_address"],
-            "agent_uri": onchain["agent_uri"],
+            "agent_uri": clean_uri,
             "name": settings.oracle_agent_name,
             "description": settings.oracle_agent_description,
             "category": "data",
