@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 // ── Colors ──────────────────────────────────────────────────────
 
@@ -172,6 +173,7 @@ export default function DeployerStorm() {
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const frameRef = useRef(0);
   const timeRef = useRef(0);
+  const router = useRouter();
 
   // Init data
   useEffect(() => {
@@ -215,13 +217,23 @@ export default function DeployerStorm() {
       setHovered(null);
     }
 
+    function onClick() {
+      const agent = hoveredRef.current;
+      if (agent) {
+        // Click agent node → navigate to agent directory filtered by tier
+        router.push(`/agents?tier=${agent.tier}`);
+      }
+    }
+
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mouseleave", onLeave);
+    canvas.addEventListener("click", onClick);
     return () => {
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("mouseleave", onLeave);
+      canvas.removeEventListener("click", onClick);
     };
-  }, []);
+  }, [router]);
 
   // Animation loop
   const draw = useCallback(() => {
@@ -424,6 +436,7 @@ export default function DeployerStorm() {
           {hovered.flagCount > 0 && (
             <p className="text-[#ff3344]">{hovered.flagCount} flag{hovered.flagCount > 1 ? "s" : ""}</p>
           )}
+          <p className="text-gray-600 mt-1 text-[9px]">Click to view agents</p>
         </div>
       )}
     </div>

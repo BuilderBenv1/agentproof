@@ -32,7 +32,7 @@ export default function ScoreGauge({ score, tier, size = "md", showTier = false 
             cy={dimensions.h / 2}
             r={dimensions.r}
             fill="none"
-            stroke="#1f2937"
+            stroke="#2a2a3a"
             strokeWidth={dimensions.sw}
           />
           {/* Progress arc */}

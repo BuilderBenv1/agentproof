@@ -17,7 +17,7 @@ const LABELS: Record<string, { text: string; color: string; icon: React.ElementT
   serial_deployer_warning: { text: "Serial Deployer", color: "#ef4444", icon: AlertTriangle },
   new_deployer: { text: "New Deployer", color: "#6b7280", icon: UserPlus },
   recent_deployer: { text: "Recent Deployer", color: "#f59e0b", icon: UserPlus },
-  established: { text: "Trusted Deployer", color: "#10b981", icon: UserCheck },
+  established: { text: "Trusted Deployer", color: "#00ff88", icon: UserCheck },
 };
 
 function getLabel(info: DeployerInfo) {
@@ -36,7 +36,7 @@ export default function DeployerBadge({ info }: { info: DeployerInfo }) {
   const Icon = label.icon;
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+    <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-mono text-gray-500 uppercase flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5" />

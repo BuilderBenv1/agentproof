@@ -23,12 +23,12 @@ function MetadataPopover({ data }: { data: Record<string, unknown> }) {
     <span className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+        className="flex items-center gap-1 hover:text-[#00ff88] transition-colors"
       >
         <FileText className="w-3 h-3" /> Metadata
       </button>
       {open && (
-        <div className="absolute z-50 top-6 left-0 w-72 max-h-60 overflow-auto bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl">
+        <div className="absolute z-50 top-6 left-0 w-72 max-h-60 overflow-auto bg-[#111118] border border-[#2a2a3a] rounded-lg p-3 shadow-xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-mono text-gray-500 uppercase">Decoded Metadata</span>
             <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white text-xs">&times;</button>
@@ -91,9 +91,9 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+      <div className="bg-[#111118] border border-[#2a2a3a] rounded-xl p-6">
         <div className="flex flex-col md:flex-row items-start gap-6">
-          <div className="w-20 h-20 rounded-xl bg-gray-800 flex items-center justify-center text-3xl font-bold font-mono text-emerald-400 flex-shrink-0 overflow-hidden">
+          <div className="w-20 h-20 rounded-xl bg-gray-800 flex items-center justify-center text-3xl font-bold font-mono text-[#00ff88] flex-shrink-0 overflow-hidden">
             {agent.image_url ? (
               <img src={agent.image_url} alt={agent.name || "Agent"} className="w-full h-full rounded-xl object-cover" />
             ) : (
@@ -148,7 +148,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 Owner: {truncateAddress(agent.owner_address)}
                 <button
                   onClick={() => navigator.clipboard.writeText(agent.owner_address)}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-[#00ff88] transition-colors"
                 >
                   <Copy className="w-3 h-3" />
                 </button>
@@ -167,7 +167,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                     href={agent.agent_uri}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
+                    className="flex items-center gap-1 hover:text-[#00ff88] transition-colors"
                   >
                     <ExternalLink className="w-3 h-3" /> Metadata
                   </a>
@@ -191,7 +191,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Star className="w-3.5 h-3.5 text-yellow-400" />
               <span className="text-xs font-mono text-gray-500 uppercase">Avg Rating</span>
@@ -199,7 +199,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
             <p className="text-xl font-bold font-mono text-white">{agent.average_rating.toFixed(1)}</p>
             <p className="text-xs text-gray-600 font-mono">out of 100</p>
           </div>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
               <span className="text-xs font-mono text-gray-500 uppercase">Reviews</span>
@@ -207,15 +207,15 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
             <p className="text-xl font-bold font-mono text-white">{agent.total_feedback}</p>
             <p className="text-xs text-gray-600 font-mono">total feedback</p>
           </div>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
             <div className="flex items-center gap-1.5 mb-1">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <CheckCircle className="w-3.5 h-3.5 text-[#00ff88]" />
               <span className="text-xs font-mono text-gray-500 uppercase">Validation</span>
             </div>
             <p className="text-xl font-bold font-mono text-white">{agent.validation_success_rate > 0 ? `${agent.validation_success_rate.toFixed(0)}%` : "N/A"}</p>
             <p className="text-xs text-gray-600 font-mono">{agent.validation_success_rate > 0 ? "success rate" : "no validations yet"}</p>
           </div>
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+          <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
             <div className="flex items-center gap-1.5 mb-1">
               <Activity className="w-3.5 h-3.5 text-purple-400" />
               <span className="text-xs font-mono text-gray-500 uppercase">Rank</span>
@@ -226,7 +226,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
         </div>
 
         {/* Score Component Bars */}
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4 space-y-3">
           <h3 className="text-xs font-mono text-gray-500 uppercase mb-3">Score Breakdown</h3>
           <ScoreBreakdownBar
             label="Rating Score"
@@ -264,7 +264,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Score Trajectory */}
           {agent.score_trajectory && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
               <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5" /> Score Trajectory
               </h3>
@@ -273,7 +273,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                   <span className="text-xs font-mono text-gray-500 block mb-1">7-Day</span>
                   {agent.score_trajectory.delta_7d != null ? (
                     <span className={`text-lg font-bold font-mono flex items-center gap-1 ${
-                      agent.score_trajectory.delta_7d > 0 ? "text-emerald-400" :
+                      agent.score_trajectory.delta_7d > 0 ? "text-[#00ff88]" :
                       agent.score_trajectory.delta_7d < 0 ? "text-red-400" : "text-gray-400"
                     }`}>
                       {agent.score_trajectory.delta_7d > 0 ? <TrendingUp className="w-4 h-4" /> :
@@ -289,7 +289,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                   <span className="text-xs font-mono text-gray-500 block mb-1">30-Day</span>
                   {agent.score_trajectory.delta_30d != null ? (
                     <span className={`text-lg font-bold font-mono flex items-center gap-1 ${
-                      agent.score_trajectory.delta_30d > 0 ? "text-emerald-400" :
+                      agent.score_trajectory.delta_30d > 0 ? "text-[#00ff88]" :
                       agent.score_trajectory.delta_30d < 0 ? "text-red-400" : "text-gray-400"
                     }`}>
                       {agent.score_trajectory.delta_30d > 0 ? <TrendingUp className="w-4 h-4" /> :
@@ -304,7 +304,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 <div>
                   <span className="text-xs font-mono text-gray-500 block mb-1">Trend</span>
                   <span className={`text-sm font-bold font-mono uppercase ${
-                    agent.score_trajectory.trend === "rising" ? "text-emerald-400" :
+                    agent.score_trajectory.trend === "rising" ? "text-[#00ff88]" :
                     agent.score_trajectory.trend === "falling" ? "text-red-400" :
                     agent.score_trajectory.trend === "new" ? "text-cyan-400" : "text-gray-400"
                   }`}>
@@ -317,7 +317,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
 
           {/* Max Exposure */}
           {agent.max_exposure_usd != null && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+            <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
               <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5" /> Max Exposure
               </h3>
@@ -330,16 +330,16 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 Recommended maximum trust value for this agent based on reputation signals, feedback volume, account age, and insurance.
               </p>
               {(agent.coverage_tier || agent.insurable != null) && (
-                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-800">
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-[#2a2a3a]">
                   {agent.coverage_tier && agent.coverage_tier !== "none" && (
-                    <span className="text-xs font-mono px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+                    <span className="text-xs font-mono px-2 py-0.5 rounded border border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88]">
                       Coverage: {agent.coverage_tier}
                     </span>
                   )}
                   {agent.insurable != null && (
                     <span className={`text-xs font-mono px-2 py-0.5 rounded border ${
                       agent.insurable
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        ? "border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88]"
                         : "border-gray-700 bg-gray-800 text-gray-500"
                     }`}>
                       {agent.insurable ? "Insurable" : "Not Insurable"}
@@ -354,7 +354,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
 
       {/* Cross-Chain Identity */}
       {agent.cross_chain_agents && agent.cross_chain_agents.length > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
             <Link2 className="w-3.5 h-3.5" /> Cross-Chain Identity ({agent.cross_chain_agents.length} linked agents)
           </h3>
@@ -374,7 +374,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 <a
                   key={`${linked.agent_id}-${linked.source_chain}`}
                   href={`/agents/${linked.agent_id}?chain=${linked.source_chain}`}
-                  className="flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg p-2 hover:border-emerald-500/30 transition-colors"
+                  className="flex items-center gap-2 bg-gray-800/50 border border-[#2a2a3a] rounded-lg p-2 hover:border-[#00ff88]/30 transition-colors"
                 >
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: lc }} />
                   <span className="text-xs font-mono text-gray-300 truncate flex-1">
@@ -399,13 +399,13 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
         (agent.audited_by && agent.audited_by.length > 0) ||
         (agent.supported_protocols && agent.supported_protocols.length > 0) ||
         agent.owner_type || agent.upgrade_pattern) && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <h3 className="text-xs font-mono text-gray-500 uppercase mb-3 flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5" /> Agent Capabilities
           </h3>
           <div className="flex flex-wrap gap-2">
             {agent.autonomy_level && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300 capitalize">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300 capitalize">
                 {agent.autonomy_level.replace("_", " ")}
               </span>
             )}
@@ -419,22 +419,22 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               </span>
             )}
             {agent.data_access_level && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300">
                 Data: {agent.data_access_level}
               </span>
             )}
             {agent.owner_type && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300 uppercase">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300 uppercase">
                 {agent.owner_type}
               </span>
             )}
             {agent.upgrade_pattern && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300">
                 {agent.upgrade_pattern.replace("_", " ")}
               </span>
             )}
             {agent.open_source && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88]">
                 Open Source
               </span>
             )}
@@ -444,23 +444,23 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
               </span>
             )}
             {agent.audited_by && agent.audited_by.length > 0 && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#00ff88]/30 bg-[#00ff88]/10 text-[#00ff88]">
                 Audited ({agent.audited_by.join(", ")})
               </span>
             )}
             {agent.can_delegate && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300">
                 Can Delegate
               </span>
             )}
             {agent.can_be_delegated && (
-              <span className="text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-800 text-gray-300">
+              <span className="text-xs font-mono px-2 py-1 rounded border border-[#2a2a3a] bg-gray-800 text-gray-300">
                 Accepts Delegation
               </span>
             )}
           </div>
           {agent.supported_protocols && agent.supported_protocols.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-800">
+            <div className="mt-3 pt-3 border-t border-[#2a2a3a]">
               <span className="text-[10px] font-mono text-gray-600 uppercase">Protocols: </span>
               {agent.supported_protocols.map((p) => (
                 <span key={p} className="text-xs font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 mr-1 uppercase">
@@ -470,9 +470,9 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
             </div>
           )}
           {(agent.jurisdiction || (agent.compliance_tags && agent.compliance_tags.length > 0)) && (
-            <div className="mt-3 pt-3 border-t border-gray-800 flex flex-wrap gap-2">
+            <div className="mt-3 pt-3 border-t border-[#2a2a3a] flex flex-wrap gap-2">
               {agent.jurisdiction && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded border border-gray-700 bg-gray-800 text-gray-400">
+                <span className="text-xs font-mono px-2 py-0.5 rounded border border-[#2a2a3a] bg-gray-800 text-gray-400">
                   {agent.jurisdiction}
                 </span>
               )}
@@ -484,9 +484,9 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
             </div>
           )}
           {agent.source_url && (
-            <div className="mt-3 pt-3 border-t border-gray-800">
+            <div className="mt-3 pt-3 border-t border-[#2a2a3a]">
               <a href={agent.source_url} target="_blank" rel="noopener noreferrer"
-                className="text-xs font-mono text-emerald-400 hover:underline flex items-center gap-1">
+                className="text-xs font-mono text-[#00ff88] hover:underline flex items-center gap-1">
                 <ExternalLink className="w-3 h-3" /> Source Code
               </a>
             </div>
@@ -501,7 +501,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
 
       {/* URI Changes */}
       {agent.uri_changes && agent.uri_changes.length > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 space-y-3">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4 space-y-3">
           <h3 className="text-xs font-mono text-gray-500 uppercase flex items-center gap-1.5">
             <RefreshCw className="w-3.5 h-3.5" />
             URI Changes ({agent.uri_changes.length})
@@ -514,7 +514,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 </span>
                 <div className="flex-1 min-w-0">
                   <span className="text-red-400/60 line-through block truncate">{change.old_uri || "—"}</span>
-                  <span className="text-emerald-400/80 block truncate">{change.new_uri}</span>
+                  <span className="text-[#00ff88]/80 block truncate">{change.new_uri}</span>
                 </div>
               </div>
             ))}
@@ -530,16 +530,16 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
       />
 
       {/* Score History Chart */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+      <div className="bg-[#111118] border border-[#2a2a3a] rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-emerald-400" />
+          <Activity className="w-4 h-4 text-[#00ff88]" />
           Score History
         </h2>
         <ReputationChart data={history} />
       </div>
 
       {/* Recent Feedback */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+      <div className="bg-[#111118] border border-[#2a2a3a] rounded-xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-cyan-400" />
           Recent Feedback
