@@ -1,0 +1,9 @@
+<svg width="240" height="48" viewBox="0 0 240 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield icon -->
+  <path d="M20 6L8 12.5V22C8 29.73 13.13 36.89 20 38.5C26.87 36.89 32 29.73 32 22V12.5L20 6Z" fill="none" stroke="#00E5A0" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M15 22.5L18 25.5L25 18" fill="none" stroke="#00E5A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- AgentProof text -->
+  <text x="42" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="800">
+    <tspan fill="#FFFFFF">Agent</tspan><tspan fill="#00E5A0">Proof</tspan>
+  </text>
+</svg>
