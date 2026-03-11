@@ -2,12 +2,11 @@
 
 Usage:
   ![AgentProof](https://oracle.agentproof.sh/api/v1/badge/1380.svg)
-  ![AgentProof](https://oracle.agentproof.sh/api/v1/badge/1380.svg?style=flat-square)
-  ![AgentProof](https://oracle.agentproof.sh/api/v1/badge/1380.svg?label=trust)
+  ![AgentProof](https://oracle.agentproof.sh/api/v1/badge/1380.svg?style=minimal)
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from services.trust import get_trust_service, get_trust_cache
@@ -26,6 +25,15 @@ TIER_COLORS = {
     "unranked": "6b7280",
 }
 
+TIER_GLOW_COLORS = {
+    "diamond": "9333ea",
+    "platinum": "06b6d4",
+    "gold": "facc15",
+    "silver": "d1d5db",
+    "bronze": "d97706",
+    "unranked": "9ca3af",
+}
+
 RECOMMENDATION_COLORS = {
     "TRUSTED": "00ff88",
     "CAUTION": "ffaa00",
@@ -33,79 +41,123 @@ RECOMMENDATION_COLORS = {
     "UNVERIFIED": "6b7280",
 }
 
-# ── SVG templates ────────────────────────────────────────────
 
-def _shield_svg(label: str, value: str, color: str, style: str = "flat") -> str:
-    """Generate a shields.io-style SVG badge."""
-    # Estimate text widths (approximation: 6.5px per char at 11px font)
-    label_width = max(len(label) * 6.5 + 12, 40)
-    value_width = max(len(value) * 7 + 12, 36)
-    total_width = label_width + value_width
-    label_x = label_width / 2
-    value_x = label_width + value_width / 2
+# ── Shield icon path (16x16 viewBox) ─────────────────────────
+SHIELD_PATH = "M8 1.5L2 4.5V8.5C2 12.14 4.56 15.5 8 16.5C11.44 15.5 14 12.14 14 8.5V4.5L8 1.5Z"
+CHECK_PATH = "M5.5 8.5L7 10L10.5 6.5"
 
-    if style == "flat-square":
-        return _flat_square_svg(label, value, color, total_width, label_width, value_width, label_x, value_x)
-    elif style == "for-the-badge":
-        return _for_the_badge_svg(label, value, color, total_width, label_width, value_width, label_x, value_x)
+
+def _branded_svg(score: float, tier: str, agent_id: int, style: str = "default") -> str:
+    """Generate a premium AgentProof badge with dark aesthetic."""
+    color = TIER_COLORS.get(tier, "6b7280")
+    glow = TIER_GLOW_COLORS.get(tier, "6b7280")
+
+    if style == "minimal":
+        return _minimal_svg(score, tier, color, glow)
+    elif style == "compact":
+        return _compact_svg(score, tier, color, glow)
     else:
-        return _flat_svg(label, value, color, total_width, label_width, value_width, label_x, value_x)
+        return _default_svg(score, tier, agent_id, color, glow)
 
 
-def _flat_svg(label, value, color, w, lw, vw, lx, vx):
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="20" role="img" aria-label="{label}: {value}">
-  <title>{label}: {value}</title>
-  <linearGradient id="s" x2="0" y2="100%">
-    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-    <stop offset="1" stop-opacity=".1"/>
-  </linearGradient>
-  <clipPath id="r"><rect width="{w:.0f}" height="20" rx="3" fill="#fff"/></clipPath>
-  <g clip-path="url(#r)">
-    <rect width="{lw:.0f}" height="20" fill="#555"/>
-    <rect x="{lw:.0f}" width="{vw:.0f}" height="20" fill="#{color}"/>
-    <rect width="{w:.0f}" height="20" fill="url(#s)"/>
+def _default_svg(score: float, tier: str, agent_id: int, color: str, glow: str) -> str:
+    """Full badge — shield icon, score bar, tier, agent ID."""
+    score_pct = min(100, max(0, score))
+    bar_width = score_pct * 0.88  # 88px max bar width
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="220" height="34" role="img" aria-label="AgentProof: {tier} {score:.1f}">
+  <title>AgentProof Trust Score: {score:.1f} ({tier})</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="220" y2="0">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="100%" stop-color="#111118"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#{color}" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#{color}"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="220" height="34" rx="6" fill="url(#bg)" stroke="#2a2a3a" stroke-width="1"/>
+  <!-- Shield icon -->
+  <g transform="translate(8, 5)" filter="url(#glow)">
+    <g transform="scale(1.5)">
+      <path d="{SHIELD_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linejoin="round" opacity="0.9"/>
+      <path d="{CHECK_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    </g>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="11">
-    <text aria-hidden="true" x="{lx:.0f}" y="15" fill="#010101" fill-opacity=".3">{label}</text>
-    <text x="{lx:.0f}" y="14">{label}</text>
-    <text aria-hidden="true" x="{vx:.0f}" y="15" fill="#010101" fill-opacity=".3">{value}</text>
-    <text x="{vx:.0f}" y="14">{value}</text>
-  </g>
+  <!-- AgentProof text -->
+  <text x="36" y="14" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="9" fill="#8888aa" font-weight="500">AGENTPROOF</text>
+  <!-- Score value -->
+  <text x="204" y="14" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="11" fill="white" font-weight="700" text-anchor="end">{score:.1f}</text>
+  <!-- Score bar track -->
+  <rect x="36" y="20" width="88" height="5" rx="2.5" fill="#1a1a24"/>
+  <!-- Score bar fill -->
+  <rect x="36" y="20" width="{bar_width:.1f}" height="5" rx="2.5" fill="url(#bar)">
+    <animate attributeName="width" from="0" to="{bar_width:.1f}" dur="0.8s" fill="freeze"/>
+  </rect>
+  <!-- Tier badge -->
+  <rect x="130" y="18" rx="3" width="{len(tier) * 6.5 + 10:.0f}" height="13" fill="#{color}" fill-opacity="0.12" stroke="#{color}" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="{130 + (len(tier) * 6.5 + 10) / 2:.0f}" y="27" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="8" fill="#{color}" text-anchor="middle" font-weight="600">{tier.upper()}</text>
 </svg>'''
 
 
-def _flat_square_svg(label, value, color, w, lw, vw, lx, vx):
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="20" role="img" aria-label="{label}: {value}">
-  <title>{label}: {value}</title>
-  <g shape-rendering="crispEdges">
-    <rect width="{lw:.0f}" height="20" fill="#555"/>
-    <rect x="{lw:.0f}" width="{vw:.0f}" height="20" fill="#{color}"/>
+def _minimal_svg(score: float, tier: str, color: str, glow: str) -> str:
+    """Minimal badge — just shield + score + tier dot."""
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="130" height="26" role="img" aria-label="AgentProof: {tier} {score:.1f}">
+  <title>AgentProof Trust Score: {score:.1f} ({tier})</title>
+  <defs>
+    <filter id="g"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="130" height="26" rx="5" fill="#0a0a0f" stroke="#2a2a3a" stroke-width="1"/>
+  <!-- Shield -->
+  <g transform="translate(6, 3)" filter="url(#g)">
+    <g transform="scale(1.25)">
+      <path d="{SHIELD_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="{CHECK_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="11">
-    <text x="{lx:.0f}" y="14">{label}</text>
-    <text x="{vx:.0f}" y="14">{value}</text>
-  </g>
+  <!-- Score -->
+  <text x="32" y="17" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="12" fill="white" font-weight="700">{score:.1f}</text>
+  <!-- Tier pill -->
+  <rect x="{130 - len(tier) * 6 - 18:.0f}" y="7" rx="3" width="{len(tier) * 6 + 10:.0f}" height="13" fill="#{color}" fill-opacity="0.15" stroke="#{color}" stroke-opacity="0.3" stroke-width="0.5"/>
+  <text x="{130 - len(tier) * 6 / 2 - 13:.0f}" y="16.5" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="7.5" fill="#{color}" text-anchor="middle" font-weight="600">{tier.upper()}</text>
 </svg>'''
 
 
-def _for_the_badge_svg(label, value, color, w, lw, vw, lx, vx):
-    # Wider, taller badge
-    scale = 1.4
-    tw = w * scale
-    tlw = lw * scale
-    tvw = vw * scale
-    tlx = tlw / 2
-    tvx = tlw + tvw / 2
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{tw:.0f}" height="28" role="img" aria-label="{label}: {value}">
-  <title>{label}: {value}</title>
-  <g shape-rendering="crispEdges">
-    <rect width="{tlw:.0f}" height="28" fill="#555"/>
-    <rect x="{tlw:.0f}" width="{tvw:.0f}" height="28" fill="#{color}"/>
+def _compact_svg(score: float, tier: str, color: str, glow: str) -> str:
+    """Compact inline badge — shield + score only, for tight spaces."""
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="78" height="22" role="img" aria-label="AgentProof: {score:.1f}">
+  <title>AgentProof Trust Score: {score:.1f} ({tier})</title>
+  <rect width="78" height="22" rx="4" fill="#0a0a0f" stroke="#{color}" stroke-width="0.8" stroke-opacity="0.4"/>
+  <!-- Shield -->
+  <g transform="translate(5, 3)">
+    <path d="{SHIELD_PATH}" fill="none" stroke="#{color}" stroke-width="1" stroke-linejoin="round"/>
+    <path d="{CHECK_PATH}" fill="none" stroke="#{color}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="10">
-    <text transform="scale(1.1)" x="{tlx / 1.1:.0f}" y="18" textLength="{tlw * 0.7:.0f}" lengthAdjust="spacing">{label.upper()}</text>
-    <text transform="scale(1.1)" x="{tvx / 1.1:.0f}" y="18" textLength="{tvw * 0.7:.0f}" lengthAdjust="spacing" font-weight="bold">{value}</text>
+  <!-- Score -->
+  <text x="26" y="15" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="10" fill="white" font-weight="700">{score:.1f}</text>
+  <!-- Tier dot -->
+  <circle cx="68" cy="11" r="3.5" fill="#{color}" opacity="0.8"/>
+</svg>'''
+
+
+def _error_svg(label: str, message: str, style: str) -> str:
+    """Error/not-found badge in the same dark aesthetic."""
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="160" height="26" role="img" aria-label="{label}: {message}">
+  <title>{label}: {message}</title>
+  <rect width="160" height="26" rx="5" fill="#0a0a0f" stroke="#2a2a3a" stroke-width="1"/>
+  <g transform="translate(6, 3)">
+    <g transform="scale(1.25)">
+      <path d="{SHIELD_PATH}" fill="none" stroke="#6b7280" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
   </g>
+  <text x="32" y="16" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="9" fill="#8888aa">{label}</text>
+  <text x="154" y="16" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="9" fill="#6b7280" text-anchor="end">{message}</text>
 </svg>'''
 
 
@@ -114,8 +166,7 @@ def _for_the_badge_svg(label, value, color, w, lw, vw, lx, vx):
 @router.get("/{agent_id}.svg")
 async def badge_score(
     agent_id: int,
-    style: str = Query("flat", description="Badge style", enum=["flat", "flat-square", "for-the-badge"]),
-    label: str = Query("agentproof", description="Left-side label text"),
+    style: str = Query("default", description="Badge style", enum=["default", "minimal", "compact"]),
     chain: str | None = Query(None, description="Source chain"),
 ):
     """SVG badge showing agent trust score and tier.
@@ -124,9 +175,14 @@ async def badge_score(
     ```
     ![AgentProof](https://oracle.agentproof.sh/api/v1/badge/1380.svg)
     ```
+
+    Styles:
+    - `default` — full badge with score bar, tier pill, shield icon (220x34)
+    - `minimal` — shield + score + tier pill (130x26)
+    - `compact` — shield + score + tier dot, for inline use (78x22)
     """
     cache = get_trust_cache()
-    cache_key = f"badge:{agent_id}:{chain}:{style}:{label}"
+    cache_key = f"badge:v2:{agent_id}:{chain}:{style}"
     cached = cache.get(cache_key)
     if cached:
         return Response(
@@ -139,8 +195,7 @@ async def badge_score(
         svc = get_trust_service()
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
-        # Return a "not found" badge instead of 404 — so embeds don't break
-        svg = _shield_svg(label, "not found", "e05d44", style)
+        svg = _error_svg("agentproof", "not found", style)
         return Response(
             content=svg,
             media_type="image/svg+xml",
@@ -148,12 +203,10 @@ async def badge_score(
         )
     except Exception as e:
         logger.error(f"Badge error for agent #{agent_id}: {e}")
-        svg = _shield_svg(label, "error", "e05d44", style)
+        svg = _error_svg("agentproof", "error", style)
         return Response(content=svg, media_type="image/svg+xml")
 
-    color = TIER_COLORS.get(result.tier, "6b7280")
-    value = f"{result.tier} · {result.composite_score:.1f}"
-    svg = _shield_svg(label, value, color, style)
+    svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
 
     cache.set(cache_key, svg, ttl=300)
     return Response(
@@ -166,7 +219,7 @@ async def badge_score(
 @router.get("/tier/{agent_id}.svg")
 async def badge_tier(
     agent_id: int,
-    style: str = Query("flat", enum=["flat", "flat-square", "for-the-badge"]),
+    style: str = Query("default", enum=["default", "minimal", "compact"]),
     chain: str | None = Query(None),
 ):
     """SVG badge showing tier only."""
@@ -174,11 +227,10 @@ async def badge_tier(
         svc = get_trust_service()
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
-        svg = _shield_svg("agentproof", "not found", "e05d44", style)
+        svg = _error_svg("trust tier", "not found", style)
         return Response(content=svg, media_type="image/svg+xml")
 
-    color = TIER_COLORS.get(result.tier, "6b7280")
-    svg = _shield_svg("trust tier", result.tier.upper(), color, style)
+    svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
     return Response(
         content=svg,
         media_type="image/svg+xml",
@@ -189,19 +241,18 @@ async def badge_tier(
 @router.get("/score/{agent_id}.svg")
 async def badge_score_only(
     agent_id: int,
-    style: str = Query("flat", enum=["flat", "flat-square", "for-the-badge"]),
+    style: str = Query("default", enum=["default", "minimal", "compact"]),
     chain: str | None = Query(None),
 ):
-    """SVG badge showing numeric score only."""
+    """SVG badge showing numeric score."""
     try:
         svc = get_trust_service()
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
-        svg = _shield_svg("trust score", "N/A", "e05d44", style)
+        svg = _error_svg("trust score", "N/A", style)
         return Response(content=svg, media_type="image/svg+xml")
 
-    color = TIER_COLORS.get(result.tier, "6b7280")
-    svg = _shield_svg("trust score", f"{result.composite_score:.1f}/100", color, style)
+    svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
     return Response(
         content=svg,
         media_type="image/svg+xml",
@@ -212,7 +263,7 @@ async def badge_score_only(
 @router.get("/recommendation/{agent_id}.svg")
 async def badge_recommendation(
     agent_id: int,
-    style: str = Query("flat", enum=["flat", "flat-square", "for-the-badge"]),
+    style: str = Query("default", enum=["default", "minimal", "compact"]),
     chain: str | None = Query(None),
 ):
     """SVG badge showing recommendation (TRUSTED / CAUTION / HIGH_RISK)."""
@@ -220,12 +271,29 @@ async def badge_recommendation(
         svc = get_trust_service()
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
-        svg = _shield_svg("agentproof", "not found", "e05d44", style)
+        svg = _error_svg("agentproof", "not found", style)
         return Response(content=svg, media_type="image/svg+xml")
 
     rec = result.recommendation.value if hasattr(result.recommendation, "value") else str(result.recommendation)
     color = RECOMMENDATION_COLORS.get(rec, "6b7280")
-    svg = _shield_svg("agentproof", rec, color, style)
+
+    # Custom recommendation badge
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="180" height="26" role="img" aria-label="AgentProof: {rec}">
+  <title>AgentProof: {rec}</title>
+  <defs>
+    <filter id="g"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="180" height="26" rx="5" fill="#0a0a0f" stroke="#{color}" stroke-width="0.8" stroke-opacity="0.3"/>
+  <g transform="translate(6, 3)" filter="url(#g)">
+    <g transform="scale(1.25)">
+      <path d="{SHIELD_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="{CHECK_PATH}" fill="none" stroke="#{color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <text x="32" y="16.5" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="9" fill="#8888aa" font-weight="500">AGENTPROOF</text>
+  <text x="174" y="16.5" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="9" fill="#{color}" text-anchor="end" font-weight="700">{rec}</text>
+</svg>'''
+
     return Response(
         content=svg,
         media_type="image/svg+xml",

@@ -6,9 +6,14 @@ import Link from "next/link";
 
 const ORACLE_URL = "https://oracle.agentproof.sh";
 
-const STYLES = ["flat", "flat-square", "for-the-badge"] as const;
+const STYLES = ["default", "minimal", "compact"] as const;
+const STYLE_DESCRIPTIONS: Record<string, string> = {
+  default: "Full badge — score bar, tier pill, shield icon (220x34)",
+  minimal: "Shield + score + tier pill (130x26)",
+  compact: "Shield + score + dot, for inline use (78x22)",
+};
 const BADGE_TYPES = [
-  { id: "default", label: "Score + Tier", path: "badge", description: "Shows tier name and composite score" },
+  { id: "default", label: "Score + Tier", path: "badge", description: "Shows tier name, score bar, and shield icon" },
   { id: "tier", label: "Tier Only", path: "badge/tier", description: "Shows trust tier badge" },
   { id: "score", label: "Score Only", path: "badge/score", description: "Shows numeric score out of 100" },
   { id: "recommendation", label: "Recommendation", path: "badge/recommendation", description: "Shows TRUSTED / CAUTION / HIGH_RISK" },
@@ -47,10 +52,10 @@ function CodeBlock({ code, lang = "markdown" }: { code: string; lang?: string })
 
 export default function BadgesPage() {
   const [agentId, setAgentId] = useState("1380");
-  const [style, setStyle] = useState<(typeof STYLES)[number]>("flat");
+  const [style, setStyle] = useState<(typeof STYLES)[number]>("default");
   const [badgeType, setBadgeType] = useState<(typeof BADGE_TYPES)[number]>(BADGE_TYPES[0]);
 
-  const badgeUrl = `${ORACLE_URL}/api/v1/${badgeType.path}/${agentId}.svg${style !== "flat" ? `?style=${style}` : ""}`;
+  const badgeUrl = `${ORACLE_URL}/api/v1/${badgeType.path}/${agentId}.svg${style !== "default" ? `?style=${style}` : ""}`;
   const markdownSnippet = `[![AgentProof](${badgeUrl})](https://agentproof.sh/agents/${agentId})`;
   const htmlSnippet = `<a href="https://agentproof.sh/agents/${agentId}"><img src="${badgeUrl}" alt="AgentProof Trust Badge" /></a>`;
 
@@ -123,7 +128,10 @@ export default function BadgesPage() {
               </button>
             ))}
           </div>
+          <p className="text-[10px] font-mono text-gray-600 mt-1.5">{STYLE_DESCRIPTIONS[style]}</p>
         </div>
+
+
 
         {/* Preview */}
         <div>
@@ -183,8 +191,7 @@ export default function BadgesPage() {
 
         <div className="pt-3 border-t border-[#2a2a3a]">
           <p className="text-[10px] font-mono text-gray-600">
-            Query params: <code className="text-gray-400">style</code> (flat | flat-square | for-the-badge),{" "}
-            <code className="text-gray-400">label</code> (custom left text),{" "}
+            Query params: <code className="text-gray-400">style</code> (default | minimal | compact),{" "}
             <code className="text-gray-400">chain</code> (source chain filter).
             No API key required. Badges cached for 5 minutes.
           </p>

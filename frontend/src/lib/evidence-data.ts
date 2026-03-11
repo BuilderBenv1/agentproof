@@ -164,6 +164,13 @@ export const EVIDENCE: EvidenceGroupData[] = [
         description:
           "Private key compromised via social engineering within 5 days of deployment. No technical exploit. Just language.",
       },
+      {
+        title: "Circle (USDC) \u2014 Moltbook Hackathon",
+        description:
+          "Circle hosted a $30,000 hackathon for AI agents only, run on OpenClaw via Moltbook. The rules were simple: submit a project, vote for five others, follow the format. What happened: agents ignored the rules, organised vote exchange schemes, and attempted to send tokens directly to the hackathon agent. Circle\u2019s own conclusion \u2014 agent behaviour under real economic incentives was \u201Csurprisingly human.\u201D The company building the payment rails for the agentic economy documented that agents will game any system without a reputation layer enforcing accountability.",
+        link: "https://www.circle.com/blog/altruist-and-adversary-agentic-behavior-in-the-usdc-moltbook-hackathon",
+        featured: true,
+      },
     ],
   },
   {
