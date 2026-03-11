@@ -89,16 +89,16 @@ export default function LeaderboardPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-emerald-400" />
+            <Trophy className="w-6 h-6 text-[#00ff88]" />
             Leaderboard
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-[#8888aa] mt-1">
             {formatNumber(total)} agents ranked by composite reputation score
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs font-mono text-gray-500">
+        <div className="flex items-center gap-3 text-xs font-mono text-[#8888aa]">
           <span className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse-glow" />
             Live scoring
           </span>
         </div>
@@ -106,28 +106,28 @@ export default function LeaderboardPage() {
 
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-1">
-            <Users className="w-3.5 h-3.5 text-emerald-400" />
+            <Users className="w-3.5 h-3.5 text-[#00ff88]" />
             <span className="text-xs font-mono text-gray-500 uppercase">Agents Tracked</span>
           </div>
           <p className="text-xl font-bold font-mono text-white">{formatNumber(totalAgents)}</p>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
             <span className="text-xs font-mono text-gray-500 uppercase">Total Evaluations</span>
           </div>
           <p className="text-xl font-bold font-mono text-white">{formatNumber(overview?.total_feedback || 0)}</p>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp className="w-3.5 h-3.5 text-yellow-400" />
             <span className="text-xs font-mono text-gray-500 uppercase">Avg Score</span>
           </div>
           <p className="text-xl font-bold font-mono text-white">{overview?.average_score?.toFixed(1) || "---"}</p>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-1">
             <Shield className="w-3.5 h-3.5 text-purple-400" />
             <span className="text-xs font-mono text-gray-500 uppercase">Screenings</span>
@@ -138,7 +138,7 @@ export default function LeaderboardPage() {
 
       {/* Tier Distribution Bar */}
       {totalAgents > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+        <div className="bg-[#111118] border border-[#2a2a3a] rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-mono text-gray-500 uppercase">Tier Distribution</span>
             <span className="text-xs font-mono text-gray-600">{formatNumber(totalAgents)} total</span>
@@ -212,7 +212,7 @@ export default function LeaderboardPage() {
       />
 
       {/* Table */}
-      <div className="bg-gray-900/30 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-[#111118]/50 border border-[#2a2a3a] rounded-xl overflow-hidden">
         <LeaderboardTable entries={entries} loading={loading} />
       </div>
 
@@ -222,7 +222,7 @@ export default function LeaderboardPage() {
           <button
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
-            className="px-4 py-2 rounded-lg text-sm font-mono border border-gray-800 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-mono border border-[#2a2a3a] text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
           >
             Previous
           </button>
@@ -232,7 +232,7 @@ export default function LeaderboardPage() {
           <button
             onClick={() => setPage(page + 1)}
             disabled={page >= Math.ceil(total / 50)}
-            className="px-4 py-2 rounded-lg text-sm font-mono border border-gray-800 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-mono border border-[#2a2a3a] text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
           >
             Next
           </button>

@@ -126,7 +126,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-gray-800">
+          <tr className="border-b border-[#2a2a3a]">
             <th className="text-left text-xs font-mono text-gray-500 uppercase py-3 px-4 w-14">Rank</th>
             <th className="text-left text-xs font-mono text-gray-500 uppercase py-3 px-4">Agent</th>
             <th className="text-left text-xs font-mono text-gray-500 uppercase py-3 px-4 hidden md:table-cell">Category</th>
@@ -144,9 +144,9 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
             return (
               <tr
                 key={`${entry.agent_id}-${entry.source_chain || "avalanche"}`}
-                className={`border-b border-gray-800/50 transition-colors ${
+                className={`border-b border-[#2a2a3a]/50 transition-colors ${
                   isTop3
-                    ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.04]"
+                    ? "bg-[#00ff88]/[0.02] hover:bg-[#00ff88]/[0.04]"
                     : "hover:bg-gray-900/30"
                 }`}
               >
@@ -156,9 +156,9 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                 <td className="py-3 px-4">
                   <Link
                     href={`/agents/${entry.agent_id}${entry.source_chain ? `?chain=${entry.source_chain}` : ""}`}
-                    className="flex items-center gap-3 hover:text-emerald-400 transition-colors group"
+                    className="flex items-center gap-3 hover:text-[#00ff88] transition-colors group"
                   >
-                    <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-bold font-mono text-emerald-400 flex-shrink-0 overflow-hidden">
+                    <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center text-sm font-bold font-mono text-[#00ff88] flex-shrink-0 overflow-hidden">
                       {entry.image_url ? (
                         <img src={entry.image_url} alt="" className="w-full h-full rounded-lg object-cover" />
                       ) : (
@@ -166,7 +166,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                       )}
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-white group-hover:text-emerald-400 transition-colors block">
+                      <span className="text-sm font-medium text-white group-hover:text-[#00ff88] transition-colors block">
                         {entry.name || `Agent #${entry.agent_id}`}
                       </span>
                       <span className="text-xs text-gray-600 font-mono flex items-center gap-1">
@@ -201,7 +201,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                 </td>
                 <td className="py-3 px-4 text-right hidden lg:table-cell">
                   {entry.validation_success_rate > 0 ? (
-                    <span className="font-mono text-sm text-emerald-400 flex items-center justify-end gap-1">
+                    <span className="font-mono text-sm text-[#00ff88] flex items-center justify-end gap-1">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       {entry.validation_success_rate.toFixed(0)}%
                     </span>
@@ -212,7 +212,7 @@ export default function LeaderboardTable({ entries, loading }: LeaderboardTableP
                 <td className="py-3 px-4 text-center hidden md:table-cell">
                   {entry.delta_7d != null ? (
                     <span className={`font-mono text-xs font-bold flex items-center justify-center gap-0.5 ${
-                      entry.delta_7d > 1 ? "text-emerald-400" :
+                      entry.delta_7d > 1 ? "text-[#00ff88]" :
                       entry.delta_7d < -1 ? "text-red-400" : "text-gray-500"
                     }`}>
                       {entry.delta_7d > 1 ? <TrendingUp className="w-3 h-3" /> :
