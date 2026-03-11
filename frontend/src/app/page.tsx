@@ -3,8 +3,8 @@
 /**
  * AgentProof Homepage — precision dark terminal aesthetic.
  *
- * Sections: Hero → Stats → Deployer Storm → How It Works → Trust Tiers
- * → Top Agents → SDK/API CTA → Evidence Preview
+ * Sections: Hero → Stats → Deployer Storm → Top Agents → How It Works
+ * → Trust Tiers → SDK/API CTA → Evidence Preview
  */
 
 import Link from "next/link";
@@ -171,6 +171,54 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Top Agents ───────────────────────────────────── */}
+      <section className="pb-16">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-[#00ff88]" />
+            Top Agents
+          </h2>
+          <Link
+            href="/leaderboard"
+            className="text-sm font-mono text-[#00ff88] hover:text-[#00dd77] flex items-center gap-1 transition-colors"
+          >
+            View Leaderboard <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {topAgents.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {topAgents.map((agent) => (
+              <AgentCard
+                key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
+                agentId={agent.agent_id}
+                name={agent.name}
+                category={agent.category}
+                compositeScore={agent.composite_score}
+                tier={agent.tier}
+                feedbackCount={agent.total_feedback}
+                rank={agent.rank}
+                imageUrl={agent.image_url}
+                sourceChain={agent.source_chain}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-[#111118] border border-[#2a2a3a] rounded-xl">
+            <Users className="w-10 h-10 text-gray-700 mx-auto mb-3" />
+            <p className="text-gray-500 font-mono text-sm">
+              {loading ? "Loading agents..." : "No agents registered yet"}
+            </p>
+            <Link
+              href="/register"
+              className="inline-block mt-3 text-sm text-[#00ff88] hover:text-[#00dd77]"
+            >
+              Be the first to register
+            </Link>
+          </div>
+        )}
+      </section>
+
       {/* ── How It Works ─────────────────────────────────── */}
       <section className="pb-16">
         <h2 className="text-xl font-bold text-white mb-8 text-center">How It Works</h2>
@@ -263,54 +311,6 @@ export default function HomePage() {
             </div>
           ))}
         </div>
-      </section>
-
-      {/* ── Top Agents ───────────────────────────────────── */}
-      <section className="pb-16">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-[#00ff88]" />
-            Top Agents
-          </h2>
-          <Link
-            href="/leaderboard"
-            className="text-sm font-mono text-[#00ff88] hover:text-[#00dd77] flex items-center gap-1 transition-colors"
-          >
-            View Leaderboard <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-
-        {topAgents.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {topAgents.map((agent) => (
-              <AgentCard
-                key={`${agent.agent_id}-${agent.source_chain || "avalanche"}`}
-                agentId={agent.agent_id}
-                name={agent.name}
-                category={agent.category}
-                compositeScore={agent.composite_score}
-                tier={agent.tier}
-                feedbackCount={agent.total_feedback}
-                rank={agent.rank}
-                imageUrl={agent.image_url}
-                sourceChain={agent.source_chain}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12 bg-[#111118] border border-[#2a2a3a] rounded-xl">
-            <Users className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-500 font-mono text-sm">
-              {loading ? "Loading agents..." : "No agents registered yet"}
-            </p>
-            <Link
-              href="/register"
-              className="inline-block mt-3 text-sm text-[#00ff88] hover:text-[#00dd77]"
-            >
-              Be the first to register
-            </Link>
-          </div>
-        )}
       </section>
 
       {/* ── SDK / API CTA ────────────────────────────────── */}
