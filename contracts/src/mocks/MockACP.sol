@@ -29,6 +29,16 @@ contract MockACP is IACP {
         _jobs[jobId] = Job(jobId, client, provider, evaluator, "", 0, 0, 0);
     }
 
+    function setJobWithBudget(
+        uint256 jobId,
+        address client,
+        address provider,
+        address evaluator,
+        uint256 budget
+    ) external {
+        _jobs[jobId] = Job(jobId, client, provider, evaluator, "", budget, 0, 0);
+    }
+
     function getJob(uint256 jobId) external view override returns (
         uint256 id,
         address client,
