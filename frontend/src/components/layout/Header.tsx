@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { href: "/mcp", label: "MCP" },
   { href: "/pricing", label: "API Pricing" },
   { href: "/whitepaper", label: "Whitepaper" },
+  { href: "/badges", label: "Badges" },
   { href: "/docs", label: "Docs" },
 ];
 
@@ -28,11 +29,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <Shield className="w-6 h-6 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
+            <Shield className="w-6 h-6 text-[#00ff88] group-hover:text-[#00dd77] transition-colors" />
             <span className="text-lg font-bold text-white">
-              Agent<span className="text-emerald-400">Proof</span>
+              Agent<span className="text-[#00ff88]">Proof</span>
             </span>
-            <span className="hidden lg:inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400/70 border border-emerald-500/20 rounded">
+            <span className="hidden lg:inline-block text-[9px] font-mono uppercase px-1.5 py-0.5 bg-[#00ff88]/10 text-[#00ff88]/70 border border-[#00ff88]/20 rounded">
               ERC-8004
             </span>
           </Link>
@@ -45,7 +46,7 @@ export default function Header() {
                 href={link.href}
                 className={`px-3 py-2 rounded-lg text-sm font-mono transition-colors ${
                   pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
-                    ? "text-emerald-400 bg-emerald-500/10"
+                    ? "text-[#00ff88] bg-[#00ff88]/10"
                     : "text-gray-400 hover:text-white hover:bg-gray-800/50"
                 }`}
               >
@@ -78,7 +79,7 @@ export default function Header() {
                 onClick={() => setMobileOpen(false)}
                 className={`block px-3 py-2 rounded-lg text-sm font-mono ${
                   pathname === link.href
-                    ? "text-emerald-400 bg-emerald-500/10"
+                    ? "text-[#00ff88] bg-[#00ff88]/10"
                     : "text-gray-400"
                 }`}
               >
