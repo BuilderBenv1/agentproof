@@ -10,6 +10,14 @@
   --accent-green: #00E5A0;
   --accent-red: #E84142;
   --accent-purple: #A78BFA;
+  --bg-surface: #111118;
+  --bg-elevated: #1a1a24;
+  --border-subtle: #2a2a3a;
+  --text-secondary: #8888aa;
+  --viz-green: #00ff88;
+  --viz-amber: #ffaa00;
+  --viz-red: #ff3344;
+  --viz-blue: #4488ff;
 }
 
 body {
