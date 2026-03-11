@@ -227,6 +227,14 @@ export const EVIDENCE: EvidenceGroupData[] = [
     iconName: "Quote",
     cards: [
       {
+        title: "Fran\u00e7ois Chollet, Creator of Keras",
+        description:
+          "One of the most credible voices in AI (200k+ followers), Chollet published a thread the day before ERC-8183 launched validating the 1\u20132 year runway for agent trust infrastructure. The reply thread independently surfaced the exact insurance and compliance angle: autonomous agents \u201Cbreak a lot of procurement teams\u201D because existing vendor risk frameworks assume a human on the other side. Timestamped, public, unsolicited \u2014 from someone with no connection to AgentProof.",
+        quote:
+          "\u201CWithin 1\u20132 years, the majority of software will be written and maintained by AI agents. The trust and verification infrastructure for that world does not exist yet.\u201D",
+        featured: true,
+      },
+      {
         title: "Garrett Droege, Willis Towers Watson",
         description:
           "National Digital Risk Practice Leader at WTW. After seeing AgentProof, he outlined the exact actuarial data structure underwriters would need to price agent risk tiers: transaction volume, delegation scope, custody relationships, loss event history with root cause classification. He has since shared a live AgentProof demo with underwriters to gauge appetite.",
