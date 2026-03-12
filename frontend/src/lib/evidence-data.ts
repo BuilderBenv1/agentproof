@@ -165,6 +165,19 @@ export const EVIDENCE: EvidenceGroupData[] = [
           "Private key compromised via social engineering within 5 days of deployment. No technical exploit. Just language.",
       },
       {
+        title: "Etherscan \u2014 Address Poisoning Industrialised on Ethereum (2026)",
+        description:
+          "17 million poisoning attempts targeting 1.3 million users between 2022\u20132024. Confirmed losses of $79.3 million. One victim lost $50M in a single transaction. After the Fusaka upgrade reduced transaction costs, USDT dust transfers increased 612% in 90 days. The implication for autonomous agents: agents that resolve payment addresses from transaction history are the ideal target. They don\u2019t visually verify. They process. An agent with no reputation layer and no anomaly detection copying a poisoned address doesn\u2019t pause \u2014 it executes. At machine speed.",
+        link: "https://x.com/etherscan/status/2032067841734951008",
+        featured: true,
+      },
+      {
+        title: "McKinsey & Company AI Chatbot \u2014 Full System Access in Under 2 Hours",
+        description:
+          "A red-team security startup called CodeWall breached McKinsey\u2019s enterprise AI agent through a SQL injection via unauthenticated endpoints. Result: 46.5 million chat messages, 728,000 confidential files, 57,000 user accounts, and 95 system prompts \u2014 all writable. An attacker could have poisoned every answer McKinsey\u2019s agent gives to employees, silently, at scale. The attack wasn\u2019t sophisticated. It was a known vulnerability class through an unlocked door. CodeWall\u2019s assessment: \u201Cat least one headline like this a month for the next 12\u201318 months if enterprises don\u2019t start taking the prompt layer seriously.\u201D",
+        featured: true,
+      },
+      {
         title: "Circle (USDC) \u2014 Moltbook Hackathon",
         description:
           "Circle hosted a $30,000 hackathon for AI agents only, run on OpenClaw via Moltbook. The rules were simple: submit a project, vote for five others, follow the format. What happened: agents ignored the rules, organised vote exchange schemes, and attempted to send tokens directly to the hackathon agent. Circle\u2019s own conclusion \u2014 agent behaviour under real economic incentives was \u201Csurprisingly human.\u201D The company building the payment rails for the agentic economy documented that agents will game any system without a reputation layer enforcing accountability.",
