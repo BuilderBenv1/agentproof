@@ -25,10 +25,9 @@ interface OverviewData {
   total_agents: number;
   total_feedback: number;
   total_validations: number;
-  average_score: number;
-  protocol_breakdown?: Record<string, number>;
+  total_liveness: number;
+  avg_score: number;
   tier_distribution?: Record<string, number>;
-  category_breakdown?: Record<string, number>;
 }
 
 interface AgentData {
@@ -51,15 +50,17 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
+        // Stats from oracle (public, no auth required)
         const [overviewRes, agentsRes] = await Promise.allSettled([
-          apiFetch<OverviewData>("/analytics/overview"),
-          apiFetch<{ agents: AgentData[] }>("/agents", {
-            params: { sort_by: "composite_score", order: "desc", page_size: 5 },
-          }),
+          apiFetch<OverviewData>("/api/v1/network/stats"),
+          // Top agents from the backend API (separate service)
+          fetch("https://agentproof-production.up.railway.app/api/agents?sort_by=composite_score&order=desc&page_size=5")
+            .then(r => r.json())
+            .then((d: { agents: AgentData[] }) => d),
         ]);
 
         if (overviewRes.status === "fulfilled") setOverview(overviewRes.value);
-        if (agentsRes.status === "fulfilled") setTopAgents(agentsRes.value.agents);
+        if (agentsRes.status === "fulfilled") setTopAgents((agentsRes.value as { agents: AgentData[] }).agents || []);
       } catch {
         // API might not be running yet
       } finally {
@@ -86,11 +87,11 @@ export default function HomePage() {
           {/* Live counter bar */}
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-mono text-gray-400 mb-10">
             <span>
-              <CountUp end={overview?.total_agents || 51700} className="text-white font-bold" suffix="+" /> agents
+              <CountUp end={overview?.total_agents || 67700} className="text-white font-bold" suffix="+" /> agents
             </span>
             <span className="text-[#2a2a3a]">·</span>
             <span>
-              <CountUp end={overview?.total_feedback || 153700} className="text-white font-bold" suffix="+" /> evaluations
+              <CountUp end={overview?.total_feedback || 167100} className="text-white font-bold" suffix="+" /> evaluations
             </span>
             <span className="text-[#2a2a3a]">·</span>
             <span>
@@ -128,7 +129,7 @@ export default function HomePage() {
           {[
             { label: "Agents Indexed", value: overview?.total_agents || 0, suffix: "" },
             { label: "Evaluations", value: overview?.total_feedback || 0, suffix: "" },
-            { label: "Avg Score", value: 0, raw: overview?.average_score?.toFixed(1) || "—" },
+            { label: "Avg Score", value: 0, raw: overview?.avg_score?.toFixed(1) || "—" },
             { label: "Screenings", value: overview?.total_validations || 0, suffix: "" },
           ].map((s) => (
             <div
