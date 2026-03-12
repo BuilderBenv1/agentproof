@@ -130,6 +130,57 @@ async def register_api_key(request: Request, body: RegisterRequest):
         raise HTTPException(status_code=500, detail="Failed to create API key")
 
 
+@router.post("/synthesis/register")
+async def synthesis_register(request: Request):
+    """Register a free partner-tier API key for Synthesis hackathon builders.
+
+    All Synthesis builders get free, unlimited API access during the event.
+    AgentProof Oracle acts as a live judge — every Synthesis agent is scored
+    in real time across the build phase.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_register_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+
+    from database import get_supabase
+    db = get_supabase()
+
+    raw_key = "ap_live_" + secrets.token_hex(16)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = raw_key[:16]
+
+    try:
+        result = db.table("api_keys").insert({
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "protocol_name": "synthesis-builder",
+            "contact_email": "",
+            "tier": "partner",
+            "monthly_limit": 999_999_999,
+            "is_active": True,
+            "metadata": {"event": "synthesis-hackathon", "role": "builder"},
+        }).execute()
+
+        key_id = result.data[0]["id"] if result.data else "unknown"
+
+        return {
+            "api_key": raw_key,
+            "key_id": key_id,
+            "tier": "partner",
+            "monthly_limit": "unlimited",
+            "price_per_call": "FREE",
+            "message": (
+                "Welcome to The Synthesis! You have free unlimited API access. "
+                "AgentProof Oracle is a live judge — your agent will be scored "
+                "in real time during the build phase. "
+                "Docs: https://agentproof.sh/docs | Badge: https://oracle.agentproof.sh/api/v1/badge/{agent_id}.svg"
+            ),
+        }
+    except Exception as e:
+        logger.error("Synthesis registration failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create API key")
+
+
 @router.get("/usage")
 async def get_usage(request: Request):
     """Get usage statistics for the authenticated API key."""

@@ -27,8 +27,6 @@ export default function UptimeChart({ agentId, days = 30 }: UptimeChartProps) {
     (a, b) => new Date(a.summary_date).getTime() - new Date(b.summary_date).getTime()
   );
 
-  const maxChecks = Math.max(...sorted.map((s) => s.total_checks), 1);
-
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -40,7 +38,7 @@ export default function UptimeChart({ agentId, days = 30 }: UptimeChartProps) {
 
       <div className="flex items-end gap-0.5 h-20">
         {sorted.map((s, i) => {
-          const height = (s.total_checks / maxChecks) * 100;
+          const height = s.uptime_pct;
           const color =
             s.uptime_pct >= 99
               ? "bg-emerald-400"

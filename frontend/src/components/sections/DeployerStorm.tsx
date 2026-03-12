@@ -171,14 +171,17 @@ export default function DeployerStorm() {
   const hoveredRef = useRef<AgentNode | null>(null);
   const [hovered, setHovered] = useState<AgentNode | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const tooltipPosRef = useRef({ x: 0, y: 0 });
   const frameRef = useRef(0);
   const timeRef = useRef(0);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const router = useRouter();
 
   // Init data
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
     dataRef.current = generateMockData(isMobile ? 40 : 80);
+    setDataLoaded(true);
   }, []);
 
   // Resize
@@ -313,7 +316,8 @@ export default function DeployerStorm() {
       // Flagged pulse
       let alpha = "cc";
       if (agent.tier === "flagged") {
-        const pulse = 0.5 + 0.5 * Math.sin(t * 3 + parseInt(agent.id.slice(-3), 10));
+        const idNum = parseInt(agent.id.replace(/\D/g, "").slice(-3) || "0", 10) || 0;
+        const pulse = 0.5 + 0.5 * Math.sin(t * 3 + idNum);
         alpha = Math.round(140 + pulse * 115).toString(16).padStart(2, "0");
       }
 
@@ -345,15 +349,16 @@ export default function DeployerStorm() {
         if (dist < closestDist) {
           closestDist = dist;
           closestAgent = agent;
-          setTooltipPos({ x: ax, y: ay });
+          tooltipPosRef.current = { x: ax, y: ay };
         }
       }
     }
 
-    // Update hover
+    // Update hover — only setState when hovered node changes (not every frame)
     if (closestAgent !== hoveredRef.current) {
       hoveredRef.current = closestAgent;
       setHovered(closestAgent);
+      setTooltipPos(tooltipPosRef.current);
     }
 
     frameRef.current = requestAnimationFrame(draw);
@@ -364,8 +369,8 @@ export default function DeployerStorm() {
     return () => cancelAnimationFrame(frameRef.current);
   }, [draw]);
 
-  // ── Stats ─────────────────────────────────────────────
-  const data = dataRef.current;
+  // ── Stats (dataLoaded triggers re-render after init) ──
+  const data = dataLoaded ? dataRef.current : null;
   const clusteredCount = data ? data.agents.filter((a) => a.clusterId !== null).length : 0;
   const total = data ? data.agents.length : 0;
   const zeroHistory = data ? data.clusters.filter((c) => c.deployerAge <= 1).length : 0;

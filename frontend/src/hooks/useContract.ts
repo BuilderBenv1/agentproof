@@ -84,7 +84,8 @@ export function useRegisterAgent() {
         setStep("idle");
       }
     }
-  }, [feeSuccess, pendingURI, step, writeContract]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feeSuccess, pendingURI, step]);
 
   // Timeout: if register step takes > 3 minutes, show recovery message
   useEffect(() => {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Trophy, Users, BarChart3, TrendingUp, Shield } from "lucide-react";
 import LeaderboardTable from "@/components/leaderboard/LeaderboardTable";
 import FilterBar from "@/components/leaderboard/FilterBar";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { apiFetch } from "@/lib/supabase";
 import { formatNumber, getTierColor } from "@/lib/utils";
 
@@ -34,7 +35,7 @@ interface OverviewData {
 
 const TIER_ORDER = ["diamond", "platinum", "gold", "silver", "bronze", "unranked"] as const;
 
-export default function LeaderboardPage() {
+function LeaderboardInner() {
   const searchParams = useSearchParams();
   const [category, setCategory] = useState(searchParams.get("category") || "");
   const [chain, setChain] = useState(searchParams.get("chain") || "");
@@ -239,5 +240,13 @@ export default function LeaderboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-20"><LoadingSpinner /></div>}>
+      <LeaderboardInner />
+    </Suspense>
   );
 }

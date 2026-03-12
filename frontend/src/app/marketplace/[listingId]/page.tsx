@@ -61,7 +61,7 @@ export default function ListingDetailPage() {
     if (isSuccess && listing && address && taskDesc) {
       apiFetch("/marketplace/tasks", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           listing_id: listing.id,
           agent_id: listing.agent_id,
           client_address: address,
@@ -70,7 +70,7 @@ export default function ListingDetailPage() {
           price_avax: listing.price_avax || 0,
           payment_id: paymentId,
           tx_hash: txHash,
-        }),
+        },
       }).catch(() => {
         // Task creation is best-effort — the on-chain escrow is the source of truth
       });
@@ -78,7 +78,7 @@ export default function ListingDetailPage() {
   }, [isSuccess, listing, address, taskDesc, paymentId, txHash]);
 
   function copyEndpoint(url: string) {
-    navigator.clipboard.writeText(url);
+    navigator.clipboard?.writeText(url).catch(() => {});
     setCopiedUrl(url);
     setTimeout(() => setCopiedUrl(null), 2000);
   }

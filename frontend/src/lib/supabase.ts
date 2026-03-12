@@ -29,7 +29,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
-    next: { revalidate: 30 },
+    cache: "no-store",
   });
 
   if (!res.ok) {

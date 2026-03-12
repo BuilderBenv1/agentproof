@@ -11,6 +11,7 @@ export function truncateAddress(address: string, start = 6, end = 4): string {
 }
 
 export function formatScore(score: number): string {
+  if (score == null || isNaN(score)) return "0.0";
   return score.toFixed(1);
 }
 
@@ -32,6 +33,7 @@ export function timeAgo(date: string | Date): string {
   const now = new Date();
   const past = new Date(date);
   const diffMs = now.getTime() - past.getTime();
+  if (diffMs < 0) return "just now";
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);

@@ -349,7 +349,6 @@ export default function HomePage() {
               <p className="text-white">pip install agentproof</p>
               <p className="text-white mt-1">npm i @agentproof/sdk</p>
               <p className="text-[#8888aa] mt-4"># Query a trust score</p>
-              <p className="text-[#00ff88]">from</p>
               <p className="text-white ml-0">
                 <span className="text-[#00ff88]">from </span>
                 <span className="text-white">agentproof </span>

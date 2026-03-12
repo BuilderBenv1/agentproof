@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAgents } from "@/hooks/useAgents";
 import AgentGrid from "@/components/agents/AgentGrid";
 import SearchBar from "@/components/ui/SearchBar";
 import FilterBar from "@/components/leaderboard/FilterBar";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { Users } from "lucide-react";
 
-export default function AgentsPage() {
+function AgentsPageInner() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || "";
   const initialSearch = searchParams.get("search") || "";
@@ -119,5 +120,13 @@ export default function AgentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AgentsPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-20"><LoadingSpinner /></div>}>
+      <AgentsPageInner />
+    </Suspense>
   );
 }

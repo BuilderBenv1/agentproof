@@ -2,10 +2,12 @@
 const nextConfig = {
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
+      { protocol: "https", hostname: "ipfs.io" },
+      { protocol: "https", hostname: "*.ipfs.dweb.link" },
+      { protocol: "https", hostname: "*.ipfs.w3s.link" },
+      { protocol: "https", hostname: "gateway.pinata.cloud" },
+      { protocol: "https", hostname: "oztrefgbigvtzncodcys.supabase.co" },
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
     ],
   },
   async rewrites() {

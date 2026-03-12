@@ -27,7 +27,7 @@ FREE_PATH_PREFIXES = (
     "/api/v1/network/",
     "/api/v1/integrations/",
     "/api/v1/badge/",
-    # Webhooks require API key auth (removed from free paths)
+    "/api/v1/integrations/synthesis/",  # Free registration for Synthesis hackathon builders
     "/api/v1/feed",
     "/integrate",
     "/health",

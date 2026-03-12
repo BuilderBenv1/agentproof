@@ -8,7 +8,7 @@
  * Usage: <CountUp end={51700} suffix="+" duration={1500} />
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface CountUpProps {
   end: number;
@@ -42,7 +42,9 @@ export default function CountUp({
   const [display, setDisplay] = useState("0");
   const rafRef = useRef<number>(0);
   const startRef = useRef<number>(0);
-  const fmt = formatter || defaultFormat;
+  // Memoize to prevent re-animation when parent passes inline formatter
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fmt = useCallback(formatter || defaultFormat, []);
 
   useEffect(() => {
     startRef.current = performance.now();

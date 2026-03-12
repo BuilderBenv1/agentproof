@@ -94,7 +94,10 @@ export default function RegisterForm() {
     if (upgradePattern) metadata.upgrade_pattern = upgradePattern;
 
     // For MVP, use a data URI. In production, upload to IPFS first.
-    const dataUri = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
+    // Use TextEncoder to safely handle non-ASCII characters (emoji, unicode)
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(metadata));
+    const base64 = btoa(Array.from(jsonBytes, (b) => String.fromCharCode(b)).join(""));
+    const dataUri = `data:application/json;base64,${base64}`;
     register(dataUri);
   }
 

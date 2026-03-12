@@ -176,16 +176,17 @@ export default function IntelligencePage() {
         setTipsterData(t);
       } catch {}
 
-      // Check all agent statuses
-      const statuses: Record<string, string> = {};
-      for (const agent of AGENTS) {
-        try {
+      // Check all agent statuses in parallel
+      const results = await Promise.allSettled(
+        AGENTS.map(async (agent) => {
           const res = await intelligenceFetch<{ status: string }>(agent.endpoint);
-          statuses[agent.name] = res.status === "ok" ? "live" : "degraded";
-        } catch {
-          statuses[agent.name] = "offline";
-        }
-      }
+          return { name: agent.name, status: res.status === "ok" ? "live" : "degraded" };
+        })
+      );
+      const statuses: Record<string, string> = {};
+      results.forEach((r, i) => {
+        statuses[AGENTS[i].name] = r.status === "fulfilled" ? r.value.status : "offline";
+      });
       setAgentStatuses(statuses);
     }
     load();

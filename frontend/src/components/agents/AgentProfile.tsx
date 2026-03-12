@@ -147,7 +147,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
                 <Shield className="w-3 h-3" />
                 Owner: {truncateAddress(agent.owner_address)}
                 <button
-                  onClick={() => navigator.clipboard.writeText(agent.owner_address)}
+                  onClick={() => navigator.clipboard?.writeText(agent.owner_address).catch(() => {})}
                   className="hover:text-[#00ff88] transition-colors"
                 >
                   <Copy className="w-3 h-3" />
