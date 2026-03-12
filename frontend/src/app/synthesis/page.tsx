@@ -177,17 +177,17 @@ export default function SynthesisPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
           {[
-            { label: "Teams", value: stats.total_teams, mono: true },
-            { label: "Agents Scored", value: stats.total_agents_scored, mono: true },
+            { label: "Teams", value: stats.total_teams ?? 0, mono: true },
+            { label: "Agents Scored", value: stats.total_agents_scored ?? 0, mono: true },
             {
               label: "Avg Velocity",
-              value: `+${stats.avg_velocity.toFixed(1)}`,
+              value: `+${(stats.avg_velocity ?? 0).toFixed(1)}`,
               mono: true,
               color: "text-emerald-400",
             },
             {
               label: "Top Velocity",
-              value: `+${stats.top_velocity.toFixed(1)}`,
+              value: `+${(stats.top_velocity ?? 0).toFixed(1)}`,
               mono: true,
               color: "text-yellow-400",
             },
