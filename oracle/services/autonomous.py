@@ -204,6 +204,8 @@ class AgentScreener:
         chain = get_chain_service()
         if chain is not None:
             submitted = 0
+            failed = 0
+            failed_agents: list[int] = []
             for row in screening_rows[:ONCHAIN_FEEDBACK_LIMIT_PER_CYCLE]:
                 agent_id = row["agent_id"]
                 risk_level = row["risk_level"]
@@ -219,7 +221,12 @@ class AgentScreener:
                             f"[{label}] On-chain feedback for agent {agent_id}: "
                             f"score={score} tx={tx_hash}"
                         )
+                    else:
+                        failed += 1
+                        failed_agents.append(agent_id)
                 except Exception as e:
+                    failed += 1
+                    failed_agents.append(agent_id)
                     logger.error(
                         f"[{label}] On-chain feedback failed for agent {agent_id}: {e}"
                     )
@@ -227,6 +234,19 @@ class AgentScreener:
 
             if submitted > 0:
                 logger.info(f"[{label}] Submitted {submitted} on-chain feedbacks")
+            if failed > 0:
+                logger.warning(
+                    f"[{label}] Failed {failed} on-chain submissions "
+                    f"(agents: {failed_agents[:10]})"
+                )
+                # Record failures for retry on next cycle
+                try:
+                    db.table("oracle_submission_failures").insert([
+                        {"agent_id": aid, "label": label, "failed_at": now}
+                        for aid in failed_agents
+                    ]).execute()
+                except Exception:
+                    pass  # Table may not exist yet — failures still logged above
 
         # Invalidate cache for screened agents so next request gets fresh data
         cache = get_trust_cache()

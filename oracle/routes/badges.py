@@ -204,7 +204,11 @@ async def badge_score(
     except Exception as e:
         logger.error(f"Badge error for agent #{agent_id}: {e}")
         svg = _error_svg("agentproof", "error", style)
-        return Response(content=svg, media_type="image/svg+xml")
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=30"},
+        )
 
     svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
 
@@ -228,7 +232,11 @@ async def badge_tier(
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
         svg = _error_svg("trust tier", "not found", style)
-        return Response(content=svg, media_type="image/svg+xml")
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=60"},
+        )
 
     svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
     return Response(
@@ -250,7 +258,11 @@ async def badge_score_only(
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
         svg = _error_svg("trust score", "N/A", style)
-        return Response(content=svg, media_type="image/svg+xml")
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=60"},
+        )
 
     svg = _branded_svg(result.composite_score, result.tier, agent_id, style)
     return Response(
@@ -272,7 +284,11 @@ async def badge_recommendation(
         result = svc.evaluate_agent(agent_id, chain=chain)
     except ValueError:
         svg = _error_svg("agentproof", "not found", style)
-        return Response(content=svg, media_type="image/svg+xml")
+        return Response(
+            content=svg,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=60"},
+        )
 
     rec = result.recommendation.value if hasattr(result.recommendation, "value") else str(result.recommendation)
     color = RECOMMENDATION_COLORS.get(rec, "6b7280")

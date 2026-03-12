@@ -157,10 +157,8 @@ def calculate_composite_score(
             100.0, (math.log10(account_age_days + 1) / math.log10(366)) * 100
         )
 
-    if uptime_pct < 0:
-        uptime_score = 50.0
-    else:
-        uptime_score = uptime_pct
+    has_uptime = uptime_pct >= 0
+    uptime_score = uptime_pct if has_uptime else 0.0
 
     uri_stability = _calculate_uri_stability_score(uri_change_count)
     freshness = _calculate_freshness_multiplier(account_age_days)
@@ -168,60 +166,28 @@ def calculate_composite_score(
     has_coding = coding_score >= 0
     has_job = job_score >= 0
 
-    # Weight selection based on which optional signals are available
-    # Each combination sums to 1.0
-    if has_coding and has_job:
-        # All signals: base 82% + coding 10% + job 8%
-        composite = (
-            rating_score * 0.25
-            + volume_score * 0.08
-            + consistency_score * 0.08
-            + validation_score * 0.11
-            + age_score * 0.10
-            + uptime_score * 0.08
-            + deployer_score * 0.06
-            + uri_stability * 0.06
-            + coding_score * 0.10
-            + job_score * 0.08
-        )
-    elif has_coding:
-        # Coding only: base 90% + coding 10%
-        composite = (
-            rating_score * 0.27
-            + volume_score * 0.09
-            + consistency_score * 0.09
-            + validation_score * 0.13
-            + age_score * 0.11
-            + uptime_score * 0.09
-            + deployer_score * 0.07
-            + uri_stability * 0.05
-            + coding_score * 0.10
-        )
-    elif has_job:
-        # Job only: base 92% + job 8%
-        composite = (
-            rating_score * 0.28
-            + volume_score * 0.09
-            + consistency_score * 0.09
-            + validation_score * 0.14
-            + age_score * 0.11
-            + uptime_score * 0.09
-            + deployer_score * 0.07
-            + uri_stability * 0.05
-            + job_score * 0.08
-        )
-    else:
-        # Base signals only
-        composite = (
-            rating_score * 0.30
-            + volume_score * 0.10
-            + consistency_score * 0.10
-            + validation_score * 0.15
-            + age_score * 0.12
-            + uptime_score * 0.10
-            + deployer_score * 0.08
-            + uri_stability * 0.05
-        )
+    # Build weighted score from available signals.
+    # Base signals always present: rating, volume, consistency, validation, age, deployer, uri_stability
+    # Optional signals: uptime, coding, job — when absent, weight redistributed to base signals.
+    signals: list[tuple[float, float]] = [
+        (rating_score, 0.30),
+        (volume_score, 0.10),
+        (consistency_score, 0.10),
+        (validation_score, 0.15),
+        (age_score, 0.12),
+        (deployer_score, 0.08),
+        (uri_stability, 0.05),
+    ]
+    if has_uptime:
+        signals.append((uptime_score, 0.10))
+    if has_coding:
+        signals.append((coding_score, 0.10))
+    if has_job:
+        signals.append((job_score, 0.08))
+
+    # Normalize weights to sum to 1.0
+    total_weight = sum(w for _, w in signals)
+    composite = sum(score * (w / total_weight) for score, w in signals)
 
     # Apply freshness penalty
     composite *= freshness
@@ -232,7 +198,7 @@ def calculate_composite_score(
         consistency_score=round(consistency_score, 2),
         validation_score=round(validation_score, 2),
         age_score=round(age_score, 2),
-        uptime_score=round(uptime_score, 2),
+        uptime_score=round(uptime_score, 2) if has_uptime else None,
         deployer_score=round(deployer_score, 2),
         uri_stability_score=round(uri_stability, 2),
         coding_score=round(coding_score, 2) if has_coding else None,
@@ -350,7 +316,7 @@ def _determine_recommendation(
         return Recommendation.HIGH_RISK
     if feedback_count < 3:
         return Recommendation.UNVERIFIED
-    if composite_score >= 58 and feedback_count >= 5:
+    if composite_score >= 72 and feedback_count >= 10:
         return Recommendation.TRUSTED
     return Recommendation.CAUTION
 
@@ -875,33 +841,33 @@ class TrustService:
         )
         total_agents = count_result.count or 0
 
-        # Paginate all agents for avg score + tier distribution
-        # Supabase default limit is 1000, so we fetch in pages
-        all_scores: list[float] = []
-        tier_dist: dict[str, int] = {}
-        page_size = 1000
-        offset = 0
-        while True:
-            batch = (
-                db.table("agents")
-                .select("composite_score, tier")
-                .range(offset, offset + page_size - 1)
-                .execute()
-            )
-            if not batch.data:
-                break
-            for a in batch.data:
-                score = float(a.get("composite_score") or 0)
-                all_scores.append(score)
-                t = a.get("tier", "unranked")
-                tier_dist[t] = tier_dist.get(t, 0) + 1
-            if len(batch.data) < page_size:
-                break
-            offset += page_size
-
+        # Average score via Supabase RPC (avoids loading all rows into memory)
         avg_score = 0.0
-        if all_scores:
-            avg_score = round(sum(all_scores) / len(all_scores), 2)
+        try:
+            avg_result = db.rpc("avg_composite_score", {}).execute()
+            if avg_result.data and avg_result.data[0]:
+                avg_score = round(float(avg_result.data[0].get("avg", 0) or 0), 2)
+        except Exception:
+            # Fallback: single-page sample if RPC doesn't exist yet
+            sample = db.table("agents").select("composite_score").limit(1000).execute()
+            if sample.data:
+                scores = [float(a.get("composite_score") or 0) for a in sample.data]
+                avg_score = round(sum(scores) / len(scores), 2)
+
+        # Tier distribution via grouped count query
+        tier_dist: dict[str, int] = {}
+        try:
+            tier_result = db.rpc("tier_distribution", {}).execute()
+            if tier_result.data:
+                for row in tier_result.data:
+                    tier_dist[row["tier"] or "unranked"] = row["count"]
+        except Exception:
+            # Fallback: single-page sample
+            sample = db.table("agents").select("tier").limit(1000).execute()
+            if sample.data:
+                for a in sample.data:
+                    t = a.get("tier", "unranked")
+                    tier_dist[t] = tier_dist.get(t, 0) + 1
 
         # Total feedback
         try:

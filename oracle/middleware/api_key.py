@@ -53,6 +53,12 @@ _key_cache: dict[str, tuple[float, dict]] = {}  # hash → (expires_at, key_row)
 _key_cache_lock = threading.Lock()
 _KEY_CACHE_TTL = 60  # seconds
 
+# Per-second rate limiting (token bucket per API key hash)
+_rate_buckets: dict[str, tuple[float, float]] = {}  # key_hash → (tokens, last_refill)
+_rate_lock = threading.Lock()
+_RATE_LIMIT_PER_SECOND = 10  # max requests per second per key
+_RATE_BUCKET_MAX = 20  # burst capacity
+
 
 def _hash_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode()).hexdigest()
@@ -73,6 +79,23 @@ def _get_cached_key(key_hash: str) -> dict | None:
 def _cache_key(key_hash: str, row: dict):
     with _key_cache_lock:
         _key_cache[key_hash] = (time.monotonic() + _KEY_CACHE_TTL, row)
+
+
+def _check_rate_limit(key_hash: str) -> bool:
+    """Token bucket rate limiter. Returns True if request is allowed."""
+    now = time.monotonic()
+    with _rate_lock:
+        if key_hash not in _rate_buckets:
+            _rate_buckets[key_hash] = (_RATE_BUCKET_MAX - 1, now)
+            return True
+        tokens, last_refill = _rate_buckets[key_hash]
+        elapsed = now - last_refill
+        tokens = min(_RATE_BUCKET_MAX, tokens + elapsed * _RATE_LIMIT_PER_SECOND)
+        if tokens < 1:
+            _rate_buckets[key_hash] = (tokens, now)
+            return False
+        _rate_buckets[key_hash] = (tokens - 1, now)
+        return True
 
 
 def _classify_endpoint(path: str) -> str:
@@ -156,6 +179,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=403,
                 content={"detail": "API key has been deactivated"},
+            )
+
+        # Per-second rate limiting
+        if not _check_rate_limit(key_hash):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Max 10 requests/second."},
+                headers={"Retry-After": "1"},
             )
 
         # Check monthly usage and apply overage pricing
