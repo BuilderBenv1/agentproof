@@ -40,12 +40,13 @@ FREE_PATH_PREFIXES = (
 
 # Monthly call limits per tier (tracked via rolling 30-day window)
 TIER_MONTHLY_LIMITS = {
-    "partner": 999_999_999, # free — co-marketing / data exchange partners
-    "paygo": 999_999_999,   # unlimited, billed per call at $0.05
-    "starter": 10_000,      # $250/mo
-    "growth": 25_000,       # $500/mo
-    "scale": 75_000,        # $1,000/mo
-    "enterprise": 200_000,  # $2,000/mo
+    "partner": 999_999_999,   # free — co-marketing / data exchange partners
+    "synthesis": 999_999_999, # free — Synthesis hackathon builders
+    "paygo": 999_999_999,     # unlimited, billed per call at $0.05
+    "starter": 10_000,        # $250/mo
+    "growth": 25_000,         # $500/mo
+    "scale": 75_000,          # $1,000/mo
+    "enterprise": 200_000,    # $2,000/mo
 }
 
 # In-memory cache for validated keys (avoids DB lookup on every request)
@@ -199,7 +200,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 
         # Over limit on a subscription tier → spill to pay-per-call (never block)
         # Partner tier is never billed
-        overage = tier not in ("paygo", "partner") and monthly_count >= monthly_limit
+        overage = tier not in ("paygo", "partner", "synthesis") and monthly_count >= monthly_limit
 
         # Attach metadata to request state
         request.state.api_key_id = api_key_id

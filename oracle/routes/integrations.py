@@ -67,6 +67,7 @@ class UpgradeRequest(BaseModel):
 
 # Tier definitions: monthly_limit, price_cents_per_month, price_per_call
 TIERS = {
+    "synthesis":  {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "FREE"},
     "paygo":      {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "$0.05"},
     "starter":    {"monthly_limit": 10_000,      "price_cents": 25_000,  "per_call": "$0.025"},
     "growth":     {"monthly_limit": 25_000,      "price_cents": 50_000,  "per_call": "$0.02"},
@@ -132,7 +133,7 @@ async def register_api_key(request: Request, body: RegisterRequest):
 
 @router.post("/synthesis/register")
 async def synthesis_register(request: Request):
-    """Register a free partner-tier API key for Synthesis hackathon builders.
+    """Register a free synthesis-tier API key for Synthesis hackathon builders.
 
     All Synthesis builders get free, unlimited API access during the event.
     AgentProof Oracle acts as a live judge — every Synthesis agent is scored
@@ -155,7 +156,7 @@ async def synthesis_register(request: Request):
             "key_prefix": key_prefix,
             "protocol_name": "synthesis-builder",
             "contact_email": "",
-            "tier": "partner",
+            "tier": "synthesis",
             "monthly_limit": 999_999_999,
             "is_active": True,
             "metadata": {"event": "synthesis-hackathon", "role": "builder"},
@@ -166,7 +167,7 @@ async def synthesis_register(request: Request):
         return {
             "api_key": raw_key,
             "key_id": key_id,
-            "tier": "partner",
+            "tier": "synthesis",
             "monthly_limit": "unlimited",
             "price_per_call": "FREE",
             "message": (
