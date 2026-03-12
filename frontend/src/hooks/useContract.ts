@@ -72,14 +72,33 @@ export function useRegisterAgent() {
   useEffect(() => {
     if (feeSuccess && pendingURI && step === "fee") {
       setStep("register");
-      writeContract({
-        address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
-        abi: IDENTITY_REGISTRY_ABI,
-        functionName: "register",
-        args: [pendingURI],
-      });
+      try {
+        writeContract({
+          address: CONTRACT_ADDRESSES.identityRegistry as `0x${string}`,
+          abi: IDENTITY_REGISTRY_ABI,
+          functionName: "register",
+          args: [pendingURI],
+        });
+      } catch (e) {
+        setErrorMsg(`Registration call failed: ${(e as Error).message || "Unknown error"}`);
+        setStep("idle");
+      }
     }
   }, [feeSuccess, pendingURI, step, writeContract]);
+
+  // Timeout: if register step takes > 3 minutes, show recovery message
+  useEffect(() => {
+    if (step !== "register") return;
+    const timer = setTimeout(() => {
+      if (step === "register") {
+        setErrorMsg(
+          "Registration is taking longer than expected. Your fee payment succeeded — please check your wallet for a pending transaction, or refresh and try again. Your 0.05 AVAX fee was already paid, so the next attempt will only charge gas."
+        );
+        setStep("idle");
+      }
+    }, 180_000);
+    return () => clearTimeout(timer);
+  }, [step]);
 
   // When register is confirmed, extract agent ID from receipt
   useEffect(() => {
@@ -109,18 +128,20 @@ export function useRegisterAgent() {
   // Track errors
   useEffect(() => {
     if (feeError) {
-      setErrorMsg(feeError.message?.includes("User rejected")
+      const msg = feeError.message || "Fee payment failed";
+      setErrorMsg(msg.includes("User rejected") || msg.includes("denied")
         ? "Transaction rejected in wallet"
-        : feeError.message || "Fee payment failed");
+        : msg.length > 200 ? msg.slice(0, 200) + "..." : msg);
       setStep("idle");
     }
   }, [feeError]);
 
   useEffect(() => {
     if (registerError) {
-      setErrorMsg(registerError.message?.includes("User rejected")
+      const msg = registerError.message || "Registration failed";
+      setErrorMsg(msg.includes("User rejected") || msg.includes("denied")
         ? "Transaction rejected in wallet"
-        : registerError.message || "Registration failed");
+        : `Registration failed: ${msg.length > 200 ? msg.slice(0, 200) + "..." : msg}`);
       setStep("idle");
     }
   }, [registerError]);
