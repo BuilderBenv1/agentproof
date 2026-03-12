@@ -90,6 +90,12 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
 
   return (
     <div className="space-y-6">
+      {/* Disclaimer */}
+      <p className="text-[10px] font-mono text-gray-600 border border-[#2a2a3a] rounded px-3 py-1.5">
+        Trust scores are informational only and do not constitute financial advice, endorsement, or guarantee of reliability.{" "}
+        <a href="/terms" className="text-gray-500 hover:text-emerald-400 underline">Terms</a>
+      </p>
+
       {/* Header */}
       <div className="bg-[#111118] border border-[#2a2a3a] rounded-xl p-6">
         <div className="flex flex-col md:flex-row items-start gap-6">

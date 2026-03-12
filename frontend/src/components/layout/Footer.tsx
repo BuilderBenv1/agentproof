@@ -36,6 +36,12 @@ export default function Footer() {
             >
               GitHub
             </a>
+            <Link href="/terms" className="text-gray-500 hover:text-white transition-colors">
+              Terms
+            </Link>
+            <Link href="/privacy" className="text-gray-500 hover:text-white transition-colors">
+              Privacy
+            </Link>
           </div>
 
           {/* Badges */}

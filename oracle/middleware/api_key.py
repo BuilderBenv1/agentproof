@@ -156,7 +156,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 db = get_supabase()
                 result = (
                     db.table("api_keys")
-                    .select("id, protocol_name, tier, monthly_limit, is_active, metadata")
+                    .select("id, protocol_name, tier, monthly_limit, is_active, expires_at, metadata")
                     .eq("key_hash", key_hash)
                     .limit(1)
                     .execute()
@@ -181,6 +181,23 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 content={"detail": "API key has been deactivated"},
             )
+
+        # Check key expiry (used for time-limited tiers like synthesis)
+        expires_at = key_row.get("expires_at")
+        if expires_at:
+            from datetime import datetime, timezone
+            try:
+                if isinstance(expires_at, str):
+                    expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expires_at:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "API key has expired. Contact support to renew."},
+                    )
+            except (ValueError, TypeError):
+                pass  # Malformed expiry — allow through, log elsewhere
 
         # Per-second rate limiting
         if not _check_rate_limit(key_hash):

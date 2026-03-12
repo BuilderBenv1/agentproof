@@ -5,6 +5,7 @@ Self-serve API key registration, usage dashboard, tier upgrades.
 """
 
 import hashlib
+import os
 import secrets
 import logging
 import threading
@@ -131,35 +132,53 @@ async def register_api_key(request: Request, body: RegisterRequest):
         raise HTTPException(status_code=500, detail="Failed to create API key")
 
 
+class SynthesisRegisterRequest(BaseModel):
+    event_code: str
+    team_name: str | None = None
+
+
+# Event code for Synthesis hackathon — distribute to participants only
+_SYNTHESIS_EVENT_CODE = os.environ.get("SYNTHESIS_EVENT_CODE", "SYNTHESIS2026")
+
+# Synthesis keys expire after the hackathon (30 days from creation)
+_SYNTHESIS_EXPIRY_DAYS = 30
+
+
 @router.post("/synthesis/register")
-async def synthesis_register(request: Request):
+async def synthesis_register(request: Request, body: SynthesisRegisterRequest):
     """Register a free synthesis-tier API key for Synthesis hackathon builders.
 
-    All Synthesis builders get free, unlimited API access during the event.
-    AgentProof Oracle acts as a live judge — every Synthesis agent is scored
-    in real time across the build phase.
+    Requires a valid event code distributed by hackathon organizers.
+    Keys expire 30 days after creation.
     """
+    # Validate event code
+    if body.event_code != _SYNTHESIS_EVENT_CODE:
+        raise HTTPException(status_code=403, detail="Invalid event code. Contact hackathon organizers.")
+
     client_ip = request.client.host if request.client else "unknown"
     if not _check_register_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
 
     from database import get_supabase
     db = get_supabase()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=_SYNTHESIS_EXPIRY_DAYS)).isoformat()
 
     raw_key = "ap_live_" + secrets.token_hex(16)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     key_prefix = raw_key[:16]
 
     try:
+        team = (body.team_name or "synthesis-builder")[:200]
         result = db.table("api_keys").insert({
             "key_hash": key_hash,
             "key_prefix": key_prefix,
-            "protocol_name": "synthesis-builder",
+            "protocol_name": team,
             "contact_email": "",
             "tier": "synthesis",
             "monthly_limit": 999_999_999,
             "is_active": True,
-            "metadata": {"event": "synthesis-hackathon", "role": "builder"},
+            "expires_at": expires_at,
+            "metadata": {"event": "synthesis-hackathon", "role": "builder", "team": team},
         }).execute()
 
         key_id = result.data[0]["id"] if result.data else "unknown"
@@ -170,8 +189,10 @@ async def synthesis_register(request: Request):
             "tier": "synthesis",
             "monthly_limit": "unlimited",
             "price_per_call": "FREE",
+            "expires_at": expires_at,
             "message": (
-                "Welcome to The Synthesis! You have free unlimited API access. "
+                "Welcome to The Synthesis! You have free unlimited API access "
+                f"until {expires_at[:10]}. "
                 "AgentProof Oracle is a live judge — your agent will be scored "
                 "in real time during the build phase. "
                 "Docs: https://agentproof.sh/docs | Badge: https://oracle.agentproof.sh/api/v1/badge/{agent_id}.svg"
@@ -282,6 +303,59 @@ async def upgrade_tier(request: Request, body: UpgradeRequest):
     except Exception as e:
         logger.error("Failed to upgrade tier: %s", e)
         raise HTTPException(status_code=500, detail="Failed to upgrade tier")
+
+
+@router.post("/rotate")
+async def rotate_api_key(request: Request):
+    """Rotate the authenticated API key. Deactivates the old key and returns a new one."""
+    api_key_id = _require_api_key(request)
+
+    from database import get_supabase
+    db = get_supabase()
+
+    try:
+        # Get current key info
+        current = db.table("api_keys").select(
+            "protocol_name, contact_email, tier, monthly_limit, metadata"
+        ).eq("id", api_key_id).limit(1).execute()
+
+        if not current.data:
+            raise HTTPException(status_code=404, detail="API key not found")
+
+        info = current.data[0]
+
+        # Deactivate old key
+        db.table("api_keys").update({"is_active": False}).eq("id", api_key_id).execute()
+
+        # Generate new key
+        raw_key = "ap_live_" + secrets.token_hex(16)
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        key_prefix = raw_key[:16]
+
+        result = db.table("api_keys").insert({
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "protocol_name": info["protocol_name"],
+            "contact_email": info.get("contact_email", ""),
+            "tier": info["tier"],
+            "monthly_limit": info["monthly_limit"],
+            "is_active": True,
+            "metadata": info.get("metadata") or {},
+        }).execute()
+
+        new_key_id = result.data[0]["id"] if result.data else "unknown"
+
+        return {
+            "api_key": raw_key,
+            "key_id": new_key_id,
+            "tier": info["tier"],
+            "message": "API key rotated. The old key has been deactivated. Store this new key securely.",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to rotate API key: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to rotate key")
 
 
 @router.delete("/key")

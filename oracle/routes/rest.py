@@ -28,6 +28,10 @@ def _add_ratelimit_headers(response, request: Request):
     response.headers["X-RateLimit-Limit"] = str(limit)
     response.headers["X-RateLimit-Remaining"] = str(max(0, limit - used))
     response.headers["X-RateLimit-Tier"] = tier or "unknown"
+    response.headers["X-Disclaimer"] = (
+        "Scores are informational only. Not financial advice. "
+        "See https://agentproof.sh/terms"
+    )
     return response
 
 
