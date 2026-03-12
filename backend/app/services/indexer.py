@@ -318,8 +318,9 @@ def process_erc8004_base_identity_events(from_block: int, to_block: int):
 
 IPFS_GATEWAYS = [
     "https://ipfs.io/ipfs/",
-    "https://cloudflare-ipfs.com/ipfs/",
     "https://gateway.pinata.cloud/ipfs/",
+    "https://dweb.link/ipfs/",
+    "https://w3s.link/ipfs/",
 ]
 
 
@@ -415,11 +416,16 @@ def _resolve_uri(uri: str, client: httpx.Client) -> dict | None:
 
             resp = client.get(url, timeout=10, follow_redirects=False)
 
-            # Handle redirects manually with SSRF check
-            if resp.status_code in (301, 302, 307, 308):
+            # Handle redirects manually with SSRF check (up to 2 hops)
+            for _ in range(2):
+                if resp.status_code not in (301, 302, 307, 308):
+                    break
                 redirect_url = resp.headers.get("location", "")
-                if not redirect_url or not _is_safe_url(redirect_url):
-                    continue
+                if not redirect_url:
+                    break
+                # Allow same-domain subdomain redirects (e.g. dweb.link → *.dweb.link)
+                if not _is_safe_url(redirect_url):
+                    break
                 resp = client.get(redirect_url, timeout=10, follow_redirects=False)
 
             if resp.status_code == 200:
