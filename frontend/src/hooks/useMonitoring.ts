@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface UptimeCheck {
   id: number;
@@ -51,7 +51,7 @@ export function useMonitoring(agentId: number) {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await apiFetch<MonitoringOverview>(`/monitoring/agent/${agentId}`);
+      const result = await backendFetch<MonitoringOverview>(`/monitoring/agent/${agentId}`);
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch monitoring data");
@@ -73,7 +73,7 @@ export function useUptimeHistory(agentId: number, days: number = 30) {
     async function fetch() {
       setLoading(true);
       try {
-        const result = await apiFetch<{ summaries: UptimeDailySummary[] }>(
+        const result = await backendFetch<{ summaries: UptimeDailySummary[] }>(
           `/monitoring/agent/${agentId}/history`,
           { params: { days } }
         );

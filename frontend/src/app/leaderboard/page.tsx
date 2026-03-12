@@ -6,7 +6,7 @@ import { Trophy, Users, BarChart3, TrendingUp, Shield } from "lucide-react";
 import LeaderboardTable from "@/components/leaderboard/LeaderboardTable";
 import FilterBar from "@/components/leaderboard/FilterBar";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 import { formatNumber, getTierColor } from "@/lib/utils";
 
 interface LeaderboardEntry {
@@ -48,7 +48,7 @@ function LeaderboardInner() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
 
   useEffect(() => {
-    apiFetch<OverviewData>("/analytics/overview")
+    backendFetch<OverviewData>("/analytics/overview")
       .then(setOverview)
       .catch(() => {});
   }, []);
@@ -57,7 +57,7 @@ function LeaderboardInner() {
     async function fetchLeaderboard() {
       setLoading(true);
       try {
-        const result = await apiFetch<{
+        const result = await backendFetch<{
           entries: LeaderboardEntry[];
           total: number;
         }>("/leaderboard", {

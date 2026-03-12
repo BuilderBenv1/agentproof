@@ -1,4 +1,8 @@
+// Oracle API — trust scores, risk, badges, synthesis, network stats
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://oracle.agentproof.sh";
+
+// Backend API — agents, leaderboard, analytics, marketplace, monitoring
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://agentproof-production.up.railway.app";
 
 export const AVALANCHE_CHAIN_ID = 43114;
 

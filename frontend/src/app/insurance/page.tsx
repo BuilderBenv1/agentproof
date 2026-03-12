@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Shield, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 import { TIERS } from "@/lib/constants";
 
 interface InsuranceStats {
@@ -40,8 +40,8 @@ export default function InsurancePage() {
       setLoading(true);
       try {
         const [statsResult, claimsResult] = await Promise.all([
-          apiFetch<InsuranceStats>("/insurance/stats"),
-          apiFetch<{ claims: InsuranceClaim[]; total: number }>("/insurance/claims", {
+          backendFetch<InsuranceStats>("/insurance/stats"),
+          backendFetch<{ claims: InsuranceClaim[]; total: number }>("/insurance/claims", {
             params: {
               status: statusFilter || undefined,
               page,

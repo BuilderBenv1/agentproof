@@ -1,4 +1,4 @@
-import { API_URL } from "./constants";
+import { API_URL, BACKEND_URL } from "./constants";
 
 interface FetchOptions {
   method?: string;
@@ -6,13 +6,10 @@ interface FetchOptions {
   params?: Record<string, string | number | undefined>;
 }
 
-export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
-  const { method = "GET", body, params } = options;
-
-  // Normalize: strip /api from base URL, then ensure endpoint starts with /api
-  const base = API_URL.replace(/\/api\/?$/, "");
+function buildUrl(base: string, endpoint: string, params?: FetchOptions["params"]): string {
+  const normalizedBase = base.replace(/\/api\/?$/, "");
   const path = endpoint.startsWith("/api") ? endpoint : `/api${endpoint}`;
-  let url = `${base}${path}`;
+  let url = `${normalizedBase}${path}`;
 
   if (params) {
     const searchParams = new URLSearchParams();
@@ -24,6 +21,12 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     const qs = searchParams.toString();
     if (qs) url += `?${qs}`;
   }
+
+  return url;
+}
+
+async function doFetch<T>(url: string, options: FetchOptions = {}): Promise<T> {
+  const { method = "GET", body } = options;
 
   const res = await fetch(url, {
     method,
@@ -38,4 +41,16 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   }
 
   return res.json();
+}
+
+/** Fetch from the Oracle API (trust scores, risk, badges, synthesis, network stats) */
+export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+  const url = buildUrl(API_URL, endpoint, options.params);
+  return doFetch<T>(url, options);
+}
+
+/** Fetch from the Backend API (agents, leaderboard, analytics, marketplace, monitoring) */
+export async function backendFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+  const url = buildUrl(BACKEND_URL, endpoint, options.params);
+  return doFetch<T>(url, options);
 }

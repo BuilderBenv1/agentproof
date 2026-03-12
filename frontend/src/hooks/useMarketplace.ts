@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface Listing {
   id: number;
@@ -61,7 +61,7 @@ export function useListings(options: UseListingsOptions = {}) {
     setLoading(true);
     setError(null);
     try {
-      const result = await apiFetch<{ listings: Listing[]; total: number }>(
+      const result = await backendFetch<{ listings: Listing[]; total: number }>(
         "/marketplace/listings",
         {
           params: {
@@ -93,7 +93,7 @@ export function useMarketplaceStats() {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<MarketplaceStats>("/marketplace/stats");
+        const result = await backendFetch<MarketplaceStats>("/marketplace/stats");
         setStats(result);
       } catch {
         // silently fail
@@ -114,7 +114,7 @@ export function useTask(taskId: string) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<{ task: MarketplaceTask }>(`/marketplace/tasks/${taskId}`);
+        const result = await backendFetch<{ task: MarketplaceTask }>(`/marketplace/tasks/${taskId}`);
         setData(result);
       } catch {
         // silently fail

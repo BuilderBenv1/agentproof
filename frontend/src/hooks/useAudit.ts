@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface AuditLog {
   id: number;
@@ -31,7 +31,7 @@ export function useAudit(agentId: number, action?: string, page: number = 1) {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await apiFetch<{ logs: AuditLog[]; total: number }>(
+      const result = await backendFetch<{ logs: AuditLog[]; total: number }>(
         `/audit/${agentId}`,
         { params: { action, page, page_size: 50 } }
       );
@@ -55,7 +55,7 @@ export function useAuditSummary(agentId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<AuditSummary>(`/audit/${agentId}/summary`);
+        const result = await backendFetch<AuditSummary>(`/audit/${agentId}/summary`);
         setSummary(result);
       } catch {
         // silently fail

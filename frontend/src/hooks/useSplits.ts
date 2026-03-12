@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface Split {
   id: number;
@@ -33,7 +33,7 @@ export function useAgentSplits(agentId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<{ splits: Split[]; total_split_revenue: number }>(
+        const result = await backendFetch<{ splits: Split[]; total_split_revenue: number }>(
           `/splits/agent/${agentId}`
         );
         setData(result);
@@ -56,7 +56,7 @@ export function useSplitDetail(splitId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<typeof data>(`/splits/${splitId}`);
+        const result = await backendFetch<typeof data>(`/splits/${splitId}`);
         setData(result);
       } catch {
         // silently fail

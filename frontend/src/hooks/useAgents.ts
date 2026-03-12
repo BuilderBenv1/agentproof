@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface Agent {
   id: number;
@@ -104,7 +104,7 @@ export function useAgents(options: UseAgentsOptions = {}) {
     setLoading(true);
     setError(null);
     try {
-      const result = await apiFetch<AgentListResult>("/agents", {
+      const result = await backendFetch<AgentListResult>("/agents", {
         params: {
           category: options.category,
           chain: options.chain,
@@ -140,7 +140,7 @@ export function useAgent(agentId: number, chain?: string) {
     async function fetch() {
       setLoading(true);
       try {
-        const result = await apiFetch<Agent>(`/agents/${agentId}`, {
+        const result = await backendFetch<Agent>(`/agents/${agentId}`, {
           params: { chain },
         });
         setAgent(result);

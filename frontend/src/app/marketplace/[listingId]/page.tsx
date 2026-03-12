@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 import { Listing } from "@/hooks/useMarketplace";
 import { MonitoringOverview } from "@/hooks/useMonitoring";
 import { useHireAgent } from "@/hooks/useContract";
@@ -30,7 +30,7 @@ export default function ListingDetailPage() {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<{ listing: Listing; agent: Record<string, unknown> }>(
+        const result = await backendFetch<{ listing: Listing; agent: Record<string, unknown> }>(
           `/marketplace/listings/${listingId}`
         );
         setListing(result.listing);
@@ -39,7 +39,7 @@ export default function ListingDetailPage() {
         // Fetch monitoring endpoints for this agent
         if (result.agent?.agent_id) {
           try {
-            const mon = await apiFetch<MonitoringOverview>(
+            const mon = await backendFetch<MonitoringOverview>(
               `/monitoring/agent/${result.agent.agent_id}`
             );
             setMonitoring(mon);
@@ -59,7 +59,7 @@ export default function ListingDetailPage() {
   // When on-chain payment succeeds, create the task in the backend
   useEffect(() => {
     if (isSuccess && listing && address && taskDesc) {
-      apiFetch("/marketplace/tasks", {
+      backendFetch("/marketplace/tasks", {
         method: "POST",
         body: {
           listing_id: listing.id,

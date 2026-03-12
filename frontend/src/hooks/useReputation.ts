@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 interface Feedback {
   id: number;
@@ -32,7 +32,7 @@ export function useFeedback(agentId: number, page = 1, pageSize = 20) {
     async function fetch() {
       setLoading(true);
       try {
-        const result = await apiFetch<{ feedback: Feedback[]; total: number }>(
+        const result = await backendFetch<{ feedback: Feedback[]; total: number }>(
           `/agents/${agentId}/feedback`,
           { params: { page, page_size: pageSize } }
         );
@@ -58,7 +58,7 @@ export function useScoreHistory(agentId: number) {
     async function fetch() {
       setLoading(true);
       try {
-        const result = await apiFetch<{ history: ScoreHistory[] }>(
+        const result = await backendFetch<{ history: ScoreHistory[] }>(
           `/agents/${agentId}/score-history`
         );
         setHistory(result.history);
@@ -86,7 +86,7 @@ export function useOverview() {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<typeof data>("/analytics/overview");
+        const result = await backendFetch<typeof data>("/analytics/overview");
         setData(result);
       } catch {
         /* empty */

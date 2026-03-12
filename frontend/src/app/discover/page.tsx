@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Filter, TrendingUp, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 import { CATEGORIES, TIERS } from "@/lib/constants";
 
 interface Agent {
@@ -43,7 +43,7 @@ export default function DiscoverPage() {
   const fetchAgents = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await apiFetch<{ agents: Agent[]; total: number }>("/discover/search", {
+      const result = await backendFetch<{ agents: Agent[]; total: number }>("/discover/search", {
         params: {
           q: query || undefined,
           category: category || undefined,
@@ -75,8 +75,8 @@ export default function DiscoverPage() {
     async function loadSidebar() {
       try {
         const [trendingResult, newResult] = await Promise.all([
-          apiFetch<{ trending: TrendingAgent[] }>("/discover/trending", { params: { period: "7d", limit: 5 } }),
-          apiFetch<{ agents: Agent[] }>("/discover/new", { params: { limit: 5 } }),
+          backendFetch<{ trending: TrendingAgent[] }>("/discover/trending", { params: { period: "7d", limit: 5 } }),
+          backendFetch<{ agents: Agent[] }>("/discover/new", { params: { limit: 5 } }),
         ]);
         setTrending(trendingResult.trending);
         setNewAgents(newResult.agents);

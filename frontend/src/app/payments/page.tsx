@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Wallet, ArrowDownLeft, Clock, CheckCircle, XCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 interface PaymentStats {
   total_payments: number;
@@ -24,7 +24,7 @@ export default function PaymentsPage() {
     async function fetchData() {
       setLoading(true);
       try {
-        const result = await apiFetch<PaymentStats>("/payments/stats/overview");
+        const result = await backendFetch<PaymentStats>("/payments/stats/overview");
         setStats(result);
       } catch {
         // API not available

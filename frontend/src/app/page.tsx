@@ -18,7 +18,7 @@ import AgentCard from "@/components/agents/AgentCard";
 import CountUp from "@/components/ui/CountUp";
 import DeployerStorm from "@/components/sections/DeployerStorm";
 import { EvidencePreview } from "@/components/sections/EvidenceWall";
-import { apiFetch } from "@/lib/supabase";
+import { apiFetch, backendFetch } from "@/lib/supabase";
 // formatNumber available from @/lib/utils if needed
 
 interface OverviewData {
@@ -50,17 +50,15 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Stats from oracle (public, no auth required)
         const [overviewRes, agentsRes] = await Promise.allSettled([
           apiFetch<OverviewData>("/api/v1/network/stats"),
-          // Top agents from the backend API (separate service)
-          fetch("https://agentproof-production.up.railway.app/api/agents?sort_by=composite_score&order=desc&page_size=5")
-            .then(r => r.json())
-            .then((d: { agents: AgentData[] }) => d),
+          backendFetch<{ agents: AgentData[] }>("/agents", {
+            params: { sort_by: "composite_score", order: "desc", page_size: 5 },
+          }),
         ]);
 
         if (overviewRes.status === "fulfilled") setOverview(overviewRes.value);
-        if (agentsRes.status === "fulfilled") setTopAgents((agentsRes.value as { agents: AgentData[] }).agents || []);
+        if (agentsRes.status === "fulfilled") setTopAgents(agentsRes.value.agents || []);
       } catch {
         // API might not be running yet
       } finally {

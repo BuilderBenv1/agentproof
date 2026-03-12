@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiFetch } from "@/lib/supabase";
+import { backendFetch } from "@/lib/supabase";
 
 export interface ExtendedProfile {
   agent_id: number;
@@ -38,7 +38,7 @@ export function useProfile(agentId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<ExtendedProfile>(`/profiles/${agentId}`);
+        const result = await backendFetch<ExtendedProfile>(`/profiles/${agentId}`);
         setProfile(result);
       } catch {
         // silently fail
@@ -59,7 +59,7 @@ export function usePortfolio(agentId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<{ portfolio: PortfolioItem[]; total: number }>(
+        const result = await backendFetch<{ portfolio: PortfolioItem[]; total: number }>(
           `/profiles/${agentId}/portfolio`
         );
         setData(result);
@@ -82,7 +82,7 @@ export function useRevenue(agentId: number) {
   useEffect(() => {
     async function fetch() {
       try {
-        const result = await apiFetch<{ months: RevenueMonth[]; total_earned: number }>(
+        const result = await backendFetch<{ months: RevenueMonth[]; total_earned: number }>(
           `/profiles/${agentId}/revenue`
         );
         setData(result);
