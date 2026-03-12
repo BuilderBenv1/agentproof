@@ -59,6 +59,8 @@ class AgentScreener:
     async def start(self):
         """Launch all background jobs as asyncio tasks."""
         self._running = True
+        # Store reference to the main event loop for safe cross-thread publishing
+        self._main_loop = asyncio.get_running_loop()
         logger.info("AgentScreener starting — 8 background jobs")
         self._tasks = [
             asyncio.create_task(self._loop("screen_new_agents", self._screen_new_agents, 300)),
@@ -253,6 +255,7 @@ class AgentScreener:
         for r in screening_rows:
             cache.invalidate(f"eval:{r['agent_id']}")
         cache.invalidate("network_stats")
+        cache.sweep()  # Periodic cleanup of expired entries
 
         # Publish to SSE feed
         self._publish_feed_events(db, screening_rows)
@@ -292,12 +295,18 @@ class AgentScreener:
             )
 
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.run_coroutine_threadsafe(bus.publish(event), loop)
+                # Use the main event loop stored at startup (safe from worker threads)
+                main_loop = getattr(self, "_main_loop", None)
+                if main_loop is not None and main_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(bus.publish(event), main_loop)
                 else:
-                    loop.run_until_complete(bus.publish(event))
-            except RuntimeError:
+                    # Fallback: try to find a running loop
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(bus.publish(event))
+                    except RuntimeError:
+                        pass  # No loop available in this thread
+            except Exception:
                 pass
 
     # ─── Job 1: Screen New Agents (every 5 min) ──────────────────────
@@ -533,30 +542,38 @@ class AgentScreener:
         except Exception as e:
             logger.warning(f"[monitor_anomalies] Feedback burst check failed: {e}")
 
-        # 3. Dormant agents suddenly receiving feedback
+        # 3. Dormant agents suddenly receiving feedback (batched query)
         try:
             if recent_feedback_data:
-                recent_agents = set(fb["agent_id"] for fb in recent_feedback_data)
+                # Count recent feedbacks per agent
+                recent_agent_counts: dict[int, int] = {}
+                for fb in recent_feedback_data:
+                    aid = fb["agent_id"]
+                    recent_agent_counts[aid] = recent_agent_counts.get(aid, 0) + 1
 
-                for aid in list(recent_agents)[:50]:
+                # Only check agents with 3+ recent feedbacks
+                candidates = [aid for aid, cnt in recent_agent_counts.items() if cnt >= 3]
+                if candidates:
+                    # Single batch query: get agents that had ANY feedback before cutoff
                     older = (
                         db.table("reputation_events")
-                        .select("id", count="exact")
-                        .eq("agent_id", aid)
+                        .select("agent_id")
+                        .in_("agent_id", candidates[:50])
                         .lt("created_at", cutoff_24h)
-                        .limit(0)
+                        .limit(len(candidates))
                         .execute()
                     )
-                    recent_count = sum(1 for fb in recent_feedback_data if fb["agent_id"] == aid)
+                    agents_with_history = set(r["agent_id"] for r in (older.data or []))
 
-                    if (older.count or 0) == 0 and recent_count >= 3:
-                        alerts.append({
-                            "agent_id": aid,
-                            "alert_type": "dormant_activation",
-                            "severity": "medium",
-                            "details": f"Previously inactive agent received {recent_count} feedbacks in 24h",
-                            "created_at": now.isoformat(),
-                        })
+                    for aid in candidates[:50]:
+                        if aid not in agents_with_history:
+                            alerts.append({
+                                "agent_id": aid,
+                                "alert_type": "dormant_activation",
+                                "severity": "medium",
+                                "details": f"Previously inactive agent received {recent_agent_counts[aid]} feedbacks in 24h",
+                                "created_at": now.isoformat(),
+                            })
         except Exception as e:
             logger.warning(f"[monitor_anomalies] Dormant check failed: {e}")
 
@@ -784,29 +801,23 @@ class AgentScreener:
         )
         new_agents = new_result.count or 0
 
-        # Avg trust score + tier distribution (paginated)
-        all_scores: list[float] = []
-        tier_dist: dict[str, int] = {}
-        offset = 0
-        while True:
-            batch = (
-                db.table("agents")
-                .select("composite_score, tier")
-                .range(offset, offset + 999)
-                .execute()
-            )
-            if not batch.data:
-                break
-            for a in batch.data:
-                score = float(a.get("composite_score") or 0)
-                all_scores.append(score)
-                t = a.get("tier", "unranked")
-                tier_dist[t] = tier_dist.get(t, 0) + 1
-            if len(batch.data) < 1000:
-                break
-            offset += 1000
+        # Avg trust score + tier distribution via RPC (avoids loading all rows)
+        avg_score = 0.0
+        try:
+            avg_result = db.rpc("avg_composite_score", {}).execute()
+            if avg_result.data and avg_result.data[0]:
+                avg_score = round(float(avg_result.data[0].get("avg", 0) or 0), 2)
+        except Exception:
+            avg_score = 0.0
 
-        avg_score = round(sum(all_scores) / len(all_scores), 2) if all_scores else 0.0
+        tier_dist: dict[str, int] = {}
+        try:
+            tier_result = db.rpc("tier_distribution", {}).execute()
+            if tier_result.data:
+                for row in tier_result.data:
+                    tier_dist[row["tier"] or "unranked"] = row["count"]
+        except Exception:
+            pass
 
         # Alerts since last report
         alerts_result = (

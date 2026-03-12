@@ -76,7 +76,7 @@ async def batch_evaluate(request: Request, body: BatchRequest):
 
     for agent_id in agent_ids:
         try:
-            evaluation = trust.evaluate_agent(agent_id)
+            evaluation = trust.evaluate_agent(agent_id, chain=body.chain)
             evaluations.append(evaluation.model_dump())
         except ValueError:
             errors.append({"agent_id": agent_id, "error": "Agent not found"})
@@ -94,6 +94,6 @@ async def batch_evaluate(request: Request, body: BatchRequest):
 
     return {
         "evaluations": evaluations,
-        "errors": errors if errors else None,
+        "errors": errors,
         "count": len(evaluations),
     }

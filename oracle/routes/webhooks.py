@@ -16,8 +16,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
 
 
+def _require_api_key(request: Request) -> str:
+    """Extract and validate API key ID from request state."""
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if not api_key_id:
+        raise HTTPException(status_code=401, detail="API key required")
+    return api_key_id
+
+
 class WebhookCreate(BaseModel):
-    subscriber_name: str
+    subscriber_name: str = ""
     webhook_url: HttpUrl
     events: list[str] = ["score_change", "risk_change", "uri_change", "unreachable", "tier_change"]
     agent_ids: list[int] | None = None
@@ -36,14 +44,18 @@ class WebhookResponse(BaseModel):
 
 
 @router.get("")
-async def list_webhooks():
-    """List all active webhook subscriptions (secrets masked)."""
+async def list_webhooks(request: Request):
+    """List active webhook subscriptions owned by the caller's API key."""
+    api_key_id = _require_api_key(request)
     db = get_supabase()
-    result = db.table("webhook_subscriptions").select("*").eq("active", True).execute()
-    subs = result.data or []
-    for sub in subs:
-        sub["secret_token"] = sub["secret_token"][:8] + "..."
-    return {"subscriptions": subs, "total": len(subs)}
+    result = (
+        db.table("webhook_subscriptions")
+        .select("id, subscriber_name, webhook_url, events, agent_ids, min_score_delta, active, total_deliveries, failed_deliveries, last_fired_at")
+        .eq("active", True)
+        .eq("api_key_id", api_key_id)
+        .execute()
+    )
+    return {"subscriptions": result.data or [], "total": len(result.data or [])}
 
 
 @router.post("", response_model=WebhookResponse)
@@ -83,7 +95,7 @@ async def register_webhook(request: Request, body: WebhookCreate):
     secret = secrets.token_hex(32)
 
     row = {
-        "subscriber_name": body.subscriber_name,
+        "subscriber_name": body.subscriber_name[:200],
         "webhook_url": str(body.webhook_url),
         "secret_token": secret,
         "events": body.events,
@@ -117,26 +129,32 @@ async def register_webhook(request: Request, body: WebhookCreate):
 
 
 @router.get("/{webhook_id}")
-async def get_webhook(webhook_id: str):
-    """Get webhook subscription details (secret token masked)."""
+async def get_webhook(request: Request, webhook_id: str):
+    """Get webhook subscription details (owned by caller's API key)."""
+    api_key_id = _require_api_key(request)
     db = get_supabase()
-    result = db.table("webhook_subscriptions").select("*").eq("id", webhook_id).execute()
+    result = (
+        db.table("webhook_subscriptions")
+        .select("id, subscriber_name, webhook_url, events, agent_ids, min_score_delta, active, total_deliveries, failed_deliveries, last_fired_at")
+        .eq("id", webhook_id)
+        .eq("api_key_id", api_key_id)
+        .execute()
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Webhook not found")
-
-    sub = result.data[0]
-    sub["secret_token"] = sub["secret_token"][:8] + "..."  # mask
-    return sub
+    return result.data[0]
 
 
 @router.delete("/{webhook_id}")
-async def delete_webhook(webhook_id: str):
-    """Deactivate a webhook subscription."""
+async def delete_webhook(request: Request, webhook_id: str):
+    """Deactivate a webhook subscription (owned by caller's API key)."""
+    api_key_id = _require_api_key(request)
     db = get_supabase()
     result = (
         db.table("webhook_subscriptions")
         .update({"active": False})
         .eq("id", webhook_id)
+        .eq("api_key_id", api_key_id)
         .execute()
     )
     if not result.data:
@@ -145,10 +163,17 @@ async def delete_webhook(webhook_id: str):
 
 
 @router.post("/test")
-async def test_webhook(webhook_id: str):
-    """Send a test event to a webhook subscription."""
+async def test_webhook(request: Request, webhook_id: str):
+    """Send a test event to a webhook subscription (owned by caller's API key)."""
+    api_key_id = _require_api_key(request)
     db = get_supabase()
-    result = db.table("webhook_subscriptions").select("*").eq("id", webhook_id).execute()
+    result = (
+        db.table("webhook_subscriptions")
+        .select("*")
+        .eq("id", webhook_id)
+        .eq("api_key_id", api_key_id)
+        .execute()
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Webhook not found")
 

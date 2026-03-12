@@ -133,8 +133,9 @@ class UsageTracker:
 
     def _flush(self):
         """Flush in-memory counters to Supabase api_usage_daily table."""
+        import copy
         with self._lock:
-            snapshot = dict(self._counters)
+            snapshot = copy.deepcopy(self._counters)
 
         if not snapshot:
             return

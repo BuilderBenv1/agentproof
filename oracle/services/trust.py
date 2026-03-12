@@ -68,6 +68,14 @@ class TrustCache:
         with self._lock:
             self._store.clear()
 
+    def sweep(self):
+        """Remove all expired entries. Call periodically to prevent unbounded growth."""
+        now = time.monotonic()
+        with self._lock:
+            expired = [k for k, (exp, _) in self._store.items() if now > exp]
+            for k in expired:
+                del self._store[k]
+
     def stats(self) -> dict:
         with self._lock:
             total = self._hits + self._misses
@@ -397,7 +405,7 @@ class TrustService:
             consistency_score=0,
             validation_score=round(success_rate, 2),
             age_score=0,
-            uptime_score=0,
+            uptime_score=None,
             deployer_score=0,
             uri_stability_score=0,
         )
@@ -418,12 +426,12 @@ class TrustService:
             evaluated_at=datetime.now(timezone.utc),
         )
 
-        # Cache it
-        _trust_cache.set(f"eval:{agent_id}", evaluation)
+        # Cache under a distinct prefix so full eval doesn't read fast-path results
+        _trust_cache.set(f"fast:{agent_id}", evaluation)
         return evaluation
 
     def evaluate_agent(self, agent_id: int, bypass_cache: bool = False, chain: str | None = None) -> TrustEvaluation:
-        # Check cache first
+        # Check cache first (only full eval cache, never fast-path)
         cache_key = f"eval:{agent_id}:{chain}" if chain else f"eval:{agent_id}"
         if not bypass_cache:
             cached = _trust_cache.get(cache_key)
@@ -871,7 +879,7 @@ class TrustService:
 
         # Total feedback
         try:
-            fb_result = db.table("reputation_events").select("id", count="exact").execute()
+            fb_result = db.table("reputation_events").select("id", count="exact").limit(0).execute()
             total_feedback = fb_result.count or 0
         except Exception:
             total_feedback = 0
@@ -879,7 +887,7 @@ class TrustService:
         # Total screenings (oracle_screenings — no ValidationRegistry deployed)
         try:
             val_result = (
-                db.table("oracle_screenings").select("id", count="exact").execute()
+                db.table("oracle_screenings").select("id", count="exact").limit(0).execute()
             )
             total_validations = val_result.count or 0
         except Exception:
@@ -891,6 +899,7 @@ class TrustService:
                 db.table("reputation_events")
                 .select("id", count="exact")
                 .eq("tag1", "liveness")
+                .limit(0)
                 .execute()
             )
             total_liveness = liveness_result.count or 0

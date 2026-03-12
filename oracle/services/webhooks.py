@@ -16,8 +16,8 @@ from database import get_supabase
 
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 3
-RETRY_DELAYS = [1, 5, 15]  # seconds
+MAX_RETRIES = 2
+RETRY_DELAYS = [1, 3]  # seconds (kept short to avoid blocking thread pool)
 DELIVERY_TIMEOUT = 10
 
 
@@ -135,21 +135,26 @@ def _deliver_to_subscriber(
         except Exception:
             pass
 
-    # Update subscription stats
+    # Update subscription stats using SQL increment to avoid race conditions
     try:
-        update_data = {"last_fired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-        if success:
-            db.table("webhook_subscriptions").update({
-                **update_data,
-                "total_deliveries": sub.get("total_deliveries", 0) + 1,
-            }).eq("id", sub_id).execute()
-        else:
-            db.table("webhook_subscriptions").update({
-                **update_data,
-                "failed_deliveries": sub.get("failed_deliveries", 0) + 1,
-            }).eq("id", sub_id).execute()
+        last_fired = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        counter_col = "total_deliveries" if success else "failed_deliveries"
+        db.rpc("increment_webhook_counter", {
+            "sub_id": sub_id,
+            "col_name": counter_col,
+            "last_fired": last_fired,
+        }).execute()
     except Exception:
-        pass
+        # Fallback: direct update (may race but won't lose the delivery record)
+        try:
+            update_data = {"last_fired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            if success:
+                update_data["total_deliveries"] = sub.get("total_deliveries", 0) + 1
+            else:
+                update_data["failed_deliveries"] = sub.get("failed_deliveries", 0) + 1
+            db.table("webhook_subscriptions").update(update_data).eq("id", sub_id).execute()
+        except Exception:
+            pass
 
     if success:
         logger.info(f"Webhook delivered to {sub.get('subscriber_name', sub_id)}")

@@ -81,7 +81,12 @@ def _check_agent_gate(
     if evaluation.evaluated_at:
         try:
             from datetime import datetime, timezone
-            eval_dt = datetime.fromisoformat(evaluation.evaluated_at.replace("Z", "+00:00"))
+            # evaluated_at is already a datetime object (set with datetime.now(timezone.utc))
+            eval_dt = evaluation.evaluated_at
+            if isinstance(eval_dt, str):
+                eval_dt = datetime.fromisoformat(eval_dt.replace("Z", "+00:00"))
+            if eval_dt.tzinfo is None:
+                eval_dt = eval_dt.replace(tzinfo=timezone.utc)
             score_age = int((datetime.now(timezone.utc) - eval_dt).total_seconds())
         except Exception:
             score_age = 0
@@ -134,7 +139,7 @@ def _resolve_address(address: str) -> dict:
     result = (
         db.table("agents")
         .select("agent_id, composite_score, tier, updated_at, owner_address")
-        .eq("owner_address", address.lower())
+        .ilike("owner_address", address)
         .limit(1)
         .execute()
     )

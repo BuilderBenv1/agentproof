@@ -48,7 +48,7 @@ class ScoreBreakdown(BaseModel):
     consistency_score: float = 0.0
     validation_score: float = 0.0
     age_score: float = 0.0
-    uptime_score: float = 0.0
+    uptime_score: float | None = None
     deployer_score: float = 0.0
     uri_stability_score: float = 0.0
     coding_score: float | None = None
