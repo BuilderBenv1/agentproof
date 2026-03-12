@@ -28,6 +28,7 @@ FREE_PATH_PREFIXES = (
     "/api/v1/integrations/",
     "/api/v1/badge/",
     "/api/v1/integrations/synthesis/",  # Free registration for Synthesis hackathon builders
+    "/api/v1/synthesis/",               # Public Synthesis leaderboard
     "/api/v1/feed",
     "/integrate",
     "/health",
