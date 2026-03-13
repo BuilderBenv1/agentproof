@@ -124,6 +124,7 @@ def _push_to_chain(chain_cfg: dict, agents_to_push: list[tuple], account, min_de
             to_push.append((agent_id, score_uint16, tier_uint8, raw_score))
 
     if not to_push:
+        logger.info("[ScorePusher:%s] No agents with score delta >= %.1f — skipping", chain_name, min_delta)
         return 0
 
     logger.info("[ScorePusher:%s] Pushing %d agent scores on-chain", chain_name, len(to_push))
@@ -181,15 +182,22 @@ def push_scores():
     settings = get_settings()
 
     if not settings.score_push_enabled:
+        logger.info("[ScorePusher] Disabled (score_push_enabled=False)")
         return 0
     if not settings.private_key:
         logger.warning("[ScorePusher] No private key configured for on-chain push")
         return 0
 
+    logger.info("[ScorePusher] Enabled — building chain configs...")
     chains = _get_chain_configs(settings)
     if not chains:
         logger.warning("[ScorePusher] No oracle addresses configured on any chain")
+        logger.warning("[ScorePusher] avax=%s base=%s eth=%s linea=%s legacy=%s",
+                       settings.avax_oracle_address, settings.base_oracle_address,
+                       settings.ethereum_oracle_address, settings.linea_oracle_address,
+                       settings.trust_score_oracle_address)
         return 0
+    logger.info("[ScorePusher] Chains configured: %s", [c['name'] for c in chains])
 
     min_delta = settings.score_push_min_delta
 
@@ -211,7 +219,9 @@ def push_scores():
         return 0
 
     if not result.data:
+        logger.warning("[ScorePusher] No agents with composite_score > 0 in Supabase")
         return 0
+    logger.info("[ScorePusher] Found %d agents with scores to push", len(result.data))
 
     # Pre-encode all agents
     all_agents = []

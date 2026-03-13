@@ -81,6 +81,7 @@ async function main() {
     base: "BASE_ORACLE_ADDRESS",
     ethereum: "ETHEREUM_ORACLE_ADDRESS",
     linea: "LINEA_ORACLE_ADDRESS",
+    polygon: "POLYGON_ORACLE_ADDRESS",
   };
   const envVar = envVarMap[network.name] || "TRUST_SCORE_ORACLE_ADDRESS";
   console.log(`\nSet these env vars on both oracle servers:`);

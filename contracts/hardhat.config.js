@@ -6,6 +6,7 @@ const AVALANCHE_RPC_URL = process.env.AVALANCHE_RPC_URL || "https://api.avax-tes
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://mainnet.base.org";
 const ETHEREUM_RPC_URL = process.env.ETHEREUM_RPC_URL || process.env.ETH_RPC_URL || "https://eth.llamarpc.com";
 const LINEA_RPC_URL = process.env.LINEA_RPC_URL || "https://rpc.linea.build";
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-rpc.com";
 const SNOWTRACE_API_KEY = process.env.SNOWTRACE_API_KEY || "";
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY || "";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
@@ -51,30 +52,47 @@ module.exports = {
       chainId: 59144,
       accounts: [PRIVATE_KEY],
     },
+    polygon: {
+      url: POLYGON_RPC_URL,
+      chainId: 137,
+      accounts: [PRIVATE_KEY],
+      gas: 5_000_000,
+      gasPrice: 200_000_000_000,
+    },
   },
   etherscan: {
-    apiKey: {
-      avalancheFujiTestnet: SNOWTRACE_API_KEY,
-      avalanche: SNOWTRACE_API_KEY,
-      base: BASESCAN_API_KEY,
-      mainnet: ETHERSCAN_API_KEY,
-      linea: LINEASCAN_API_KEY,
-    },
+    apiKey: BASESCAN_API_KEY,
     customChains: [
       {
         network: "base",
         chainId: 8453,
         urls: {
-          apiURL: "https://api.basescan.org/api",
+          apiURL: "https://api.etherscan.io/v2/api?chainid=8453",
           browserURL: "https://basescan.org",
+        },
+      },
+      {
+        network: "avalanche",
+        chainId: 43114,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=43114",
+          browserURL: "https://snowtrace.io",
         },
       },
       {
         network: "linea",
         chainId: 59144,
         urls: {
-          apiURL: "https://api.lineascan.build/api",
+          apiURL: "https://api.etherscan.io/v2/api?chainid=59144",
           browserURL: "https://lineascan.build",
+        },
+      },
+      {
+        network: "polygon",
+        chainId: 137,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=137",
+          browserURL: "https://polygonscan.com",
         },
       },
     ],

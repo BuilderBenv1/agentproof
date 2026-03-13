@@ -450,13 +450,13 @@ class AgentScreener:
             self._insert_screenings_and_submit(db, rescreen_rows, "rescreen_stale")
 
         # ── Phase 3: Push updated scores on-chain (if enabled) ─────────
+        logger.info("[screen_new_agents] Phase 3: Score push starting...")
         try:
             from services.score_pusher import push_scores
             pushed = push_scores()
-            if pushed > 0:
-                logger.info(f"[screen_new_agents] Pushed {pushed} scores on-chain")
+            logger.info(f"[screen_new_agents] Phase 3 complete — pushed {pushed} scores on-chain")
         except Exception as e:
-            logger.error(f"[screen_new_agents] Score push failed: {e}")
+            logger.error(f"[screen_new_agents] Score push failed: {e}", exc_info=True)
 
     # ─── Job 2: Monitor Anomalies (every 15 min) ─────────────────────
 
