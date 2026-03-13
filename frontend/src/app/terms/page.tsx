@@ -1,6 +1,11 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "AgentProof Terms of Service — legal terms governing use of the AgentProof trust oracle, API, and reputation scoring platform.",
+  alternates: { canonical: "https://agentproof.sh/terms" },
+};
 import { ArrowLeft } from "lucide-react";
 
 export default function TermsPage() {

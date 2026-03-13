@@ -1,6 +1,11 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "AgentProof Privacy Policy — how we collect, use, and protect data in the AgentProof trust oracle platform.",
+  alternates: { canonical: "https://agentproof.sh/privacy" },
+};
 import { ArrowLeft } from "lucide-react";
 
 export default function PrivacyPage() {

@@ -1,6 +1,17 @@
-"use client";
-
+import type { Metadata } from "next";
 import { FileText, Download, ExternalLink, Shield, Globe, Lock, AlertTriangle, BarChart3, Activity, Layers, Zap, Link2 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Whitepaper — ERC-8004 Trust Oracle Architecture",
+  description: "AgentProof technical whitepaper. 9-signal behavioral scoring, deployer analysis, cross-chain reputation, and insurance primitives for autonomous AI agents on ERC-8004.",
+  keywords: ["AgentProof whitepaper", "ERC-8004 whitepaper", "AI agent scoring architecture", "agent trust oracle design", "on-chain reputation"],
+  alternates: { canonical: "https://agentproof.sh/whitepaper" },
+  openGraph: {
+    title: "AgentProof Whitepaper — ERC-8004 Trust Oracle Architecture",
+    description: "Technical whitepaper covering 9-signal behavioral scoring for autonomous AI agents.",
+    url: "https://agentproof.sh/whitepaper",
+  },
+};
 import Link from "next/link";
 
 const SECTIONS = [
