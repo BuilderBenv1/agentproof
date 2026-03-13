@@ -43,7 +43,7 @@ async function doFetch<T>(url: string, options: FetchOptions = {}): Promise<T> {
   return res.json();
 }
 
-/** Fetch from the Oracle API (trust scores, risk, badges, synthesis, network stats) */
+/** Fetch from the Oracle API (trust scores, risk, badges, network stats) */
 export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const url = buildUrl(API_URL, endpoint, options.params);
   return doFetch<T>(url, options);

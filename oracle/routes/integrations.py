@@ -5,12 +5,10 @@ Self-serve API key registration, usage dashboard, tier upgrades.
 """
 
 import hashlib
-import os
 import secrets
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -68,7 +66,6 @@ class UpgradeRequest(BaseModel):
 
 # Tier definitions: monthly_limit, price_cents_per_month, price_per_call
 TIERS = {
-    "synthesis":  {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "FREE"},
     "paygo":      {"monthly_limit": 999_999_999, "price_cents": 0,       "per_call": "$0.05"},
     "starter":    {"monthly_limit": 10_000,      "price_cents": 25_000,  "per_call": "$0.025"},
     "growth":     {"monthly_limit": 25_000,      "price_cents": 50_000,  "per_call": "$0.02"},
@@ -129,77 +126,6 @@ async def register_api_key(request: Request, body: RegisterRequest):
         )
     except Exception as e:
         logger.error("Failed to register API key: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to create API key")
-
-
-class SynthesisRegisterRequest(BaseModel):
-    event_code: str
-    team_name: str | None = None
-
-
-# Event code for Synthesis hackathon — distribute to participants only
-_SYNTHESIS_EVENT_CODE = os.environ.get("SYNTHESIS_EVENT_CODE", "SYNTHESIS2026")
-
-# Synthesis keys expire after the hackathon (30 days from creation)
-_SYNTHESIS_EXPIRY_DAYS = 30
-
-
-@router.post("/synthesis/register")
-async def synthesis_register(request: Request, body: SynthesisRegisterRequest):
-    """Register a free synthesis-tier API key for Synthesis hackathon builders.
-
-    Requires a valid event code distributed by hackathon organizers.
-    Keys expire 30 days after creation.
-    """
-    # Validate event code
-    if body.event_code != _SYNTHESIS_EVENT_CODE:
-        raise HTTPException(status_code=403, detail="Invalid event code. Contact hackathon organizers.")
-
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_register_rate_limit(client_ip):
-        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-
-    from database import get_supabase
-    db = get_supabase()
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=_SYNTHESIS_EXPIRY_DAYS)).isoformat()
-
-    raw_key = "ap_live_" + secrets.token_hex(16)
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    key_prefix = raw_key[:16]
-
-    try:
-        team = (body.team_name or "synthesis-builder")[:200]
-        result = db.table("api_keys").insert({
-            "key_hash": key_hash,
-            "key_prefix": key_prefix,
-            "protocol_name": team,
-            "contact_email": "",
-            "tier": "synthesis",
-            "monthly_limit": 999_999_999,
-            "is_active": True,
-            "expires_at": expires_at,
-            "metadata": {"event": "synthesis-hackathon", "role": "builder", "team": team},
-        }).execute()
-
-        key_id = result.data[0]["id"] if result.data else "unknown"
-
-        return {
-            "api_key": raw_key,
-            "key_id": key_id,
-            "tier": "synthesis",
-            "monthly_limit": "unlimited",
-            "price_per_call": "FREE",
-            "expires_at": expires_at,
-            "message": (
-                "Welcome to The Synthesis! You have free unlimited API access "
-                f"until {expires_at[:10]}. "
-                "AgentProof Oracle is a live judge — your agent will be scored "
-                "in real time during the build phase. "
-                "Docs: https://agentproof.sh/docs | Badge: https://oracle.agentproof.sh/api/v1/badge/{agent_id}.svg"
-            ),
-        }
-    except Exception as e:
-        logger.error("Synthesis registration failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create API key")
 
 

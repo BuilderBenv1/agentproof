@@ -1,4 +1,4 @@
-// Oracle API — trust scores, risk, badges, synthesis, network stats
+// Oracle API — trust scores, risk, badges, network stats
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://oracle.agentproof.sh";
 
 // Backend API — agents, leaderboard, analytics, marketplace, monitoring
