@@ -57,7 +57,7 @@ TRUST_SCORE_ORACLE_ABI = [
 # chain_name → {agent_id → last_pushed_score}
 _last_pushed: dict[str, dict[int, float]] = {}
 
-BATCH_SIZE = 50
+BATCH_SIZE = 20
 
 
 def _get_chain_configs(settings) -> list[dict]:
@@ -138,14 +138,17 @@ def _push_to_chain(chain_cfg: dict, agents_to_push: list[tuple], account, min_de
 
         try:
             nonce = w3.eth.get_transaction_count(account.address)
+            base_fee = w3.eth.gas_price
+            priority_fee = min(w3.to_wei(2, "gwei"), base_fee)  # never exceed base
+            max_fee = base_fee * 2 + priority_fee
             tx = contract.functions.batchUpdateScores(
                 ids, scores_uint16, tiers_uint8
             ).build_transaction({
                 "from": account.address,
                 "nonce": nonce,
-                "gas": 300_000 + 30_000 * len(batch),
-                "maxFeePerGas": w3.eth.gas_price * 2,
-                "maxPriorityFeePerGas": w3.to_wei(2, "gwei"),
+                "gas": 300_000 + 80_000 * len(batch),
+                "maxFeePerGas": max_fee,
+                "maxPriorityFeePerGas": priority_fee,
             })
             signed = account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
