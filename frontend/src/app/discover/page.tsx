@@ -59,7 +59,8 @@ export default function DiscoverPage() {
       });
       setAgents(result.agents);
       setTotal(result.total);
-    } catch {
+    } catch (err) {
+      console.error("[discover] search failed:", err);
       setAgents([]);
     } finally {
       setLoading(false);
