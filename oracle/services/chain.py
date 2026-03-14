@@ -293,7 +293,7 @@ EVM_CHAINS = [
     {"name": "monad",      "chain_id": 143,         "rpc_attr": "monad_rpc_url",      "poa": False},
     {"name": "abstract",   "chain_id": 2741,        "rpc_attr": "abstract_rpc_url",   "poa": False},
     {"name": "taiko",      "chain_id": 167000,      "rpc_attr": "taiko_rpc_url",      "poa": False},
-    {"name": "megaeth",    "chain_id": 4326,        "rpc_attr": "megaeth_rpc_url",    "poa": False},
+    {"name": "megaeth",    "chain_id": 4326,        "rpc_attr": "megaeth_rpc_url",    "poa": False},  # mainnet.megaeth.com/rpc
     {"name": "skale",      "chain_id": 1187947933,  "rpc_attr": "skale_rpc_url",      "poa": False},
     {"name": "xlayer",     "chain_id": 196,         "rpc_attr": "xlayer_rpc_url",     "poa": False},
     {"name": "soneium",    "chain_id": 1868,        "rpc_attr": "soneium_rpc_url",    "poa": False},
