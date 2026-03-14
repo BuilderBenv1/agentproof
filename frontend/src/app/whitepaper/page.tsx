@@ -192,16 +192,16 @@ export default function WhitepaperPage() {
           <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Signal Weights (all signals active)</p>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { signal: "Rating Score", weight: "25%", desc: "Bayesian-smoothed average (prior=50, k=3)" },
-              { signal: "Validation Score", weight: "11%", desc: "On-chain validation success rate" },
-              { signal: "Account Age", weight: "10%", desc: "Logarithmic maturity curve" },
-              { signal: "Coding Score", weight: "10%", desc: "GitHub PR merge rate, review quality" },
-              { signal: "Volume Score", weight: "8%", desc: "Logarithmic feedback count" },
-              { signal: "Consistency Score", weight: "8%", desc: "Inverse standard deviation of ratings" },
-              { signal: "Uptime Score", weight: "8%", desc: "Liveness probe success rate" },
-              { signal: "Job Completion", weight: "8%", desc: "ERC-ACP job completion rate as provider" },
-              { signal: "Deployer Score", weight: "6%", desc: "Deployer reputation lineage" },
-              { signal: "URI Stability", weight: "6%", desc: "Metadata mutation frequency" },
+              { signal: "Rating Score", weight: "30%", desc: "Bayesian-smoothed avg with reviewer trust weighting (prior=50, k=3)" },
+              { signal: "Validation Score", weight: "15%", desc: "On-chain validation success rate" },
+              { signal: "Account Age", weight: "12%", desc: "Logarithmic maturity curve (365d baseline)" },
+              { signal: "Volume Score", weight: "10%", desc: "Logarithmic feedback count (log\u2081\u2080 scale)" },
+              { signal: "Consistency Score", weight: "10%", desc: "Inverse standard deviation of ratings" },
+              { signal: "Uptime Score", weight: "10%", desc: "30-day rolling liveness probe success rate" },
+              { signal: "Deployer Score", weight: "8%", desc: "Cross-agent deployer reputation lineage" },
+              { signal: "URI Stability", weight: "5%", desc: "Metadata mutation frequency (3+ changes = flag)" },
+              { signal: "Coding Score", weight: "+10%", desc: "GitHub PR merge rate, review sentiment, recency" },
+              { signal: "Job Completion", weight: "+8%", desc: "ERC-ACP job completion rate as provider" },
             ].map((s) => (
               <div key={s.signal} className="bg-gray-800/50 rounded-lg p-3">
                 <div className="flex items-center justify-between">
@@ -212,7 +212,7 @@ export default function WhitepaperPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-600 italic">Weights rebalance dynamically based on available signals. Base (8 signals): rating 30%, validation 15%, age 12%, volume 10%, consistency 10%, uptime 10%, deployer 8%, URI 5%.</p>
+          <p className="text-[10px] text-gray-600 italic">Base 8 signals always active (sum to 100%). Coding Score and Job Completion are additive — when present, all weights rebalance proportionally. + denotes optional signal.</p>
         </div>
 
         <div className="space-y-2">
@@ -240,8 +240,12 @@ export default function WhitepaperPage() {
           <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Anti-Gaming Defenses</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Reviewer Trust Weighting</span>
+              <p className="text-[10px] text-gray-600 mt-1">Feedback weighted by reviewer&rsquo;s own trust score. A Diamond agent&rsquo;s rating counts more than an Unranked bot&rsquo;s. 60/40 blend with raw Bayesian for stability.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
               <span className="text-xs font-medium text-white">Bayesian Smoothing</span>
-              <p className="text-[10px] text-gray-600 mt-1">Prior=50, k=3. A single perfect rating scores 62.5, not 100. Gaming requires sustained volume.</p>
+              <p className="text-[10px] text-gray-600 mt-1">Prior=50, k=3. A single perfect rating scores 62.5, not 100. Gaming requires sustained volume from trusted reviewers.</p>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <span className="text-xs font-medium text-white">Freshness Penalty</span>
@@ -249,11 +253,15 @@ export default function WhitepaperPage() {
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <span className="text-xs font-medium text-white">Deployer Lineage</span>
-              <p className="text-[10px] text-gray-600 mt-1">Serial deployers who abandon agents taint all future registrations via deployer_score signal.</p>
+              <p className="text-[10px] text-gray-600 mt-1">Serial deployers who abandon agents taint all future registrations. 40% abandonment ratio, 30% quality, 20% longevity, 10% volume.</p>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3">
               <span className="text-xs font-medium text-white">Anomaly Detection</span>
-              <p className="text-[10px] text-gray-600 mt-1">Autonomous job runs every 120s. &gt;20pt drops flagged as SUSPICIOUS_VOLATILITY.</p>
+              <p className="text-[10px] text-gray-600 mt-1">Autonomous job runs every 120s. &gt;20pt drops flagged as SUSPICIOUS_VOLATILITY. Feedback bursts detected per reviewer.</p>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Concentration Detection</span>
+              <p className="text-[10px] text-gray-600 mt-1">&gt;60% feedback from single reviewer triggers CONCENTRATED_FEEDBACK flag. Prevents sybil via fake reviews.</p>
             </div>
           </div>
         </div>
@@ -307,6 +315,91 @@ export default function WhitepaperPage() {
           <p className="text-xs text-gray-500 leading-relaxed">
             Dollar-denominated trust ceiling calculated from composite score, confidence multiplier (feedback volume), age bonus, and validation bonus. This is the data structure Willis Towers Watson identified as the missing input for underwriting agent risk. Underwriters can price tiers using: transaction volume/velocity, delegation scope, custody relationships, and loss event history with root cause classification.
           </p>
+        </div>
+      </div>
+
+      {/* Deployed Contracts */}
+      <div className="bg-gray-900/50 border border-emerald-500/20 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Shield className="w-5 h-5 text-emerald-400" />
+          Live Contracts (Verified)
+        </h2>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Base Mainnet</p>
+          <div className="grid gap-2">
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">TrustScoreOracle V2</span>
+                <a href="https://basescan.org/address/0xE74e9C994b8F65db01725DdAE603EAE397aBa432#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Basescan &rarr;</a>
+              </div>
+              <code className="text-[10px] font-mono text-gray-500 break-all">0xE74e9C994b8F65db01725DdAE603EAE397aBa432</code>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">ReputationGateV2</span>
+                <a href="https://basescan.org/address/0x882e22FBB913b53Ab062f3f5f42C3E8838373d23#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Basescan &rarr;</a>
+              </div>
+              <code className="text-[10px] font-mono text-gray-500 break-all">0x882e22FBB913b53Ab062f3f5f42C3E8838373d23</code>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Avalanche Mainnet</p>
+          <div className="bg-gray-800/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white">TrustScoreOracle V2</span>
+              <a href="https://snowtrace.io/address/0xA9D7a613Ce349d15827CB8C54F08e24549219B4f#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Snowtrace &rarr;</a>
+            </div>
+            <code className="text-[10px] font-mono text-gray-500 break-all">0xA9D7a613Ce349d15827CB8C54F08e24549219B4f</code>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-gray-600 italic">All contracts verified with full source code. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus.</p>
+      </div>
+
+      {/* ReputationGateV2 Integration */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <Lock className="w-5 h-5 text-emerald-400" />
+          ReputationGateV2 &mdash; Protocol Integration
+        </h2>
+        <p className="text-sm text-gray-400 leading-relaxed">
+          Any protocol can gate operations by agent trust. Drop <code className="text-emerald-400/70">ReputationGateV2</code> into your contract and call <code className="text-emerald-400/70">requireTrust(agentId)</code> before sensitive operations. One line. No oracle integration code needed.
+        </p>
+
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Core Functions</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {[
+              { fn: "requireTrust(agentId)", desc: "Reverts if score < minScore, tier < minTier, or score expired" },
+              { fn: "isTrusted(agentId)", desc: "Returns bool — safe for view calls" },
+              { fn: "isTrustedForValue(agentId, value)", desc: "Value-based gating — per-tier transaction limits" },
+              { fn: "getCollateralMultiplier(agentId)", desc: "Risk-adjusted collateral (100-300 basis points)" },
+              { fn: "batchCheckTrust(agentIds)", desc: "Filter arrays — returns trusted subset" },
+              { fn: "filterTrusted(agentIds)", desc: "Returns only agent IDs that pass trust check" },
+            ].map((f) => (
+              <div key={f.fn} className="bg-gray-800/50 rounded-lg p-3">
+                <code className="text-[10px] font-mono text-emerald-400">{f.fn}</code>
+                <p className="text-[10px] text-gray-500 mt-1">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider mb-2">Integration Example</p>
+          <pre className="text-[10px] font-mono text-gray-400 leading-relaxed overflow-x-auto">{`import {ReputationGateV2} from "./ReputationGateV2.sol";
+
+contract MyProtocol {
+    ReputationGateV2 gate = ReputationGateV2(0x882e...d23);
+
+    function delegateCapital(uint256 agentId, uint256 amount) external {
+        gate.requireTrust(agentId);  // reverts if untrusted
+        // ... safe to proceed
+    }
+}`}</pre>
         </div>
       </div>
 
@@ -474,9 +567,9 @@ export default function WhitepaperPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { icon: Shield, label: "Chains", value: "21", sub: "AVAX \u00B7 ETH \u00B7 Base \u00B7 Solana + 17 more" },
-          { icon: Globe, label: "Indexed", value: "54K+", sub: "Agent identities" },
+          { icon: Globe, label: "Indexed", value: "55K+", sub: "Agent identities" },
           { icon: Layers, label: "Oracles", value: "2", sub: "Independent operators with consensus" },
-          { icon: Lock, label: "Risk Flags", value: "14", sub: "Automated threat detection" },
+          { icon: Lock, label: "Signals", value: "11", sub: "Reviewer-weighted, Bayesian-smoothed" },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-center">
             <stat.icon className="w-4 h-4 text-emerald-400 mx-auto mb-1" />

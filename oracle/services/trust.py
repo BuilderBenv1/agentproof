@@ -117,6 +117,33 @@ def _calculate_freshness_multiplier(account_age_days: int) -> float:
     return 1.0
 
 
+def _calculate_reviewer_weighted_rating(
+    ratings: list[float],
+    reviewer_scores: list[float],
+) -> float:
+    """Compute trust-weighted average rating.
+
+    Each reviewer's feedback is weighted by their own composite score.
+    A Diamond agent's 5-star counts more than an Unranked bot's 5-star.
+    Falls back to simple average when no reviewer scores are available.
+
+    Weights: reviewer_score is 0-100, floor at 10 to avoid zero-weight.
+    """
+    if not ratings:
+        return 0.0
+    if not reviewer_scores or len(reviewer_scores) != len(ratings):
+        return sum(ratings) / len(ratings)
+
+    weighted_sum = 0.0
+    weight_sum = 0.0
+    for rating, rev_score in zip(ratings, reviewer_scores):
+        w = max(10.0, rev_score)  # floor at 10 to keep all feedback relevant
+        weighted_sum += rating * w
+        weight_sum += w
+
+    return weighted_sum / weight_sum if weight_sum > 0 else sum(ratings) / len(ratings)
+
+
 def calculate_composite_score(
     average_rating: float,
     feedback_count: int,
@@ -128,17 +155,26 @@ def calculate_composite_score(
     uri_change_count: int = 0,
     coding_score: float = -1.0,
     job_score: float = -1.0,
+    reviewer_weighted_rating: float = -1.0,
 ) -> tuple[float, ScoreBreakdown]:
     """
     Composite score (0-100) with 8 base signals + optional coding + job signals.
     When coding_score >= 0, weights rebalance to include it at 10%.
     When job_score >= 0, weights rebalance to include it at 8%.
+    When reviewer_weighted_rating >= 0, blends it 60/40 with raw Bayesian rating
+    to create a trust-graph-aware score.
     Returns (score, breakdown) so the oracle can expose component scores.
     """
     prior_rating = 50.0
     k = 3
+
+    # Use reviewer-weighted rating when available (blend with raw for stability)
+    effective_avg = average_rating
+    if reviewer_weighted_rating >= 0 and feedback_count >= 3:
+        effective_avg = reviewer_weighted_rating * 0.6 + average_rating * 0.4
+
     smoothed_rating = (
-        (average_rating * feedback_count + prior_rating * k) / (feedback_count + k)
+        (effective_avg * feedback_count + prior_rating * k) / (feedback_count + k)
     )
 
     rating_score = smoothed_rating
@@ -483,6 +519,26 @@ class TrustService:
         avg_rating = sum(ratings) / len(ratings) if ratings else 0
         std_dev = calculate_std_dev(ratings)
 
+        # Reviewer trust weighting — look up each reviewer's composite score
+        reviewer_weighted_avg = -1.0
+        if feedback_count >= 3 and reviewer_addresses:
+            try:
+                unique_reviewers = list(set(reviewer_addresses))
+                rev_scores_result = (
+                    db.table("agents")
+                    .select("owner_address, composite_score")
+                    .in_("owner_address", unique_reviewers[:200])
+                    .execute()
+                )
+                rev_score_map = {
+                    r["owner_address"]: float(r.get("composite_score") or 0)
+                    for r in (rev_scores_result.data or [])
+                }
+                reviewer_scores = [rev_score_map.get(addr, 0.0) for addr in reviewer_addresses]
+                reviewer_weighted_avg = _calculate_reviewer_weighted_rating(ratings, reviewer_scores)
+            except Exception:
+                pass  # Fall back to unweighted
+
         # Validation success rate
         try:
             validations = (
@@ -588,6 +644,7 @@ class TrustService:
             uri_change_count=uri_changes,
             coding_score=coding,
             job_score=job_score_val,
+            reviewer_weighted_rating=reviewer_weighted_avg,
         )
         tier = determine_tier(composite, feedback_count)
 

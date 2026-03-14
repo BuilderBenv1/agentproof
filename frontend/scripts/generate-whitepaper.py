@@ -108,7 +108,7 @@ def build():
     pdf.set_text_color(40, 40, 40)
     pdf.cell(0, 7, "Abstract", new_x="LMARGIN", new_y="NEXT")
     pdf.body_text(
-        "55,000 agents are registered on-chain across 21 chains. Protocols need to know which ones "
+        "55,000+ agents are registered on-chain across 21 chains. Protocols need to know which ones "
         "to trust before delegating capital. AgentProof is the oracle they query. An on-chain trust "
         "oracle with multi-operator consensus, commerce-layer hooks that block untrusted agents at the "
         "smart contract level, and the actuarial data pipeline that insurance underwriters need to price "
@@ -119,7 +119,7 @@ def build():
     # Stats line
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(0, 180, 130)
-    pdf.cell(0, 7, "21 Chains  |  54K+ Agents  |  2 Oracle Operators  |  ERC-ACP Hooks  |  14 Risk Flags", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, "21 Chains  |  55K+ Agents  |  11 Signals  |  2 Oracle Operators  |  14 Risk Flags  |  Scores Live On-Chain", align="C", new_x="LMARGIN", new_y="NEXT")
 
     # -- Section 1: The Infrastructure Gap --
     pdf.add_page()
@@ -369,15 +369,25 @@ def build():
 
     pdf.ln(3)
 
-    pdf.sub_section("5.2 Anti-Gaming Defenses")
-    pdf.bullet("Bayesian Smoothing (k=3): A single perfect rating scores 62.5, not 100. Gaming requires sustained volume, increasing cost and exposure time.")
+    pdf.sub_section("5.2 Reviewer Trust Weighting")
+    pdf.small_text(
+        "Not all feedback is equal. Each reviewer's rating is weighted by their own composite trust "
+        "score. A Diamond-tier agent's 5-star rating counts significantly more than an Unranked bot's. "
+        "This creates a recursive trust graph (PageRank for agents) that is extremely hard to game -- "
+        "you need trusted reviewers, not just volume. The weighted rating is blended 60/40 with the "
+        "raw Bayesian average for stability, activating only when an agent has 3+ feedback entries."
+    )
+
+    pdf.sub_section("5.3 Anti-Gaming Defenses")
+    pdf.bullet("Bayesian Smoothing (k=3): A single perfect rating scores 62.5, not 100. Gaming requires sustained volume from trusted reviewers.")
+    pdf.bullet("Reviewer Trust Weighting: Feedback from Diamond agents carries more weight than feedback from Unranked bots. Sybil reviewers have near-zero impact.")
     pdf.bullet("Freshness Penalty: <7 days (0.70x), 7-30 days (0.85x), 30-90 days (0.95x), 90+ days (1.0x). Identity rotation costs 30% for the first week.")
-    pdf.bullet("Deployer Lineage: Serial deployers who create and abandon agents accumulate negative deployer scores that taint future registrations (6-8% weight).")
-    pdf.bullet("Feedback Diversity: Concentrated feedback from a single reviewer triggers CONCENTRATED_FEEDBACK risk flag.")
-    pdf.bullet("Anomaly Detection: Autonomous job runs every 120s detecting >20-point score drops and flagging SUSPICIOUS_VOLATILITY.")
+    pdf.bullet("Deployer Lineage: Serial deployers who create and abandon agents accumulate negative deployer scores (40% abandonment, 30% quality, 20% longevity, 10% volume).")
+    pdf.bullet("Concentration Detection: >60% feedback from a single reviewer triggers CONCENTRATED_FEEDBACK flag.")
+    pdf.bullet("Anomaly Detection: Autonomous job runs every 120s detecting >20-point score drops and feedback bursts.")
     pdf.bullet("Registration Bond: ERC-8004 registration requires a bond (0.1 AVAX on Avalanche), making mass identity creation expensive.")
 
-    pdf.sub_section("5.3 Tier Thresholds")
+    pdf.sub_section("5.4 Tier Thresholds")
 
     tiers = [
         ("Diamond", ">=85", ">=20 feedback", "Top-tier verified agents"),
@@ -444,6 +454,76 @@ def build():
         "as the missing input for underwriting agent risk. Underwriters can price agent risk tiers "
         "using: transaction volume and velocity, delegation scope, custody relationships, and loss "
         "event history with root cause classification."
+    )
+
+    # -- Deployed Contracts --
+    pdf.add_page()
+    pdf.section_title("", "Deployed Contracts (Verified)")
+
+    pdf.sub_section("Base Mainnet")
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(55, 5.5, "TrustScoreOracle V2")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(0, 180, 130)
+    pdf.cell(0, 5.5, "0xE74e9C994b8F65db01725DdAE603EAE397aBa432")
+    pdf.ln()
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(55, 5.5, "ReputationGateV2")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(0, 180, 130)
+    pdf.cell(0, 5.5, "0x882e22FBB913b53Ab062f3f5f42C3E8838373d23")
+    pdf.ln()
+
+    pdf.ln(2)
+    pdf.sub_section("Avalanche Mainnet")
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(55, 5.5, "TrustScoreOracle V2")
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(0, 180, 130)
+    pdf.cell(0, 5.5, "0xA9D7a613Ce349d15827CB8C54F08e24549219B4f")
+    pdf.ln()
+
+    pdf.ln(2)
+    pdf.small_text("All contracts verified with full source code on Basescan and Snowtrace. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus.")
+
+    # -- ReputationGateV2 --
+    pdf.ln(3)
+    pdf.section_title("", "ReputationGateV2 -- Protocol Integration")
+
+    pdf.body_text(
+        "Any protocol can gate operations by agent trust. Deploy ReputationGateV2 pointing to the "
+        "TrustScoreOracle and call requireTrust(agentId) before sensitive operations. One line of code. "
+        "No oracle integration logic needed."
+    )
+
+    pdf.sub_section("Core Functions")
+    gate_fns = [
+        ("requireTrust(agentId)", "Reverts if score < minScore, tier < minTier, or score expired"),
+        ("isTrusted(agentId)", "Returns bool -- safe for view calls"),
+        ("isTrustedForValue(agentId, value)", "Value-based gating -- per-tier transaction limits"),
+        ("getCollateralMultiplier(agentId)", "Risk-adjusted collateral (100-300 basis points)"),
+        ("batchCheckTrust(agentIds)", "Returns trusted/untrusted booleans for batch"),
+        ("filterTrusted(agentIds)", "Returns only agent IDs that pass trust check"),
+    ]
+    for fn, desc in gate_fns:
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(60, 5, fn)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(0, 5, desc)
+        pdf.ln()
+
+    pdf.ln(3)
+    pdf.sub_section("Value-Based Gating")
+    pdf.small_text(
+        "Per-tier value limits configurable by the protocol owner. Example: Diamond agents can "
+        "transact up to 100 ETH, Gold up to 10 ETH, Bronze up to 0.1 ETH. Agents below the tier's "
+        "limit are blocked. Collateral multipliers increase for lower-tier agents -- a Bronze agent "
+        "needs 3x collateral compared to a Diamond agent for the same operation."
     )
 
     # -- Section 7: Architecture & Endpoints --
