@@ -298,6 +298,7 @@ EVM_CHAINS = [
     {"name": "xlayer",     "chain_id": 196,         "rpc_attr": "xlayer_rpc_url",     "poa": False},
     {"name": "soneium",    "chain_id": 1868,        "rpc_attr": "soneium_rpc_url",    "poa": False},
     {"name": "metis",      "chain_id": 1088,        "rpc_attr": "metis_rpc_url",      "poa": False},
+    {"name": "shape",      "chain_id": 360,         "rpc_attr": "shape_rpc_url",      "poa": False},
     {"name": "ethereum",   "chain_id": 1,           "rpc_attr": "ethereum_rpc_url",   "poa": False},  # last — expensive gas
 ]
 

@@ -1467,7 +1467,7 @@ def _eth_blocks_behind() -> int:
 # Add new ERC-8004 chains here. The generic indexer uses raw httpx
 # JSON-RPC calls so no web3.py instance or per-chain boilerplate needed.
 EXTRA_CHAINS = [
-    {"name": "polygon",  "start_block": 82_458_000,  "block_range": 2000,  "env": "POLYGON_RPC_URL"},
+    {"name": "polygon",  "start_block": 82_458_000,  "block_range": 10000, "env": "POLYGON_RPC_URL"},
     {"name": "arbitrum", "start_block": 428_895_000, "block_range": 50000, "env": "ARBITRUM_RPC_URL"},
     {"name": "optimism", "start_block": 147_514_000, "block_range": 10000, "env": "OPTIMISM_RPC_URL"},
     {"name": "bsc",      "start_block": 79_500_000,  "block_range": 2000,  "env": "BSC_RPC_URL"},
@@ -1475,7 +1475,7 @@ EXTRA_CHAINS = [
     {"name": "gnosis",   "start_block": 44_505_000,  "block_range": 10000, "env": "GNOSIS_RPC_URL"},
     {"name": "mantle",   "start_block": 91_333_000,  "block_range": 10000, "env": "MANTLE_RPC_URL"},
     {"name": "celo",     "start_block": 58_396_000,  "block_range": 10000, "env": "CELO_RPC_URL"},
-    {"name": "monad",    "start_block": 1,           "block_range": 10000, "env": "MONAD_RPC_URL"},
+    {"name": "monad",    "start_block": 1,           "block_range": 100,   "env": "MONAD_RPC_URL"},
     {"name": "abstract", "start_block": 1,           "block_range": 10000, "env": "ABSTRACT_RPC_URL"},
     {"name": "taiko",    "start_block": 1,           "block_range": 10000, "env": "TAIKO_RPC_URL"},
     {"name": "megaeth",  "start_block": 1,           "block_range": 10000, "env": "MEGAETH_RPC_URL"},
@@ -1483,6 +1483,7 @@ EXTRA_CHAINS = [
     {"name": "xlayer",   "start_block": 1,           "block_range": 100,   "env": "XLAYER_RPC_URL"},
     {"name": "soneium",  "start_block": 1,           "block_range": 10000, "env": "SONEIUM_RPC_URL"},
     {"name": "metis",    "start_block": 1,           "block_range": 10000, "env": "METIS_RPC_URL"},
+    {"name": "shape",    "start_block": 1,           "block_range": 10000, "env": "SHAPE_RPC_URL"},
 ]
 
 # Cache RPC URLs so we only read env vars once

@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     xlayer_rpc_url: str = ""
     soneium_rpc_url: str = ""
     metis_rpc_url: str = ""
+    shape_rpc_url: str = ""
 
     # Solana (non-EVM)
     solana_rpc_url: str = ""
