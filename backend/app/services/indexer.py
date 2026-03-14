@@ -1475,10 +1475,10 @@ EXTRA_CHAINS = [
     {"name": "gnosis",   "start_block": 44_505_000,  "block_range": 10000, "env": "GNOSIS_RPC_URL"},
     {"name": "mantle",   "start_block": 91_333_000,  "block_range": 10000, "env": "MANTLE_RPC_URL"},
     {"name": "celo",     "start_block": 58_396_000,  "block_range": 10000, "env": "CELO_RPC_URL"},
-    {"name": "monad",    "start_block": 1,           "block_range": 100,   "env": "MONAD_RPC_URL"},
+    # monad: uses dedicated monad_chain indexer (eth_getLogs doesn't work)
     {"name": "abstract", "start_block": 1,           "block_range": 10000, "env": "ABSTRACT_RPC_URL"},
     {"name": "taiko",    "start_block": 1,           "block_range": 10000, "env": "TAIKO_RPC_URL"},
-    {"name": "megaeth",  "start_block": 1,           "block_range": 10000, "env": "MEGAETH_RPC_URL"},
+    {"name": "megaeth",  "start_block": 8_030_000,    "block_range": 50000, "env": "MEGAETH_RPC_URL"},
     {"name": "skale",    "start_block": 1,           "block_range": 2000,  "env": "SKALE_RPC_URL"},
     {"name": "xlayer",   "start_block": 1,           "block_range": 100,   "env": "XLAYER_RPC_URL"},
     {"name": "soneium",  "start_block": 1,           "block_range": 10000, "env": "SONEIUM_RPC_URL"},
@@ -1783,6 +1783,14 @@ def run_indexer_cycle():
         except Exception as e:
             logger.error(f"Error processing {chain_name} ERC-8004 events: {e}")
 
+    # --- Monad (eth_getLogs broken — uses batch eth_call) ---
+    monad_rpc = os.environ.get("MONAD_RPC_URL", "")
+    if monad_rpc:
+        try:
+            _process_monad_agents(monad_rpc)
+        except Exception as e:
+            logger.error(f"Error processing Monad agents: {e}")
+
     # --- Solana (non-EVM) ---
     solana_rpc = os.environ.get("SOLANA_RPC_URL", "")
     if solana_rpc:
@@ -1804,6 +1812,67 @@ def run_indexer_cycle():
 
         except Exception as e:
             logger.error(f"Error processing Solana events: {e}")
+
+
+def _process_monad_agents(rpc_url: str) -> int:
+    """Index Monad agents via batch eth_call (eth_getLogs doesn't work on Monad)."""
+    from app.services import monad_chain
+
+    db = get_supabase()
+    contract_name = "monad_agent_registry"
+    last_token_id = get_last_processed_block(contract_name, default_start=0)
+
+    events, new_last_id = monad_chain.index_monad_agents(rpc_url, last_token_id)
+    if not events:
+        return 0
+
+    # Convert to agent rows (same format as generic chain indexer)
+    rows = []
+    for ev in events:
+        agent_uri = ev.agentURI or ""
+        name, description, image_url, endpoints = None, None, None, []
+
+        # Parse data URI metadata
+        if agent_uri.startswith("data:"):
+            try:
+                import base64
+                b64 = agent_uri.split(",", 1)[1]
+                meta = __import__("json").loads(base64.b64decode(b64))
+                name = _sanitize_text(meta.get("name"))
+                description = _sanitize_text(meta.get("description"))
+                image_url = meta.get("image")
+                endpoints = meta.get("endpoints", [])
+            except Exception:
+                pass
+        elif agent_uri.startswith("{"):
+            try:
+                meta = __import__("json").loads(agent_uri)
+                name = _sanitize_text(meta.get("name"))
+                description = _sanitize_text(meta.get("description"))
+                image_url = meta.get("image")
+                endpoints = meta.get("endpoints", [])
+            except Exception:
+                pass
+
+        rows.append({
+            "agent_id": ev.agentId,
+            "owner_address": ev.owner,
+            "agent_uri": _sanitize_text(agent_uri) or "",
+            "name": name,
+            "description": description,
+            "image_url": image_url,
+            "endpoints": __import__("json").dumps(endpoints) if endpoints else "[]",
+            "registered_at": datetime.now(timezone.utc).isoformat(),
+            "source_chain": "monad",
+            "category": "general",
+        })
+
+    if rows:
+        _resilient_upsert(db, "agents", rows, "agent_id,source_chain", "monad")
+
+    update_last_processed_block(contract_name, new_last_id)
+    logger.info(f"[monad] Indexed {len(rows)} agents (last token ID: {new_last_id})")
+    return len(rows)
 
 
 def _process_solana_agents(rpc_url: str) -> int:

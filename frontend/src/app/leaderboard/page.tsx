@@ -82,7 +82,7 @@ function LeaderboardInner() {
   }, [category, chain, timeRange, tierFilter, page]);
 
   const tierDist = overview?.tier_distribution || {};
-  const totalAgents = overview?.total_agents || 0;
+  const totalAgents = overview?.total_agents || total || 0;
 
   return (
     <div className="space-y-6">

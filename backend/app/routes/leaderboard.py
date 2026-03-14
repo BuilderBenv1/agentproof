@@ -44,7 +44,7 @@ async def get_leaderboard(
     query = db.table("agents").select(
         "agent_id, name, category, composite_score, average_rating, total_feedback, "
         "validation_success_rate, tier, rank, image_url, registered_at, source_chain",
-        count="planned",
+        count="exact",
     )
 
     if category:
