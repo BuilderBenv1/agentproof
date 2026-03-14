@@ -1467,10 +1467,10 @@ def _eth_blocks_behind() -> int:
 # Add new ERC-8004 chains here. The generic indexer uses raw httpx
 # JSON-RPC calls so no web3.py instance or per-chain boilerplate needed.
 EXTRA_CHAINS = [
-    {"name": "polygon",  "start_block": 82_458_000,  "block_range": 3500,  "env": "POLYGON_RPC_URL"},
+    {"name": "polygon",  "start_block": 82_458_000,  "block_range": 2000,  "env": "POLYGON_RPC_URL"},
     {"name": "arbitrum", "start_block": 428_895_000, "block_range": 50000, "env": "ARBITRUM_RPC_URL"},
     {"name": "optimism", "start_block": 147_514_000, "block_range": 10000, "env": "OPTIMISM_RPC_URL"},
-    {"name": "bsc",      "start_block": 47_000_000,  "block_range": 5000,  "env": "BSC_RPC_URL"},
+    {"name": "bsc",      "start_block": 79_500_000,  "block_range": 2000,  "env": "BSC_RPC_URL"},
     {"name": "scroll",   "start_block": 29_432_000,  "block_range": 10000, "env": "SCROLL_RPC_URL"},
     {"name": "gnosis",   "start_block": 44_505_000,  "block_range": 10000, "env": "GNOSIS_RPC_URL"},
     {"name": "mantle",   "start_block": 91_333_000,  "block_range": 10000, "env": "MANTLE_RPC_URL"},
