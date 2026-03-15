@@ -104,6 +104,23 @@ async def top_agents(
         raise HTTPException(status_code=500, detail="Internal error")
 
 
+@router.get("/ens/{ens_name}")
+async def resolve_ens(ens_name: str):
+    """Resolve ENS name to ERC-8004 agent(s) and trust scores. [x402: $0.01]"""
+    from config import get_settings
+    from services.ens import resolve_ens_to_agent
+
+    settings = get_settings()
+    eth_rpc = getattr(settings, "ethereum_rpc_url", "")
+    if not eth_rpc:
+        raise HTTPException(status_code=503, detail="ENS resolution requires Ethereum RPC")
+
+    result = await asyncio.to_thread(resolve_ens_to_agent, ens_name, eth_rpc)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Could not resolve ENS name: {ens_name}")
+    return result
+
+
 @router.get("/health")
 async def health():
     """Health check (free)."""

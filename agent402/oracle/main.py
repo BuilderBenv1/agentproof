@@ -225,7 +225,63 @@ async def pricing():
             "GET /api/v1/network/stats",
             "GET /api/v1/agents/top",
             "GET /.well-known/agent.json",
+            "GET /.well-known/x402.json",
         ],
+    }
+
+
+@app.get("/.well-known/x402.json")
+async def x402_discovery():
+    """x402 service discovery — compatible with AgentCash and x402scan."""
+    settings = get_settings()
+    return {
+        "x402": {
+            "version": "1.0",
+            "service": {
+                "name": "AgentProof Trust Oracle",
+                "description": "On-chain reputation scores for AI agents. "
+                "Query trust evaluations, risk assessments, and agent search via x402 USDC micropayments.",
+                "url": "https://agent402.agentproof.sh",
+                "category": "reputation",
+                "tags": ["ai-agents", "trust", "reputation", "erc-8004", "oracle"],
+            },
+            "payment": {
+                "network": settings.x402_network,
+                "currency": "USDC",
+                "pay_to": settings.x402_pay_to,
+                "facilitator": settings.x402_facilitator_url,
+            },
+            "endpoints": [
+                {
+                    "method": "GET",
+                    "path": "/api/v1/trust/{agent_id}",
+                    "price": settings.x402_price_eval,
+                    "description": "Full trust evaluation — composite score, tier, recommendation, risk flags, score breakdown",
+                    "response_type": "application/json",
+                },
+                {
+                    "method": "GET",
+                    "path": "/api/v1/trust/{agent_id}/risk",
+                    "price": settings.x402_price_eval,
+                    "description": "Risk assessment — flags, level, actionable recommendation",
+                    "response_type": "application/json",
+                },
+                {
+                    "method": "GET",
+                    "path": "/api/v1/agents/trusted",
+                    "price": settings.x402_price_search,
+                    "description": "Search trusted agents by category, score, tier, feedback count",
+                    "response_type": "application/json",
+                },
+            ],
+            "protocols": ["rest", "a2a"],
+            "links": {
+                "docs": "https://agentproof.sh/docs",
+                "pricing": "https://agent402.agentproof.sh/api/v1/pricing",
+                "a2a_card": "https://agent402.agentproof.sh/.well-known/agent.json",
+                "website": "https://agentproof.sh",
+            },
+        },
     }
 
 

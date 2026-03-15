@@ -123,6 +123,20 @@ MCP_TOOLS = [
             required=["address"],
         ),
     ),
+    MCPToolDefinition(
+        name="resolve_ens",
+        description="Resolve an ENS name (e.g. vitalik.eth) to ERC-8004 agent ID(s) and trust scores. Chains ENS name → Ethereum address → agent lookup. Returns all agents owned by the resolved address.",
+        inputSchema=MCPToolInputSchema(
+            type="object",
+            properties={
+                "ens_name": {
+                    "type": "string",
+                    "description": "The ENS name to resolve (e.g. vitalik.eth, myagent.eth)",
+                },
+            },
+            required=["ens_name"],
+        ),
+    ),
 ]
 
 
@@ -174,6 +188,19 @@ def _execute_tool(name: str, arguments: dict) -> Any:
             raise ValueError("address is required")
         from routes.hook import _resolve_address
         return _resolve_address(addr)
+
+    elif name == "resolve_ens":
+        ens_name = arguments.get("ens_name")
+        if not ens_name:
+            raise ValueError("ens_name is required (e.g. vitalik.eth)")
+        from services.ens import get_ens_service
+        ens = get_ens_service()
+        if not ens["configured"]:
+            raise ValueError("ENS resolution requires Ethereum RPC — not configured")
+        result = ens["resolve_to_agent"](ens_name)
+        if result is None:
+            raise ValueError(f"Could not resolve ENS name: {ens_name}")
+        return result
 
     else:
         raise ValueError(f"Unknown tool: {name}")

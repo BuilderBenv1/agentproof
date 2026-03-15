@@ -92,6 +92,19 @@ async def lifespan(app: FastAPI):
     screener = get_screener()
     await screener.start()
 
+    # Log startup
+    try:
+        from services.agent_logger import get_agent_logger
+        get_agent_logger().log(
+            action="startup",
+            description=f"Oracle started — {settings.oracle_agent_name} v{settings.oracle_version}",
+            outcome="success",
+            tool_calls=["supabase_connect", "cache_warm", "scheduler_start"],
+            details={"version": settings.oracle_version, "warmed_agents": warmed if 'warmed' in dir() else 0},
+        )
+    except Exception:
+        pass
+
     yield
 
     # Shutdown autonomous scheduler
@@ -304,6 +317,39 @@ loadStats();
 </body>
 </html>
 """
+
+
+@app.get("/agent.json")
+async def agent_manifest():
+    """ERC-8004 agent manifest — machine-readable identity, tools, and capabilities."""
+    import json
+    from pathlib import Path
+
+    manifest_path = Path(__file__).parent.parent / "agent.json"
+    if manifest_path.exists():
+        return JSONResponse(content=json.loads(manifest_path.read_text()))
+
+    # Fallback inline manifest
+    settings = get_settings()
+    return {
+        "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+        "name": settings.oracle_agent_name,
+        "description": settings.oracle_agent_description,
+        "version": settings.oracle_version,
+        "services": [
+            {"name": "A2A", "endpoint": f"{settings.oracle_base_url}/.well-known/agent.json"},
+            {"name": "MCP", "endpoint": f"{settings.oracle_base_url}/mcp"},
+            {"name": "REST", "endpoint": f"{settings.oracle_base_url}/api/v1"},
+        ],
+        "active": True,
+    }
+
+
+@app.get("/agent_log.json")
+async def agent_log_file():
+    """Structured execution log — autonomous decisions, tool calls, outcomes."""
+    from services.agent_logger import get_agent_logger
+    return get_agent_logger().get_log()
 
 
 @app.get("/api/v1/info")

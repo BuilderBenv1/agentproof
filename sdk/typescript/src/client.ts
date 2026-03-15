@@ -151,6 +151,34 @@ export class AgentProof {
     return this.request<NetworkStats>("/network/stats");
   }
 
+  // ─── ENS Resolution ──────────────────────────────────────────
+
+  /** Resolve an ENS name to ERC-8004 agent(s) and trust scores */
+  async resolveEns(ensName: string): Promise<{
+    ens_name: string;
+    address: string;
+    agent_id: number | null;
+    composite_score?: number;
+    tier?: string;
+    agents: Array<{
+      agent_id: number;
+      name: string | null;
+      composite_score: number;
+      tier: string;
+      category: string;
+      total_feedback: number;
+      source_chain: string;
+    }>;
+    message?: string;
+  }> {
+    return this.request(`/ens/${ensName}`);
+  }
+
+  /** Resolve ENS name and get full trust evaluation for the primary agent */
+  async ensTrust(ensName: string): Promise<TrustEvaluation & { ens_name: string; resolved_address: string }> {
+    return this.request(`/ens/${ensName}/trust`);
+  }
+
   // ─── Agents ────────────────────────────────────────────────
 
   /** List agents with optional filters */

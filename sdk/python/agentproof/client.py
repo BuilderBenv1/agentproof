@@ -94,6 +94,43 @@ class AgentProof:
             raise AgentProofError(r.status_code, r.text, f"/hook/resolve/{address}")
         return r.json()
 
+    def resolve_ens(self, ens_name: str) -> dict:
+        """
+        Resolve an ENS name to ERC-8004 agent(s) and trust scores.
+
+        Returns::
+
+            {
+                "ens_name": "vitalik.eth",
+                "address": "0xd8dA...",
+                "agent_id": 42,
+                "composite_score": 72.5,
+                "tier": "gold",
+                "agents": [...]
+            }
+
+        Raises AgentProofError(404) if the ENS name cannot be resolved
+        or no agent is registered for the resolved address.
+        """
+        r = self._client.get(
+            f"{self._base.replace('/api', '')}/api/v1/ens/{ens_name}",
+        )
+        if r.status_code >= 400:
+            raise AgentProofError(r.status_code, r.text, f"/ens/{ens_name}")
+        return r.json()
+
+    def ens_trust(self, ens_name: str) -> dict:
+        """
+        Resolve ENS name and get full trust evaluation for the primary agent.
+        Combines ENS resolution + trust evaluation in one call.
+        """
+        r = self._client.get(
+            f"{self._base.replace('/api', '')}/api/v1/ens/{ens_name}/trust",
+        )
+        if r.status_code >= 400:
+            raise AgentProofError(r.status_code, r.text, f"/ens/{ens_name}/trust")
+        return r.json()
+
     # ── Agents ──────────────────────────────────────────────
 
     def list_agents(

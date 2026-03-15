@@ -99,6 +99,8 @@ class AgentScreener:
 
     async def _loop(self, name: str, func, interval_seconds: int):
         """Generic loop: run func in thread, sleep, repeat."""
+        from services.agent_logger import get_agent_logger
+
         # Stagger initial starts so jobs don't all hit Supabase simultaneously
         delays = {
             "screen_new_agents": 10,
@@ -118,11 +120,31 @@ class AgentScreener:
                 self.last_runs[name] = datetime.now(timezone.utc)
                 self.job_counts[name] += 1
                 self.last_errors.pop(name, None)
+                # Log successful execution
+                try:
+                    get_agent_logger().log(
+                        action=name,
+                        description=f"Autonomous job '{name}' completed (run #{self.job_counts[name]})",
+                        outcome="success",
+                        tool_calls=["supabase_query", "scoring_engine"],
+                    )
+                except Exception:
+                    pass
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"[{name}] Error: {e}", exc_info=True)
                 self.last_errors[name] = str(e)
+                # Log failure
+                try:
+                    get_agent_logger().log(
+                        action=name,
+                        description=f"Autonomous job '{name}' failed: {e}",
+                        outcome="failure",
+                        details={"error": str(e)},
+                    )
+                except Exception:
+                    pass
             await asyncio.sleep(interval_seconds)
 
     # ─── Risk Evaluation Helper ───────────────────────────────────────
@@ -202,6 +224,24 @@ class AgentScreener:
 
         logger.info(f"[{label}] Screened {len(screening_rows)} agents")
 
+        # Log screening decision
+        try:
+            from services.agent_logger import get_agent_logger
+            risk_counts = Counter(r["risk_level"] for r in screening_rows)
+            get_agent_logger().log(
+                action="screening_batch",
+                description=f"Screened {len(screening_rows)} agents — {dict(risk_counts)}",
+                outcome="success",
+                tool_calls=["supabase_query", "risk_evaluation"],
+                details={
+                    "batch_label": label,
+                    "count": len(screening_rows),
+                    "risk_distribution": dict(risk_counts),
+                },
+            )
+        except Exception:
+            pass
+
         # Submit on-chain feedback (max per cycle)
         chain = get_chain_service()
         if chain is not None:
@@ -236,6 +276,17 @@ class AgentScreener:
 
             if submitted > 0:
                 logger.info(f"[{label}] Submitted {submitted} on-chain feedbacks")
+                try:
+                    from services.agent_logger import get_agent_logger
+                    get_agent_logger().log(
+                        action="onchain_feedback",
+                        description=f"Submitted {submitted} on-chain feedback transactions",
+                        outcome="success",
+                        tool_calls=["erc8004_reputation_registry", "eth_sendTransaction"],
+                        details={"submitted": submitted, "failed": failed},
+                    )
+                except Exception:
+                    pass
             if failed > 0:
                 logger.warning(
                     f"[{label}] Failed {failed} on-chain submissions "

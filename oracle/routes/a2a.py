@@ -83,6 +83,13 @@ def _build_agent_card() -> dict:
                 tags=["address", "resolve", "identity"],
                 examples=["Resolve 0x1234... to agent ID", "What agent owns this wallet?"],
             ),
+            A2ASkill(
+                id="resolve_ens",
+                name="Resolve ENS Name",
+                description="Resolve an ENS name (e.g. vitalik.eth) to its ERC-8004 agent ID(s) and trust scores. Chains ENS → address → agent lookup.",
+                tags=["ens", "resolve", "identity", "ethereum"],
+                examples=["Look up vitalik.eth", "What agent is behind myagent.eth?"],
+            ),
         ],
         provider=A2AProvider(
             organization="AgentProof",
@@ -128,6 +135,12 @@ def _parse_skill_request(message: dict) -> tuple[str, dict]:
     elif "hook" in text_lower or "gate" in text_lower or "pass" in text_lower:
         agent_id = _extract_agent_id(text)
         return "hook_gate_check", {"agent_id": agent_id} if agent_id else {}
+    elif "ens" in text_lower or ".eth" in text_lower:
+        import re
+        ens_match = re.search(r"([a-zA-Z0-9\-]+\.eth)", text)
+        if ens_match:
+            return "resolve_ens", {"ens_name": ens_match.group(1)}
+        return "resolve_ens", {}
     elif "resolve" in text_lower or "address" in text_lower or "wallet" in text_lower:
         # Try to extract 0x address
         import re
@@ -203,6 +216,19 @@ def _execute_skill(skill_id: str, params: dict) -> Any:
             return _resolve_address(address)
         except ValueError as e:
             return {"error": str(e)}
+
+    elif skill_id == "resolve_ens":
+        ens_name = params.get("ens_name")
+        if not ens_name:
+            return {"error": "ens_name is required (e.g. vitalik.eth)"}
+        from services.ens import get_ens_service
+        ens = get_ens_service()
+        if not ens["configured"]:
+            return {"error": "ENS resolution requires Ethereum RPC — not configured"}
+        result = ens["resolve_to_agent"](ens_name)
+        if result is None:
+            return {"error": f"Could not resolve ENS name: {ens_name}"}
+        return result
 
     else:
         return {"error": f"Unknown skill: {skill_id}"}

@@ -1,0 +1,81 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "AgentProof Trust Oracle",
+  "description": "Autonomous reputation oracle for the ERC-8004 agent ecosystem. Indexes 100,000+ agents across 21 EVM chains, computes 10-signal composite trust scores with Bayesian smoothing, and publishes results on-chain. Queryable via REST API, Google A2A protocol, Anthropic MCP, and ENS resolution.",
+  "image": "https://agentproof.sh/logo.png",
+  "services": [
+    {
+      "name": "A2A",
+      "endpoint": "https://oracle.agentproof.sh/.well-known/agent.json",
+      "version": "0.3.0"
+    },
+    {
+      "name": "MCP",
+      "endpoint": "https://oracle.agentproof.sh/mcp",
+      "version": "2025-06-18"
+    },
+    {
+      "name": "web",
+      "endpoint": "https://agentproof.sh"
+    },
+    {
+      "name": "REST",
+      "endpoint": "https://oracle.agentproof.sh/api/v1"
+    },
+    {
+      "name": "SSE",
+      "endpoint": "https://oracle.agentproof.sh/api/v1/feed"
+    }
+  ],
+  "x402Support": false,
+  "active": true,
+  "operatorWallet": "",
+  "registrations": [],
+  "supportedTrust": ["reputation"],
+  "tools": [
+    "evaluate_agent",
+    "find_trusted_agents",
+    "risk_check",
+    "network_stats",
+    "hook_gate_check",
+    "resolve_address",
+    "resolve_ens"
+  ],
+  "techStack": {
+    "runtime": "python-3.12",
+    "framework": "fastapi",
+    "database": "supabase-postgresql",
+    "chains": [
+      "avalanche", "ethereum", "base", "linea", "polygon", "arbitrum",
+      "optimism", "bsc", "scroll", "gnosis", "mantle", "celo", "monad",
+      "abstract", "taiko", "megaeth", "skale", "xlayer", "soneium",
+      "metis", "shape", "solana"
+    ],
+    "protocols": ["rest", "a2a", "mcp", "sse", "ens"]
+  },
+  "computeConstraints": {
+    "scoring_cycle_interval_seconds": 300,
+    "liveness_check_interval_seconds": 3600,
+    "max_agents_per_screening_batch": 200,
+    "max_onchain_feedback_per_cycle": 20,
+    "cache_ttl_seconds": 300
+  },
+  "taskCategories": [
+    "trust-evaluation",
+    "risk-assessment",
+    "agent-discovery",
+    "reputation-scoring",
+    "liveness-verification",
+    "anomaly-detection",
+    "on-chain-feedback"
+  ],
+  "autonomousCapabilities": {
+    "screen_new_agents": "Discover and score newly registered ERC-8004 agents every 5 minutes",
+    "monitor_anomalies": "Detect score volatility, concentrated feedback, and suspicious patterns every 15 minutes",
+    "verify_agent_liveness": "Probe agent endpoints for uptime/latency every hour",
+    "publish_network_report": "Generate aggregate network health reports every 6 hours",
+    "sync_github_activity": "Poll GitHub for coding agent contribution metrics every 10 minutes",
+    "compute_failure_metrics": "Calculate MTTR and failure rates every 30 minutes",
+    "push_scores_onchain": "Write consensus scores to TrustScoreOracle contracts on-chain"
+  }
+}

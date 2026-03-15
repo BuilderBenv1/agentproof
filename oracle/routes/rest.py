@@ -333,6 +333,72 @@ async def get_dimensional_scores(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/ens/{ens_name}")
+async def resolve_ens(request: Request, ens_name: str):
+    """Resolve an ENS name to ERC-8004 agent(s) and trust scores.
+
+    Examples: /api/v1/ens/vitalik.eth, /api/v1/ens/myagent.eth
+    """
+    from services.ens import get_ens_service
+
+    ens = get_ens_service()
+    if not ens["configured"]:
+        raise HTTPException(
+            status_code=503,
+            detail="ENS resolution requires an Ethereum RPC. Not currently configured.",
+        )
+
+    result = ens["resolve_to_agent"](ens_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Could not resolve ENS name: {ens_name}")
+
+    response = JSONResponse(content=result)
+    return _add_ratelimit_headers(response, request)
+
+
+@router.get("/ens/{ens_name}/trust")
+async def ens_trust_evaluation(request: Request, ens_name: str):
+    """Resolve ENS name and return full trust evaluation for the primary agent."""
+    from services.ens import get_ens_service
+
+    ens = get_ens_service()
+    if not ens["configured"]:
+        raise HTTPException(
+            status_code=503,
+            detail="ENS resolution requires an Ethereum RPC. Not currently configured.",
+        )
+
+    result = ens["resolve_to_agent"](ens_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Could not resolve ENS name: {ens_name}")
+
+    agent_id = result.get("agent_id")
+    if not agent_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{ens_name} resolved to {result.get('address')} but no ERC-8004 agent found",
+        )
+
+    # Full trust evaluation
+    svc = get_trust_service()
+    try:
+        evaluation = svc.evaluate_agent(agent_id)
+        eval_data = evaluation.model_dump(mode="json")
+        eval_data["ens_name"] = ens_name
+        eval_data["resolved_address"] = result.get("address")
+        response = JSONResponse(content=eval_data)
+        return _add_ratelimit_headers(response, request)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/agent-log")
+async def agent_execution_log():
+    """Structured execution log showing autonomous decisions, tool calls, and outcomes."""
+    from services.agent_logger import get_agent_logger
+    return get_agent_logger().get_log()
+
+
 @router.get("/health")
 async def health():
     """Oracle health check."""
