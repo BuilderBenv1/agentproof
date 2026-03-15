@@ -31,14 +31,17 @@ _CACHE_TTL = 600  # 10 minutes
 
 
 def _namehash(name: str) -> bytes:
-    """Compute ENS namehash for a domain name (EIP-137)."""
-    import hashlib
+    """Compute ENS namehash for a domain name (EIP-137).
+
+    Uses keccak256 (Ethereum's hash), NOT NIST SHA3-256.
+    """
+    from web3 import Web3
     node = b"\x00" * 32
     if name:
         labels = name.split(".")
         for label in reversed(labels):
-            label_hash = hashlib.sha3_256(label.encode("utf-8")).digest()
-            node = hashlib.sha3_256(node + label_hash).digest()
+            label_hash = Web3.keccak(text=label)
+            node = Web3.keccak(node + label_hash)
     return node
 
 
@@ -222,19 +225,9 @@ def resolve_ens_text(name: str, key: str, eth_rpc_url: str) -> str | None:
 
 
 def _checksum_address(address: str) -> str:
-    """EIP-55 checksum for Ethereum address."""
-    import hashlib
-    address = address.lower().replace("0x", "")
-    hash_hex = hashlib.sha3_256(address.encode("ascii")).hexdigest()
-    checksummed = "0x"
-    for i, char in enumerate(address):
-        if char in "0123456789":
-            checksummed += char
-        elif int(hash_hex[i], 16) >= 8:
-            checksummed += char.upper()
-        else:
-            checksummed += char
-    return checksummed
+    """EIP-55 checksum for Ethereum address (uses keccak256, not SHA3)."""
+    from web3 import Web3
+    return Web3.to_checksum_address(address)
 
 
 # Singleton accessor
