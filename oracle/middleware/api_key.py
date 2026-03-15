@@ -28,6 +28,9 @@ FREE_PATH_PREFIXES = (
     "/api/v1/integrations/",
     "/api/v1/badge/",
     "/api/v1/feed",
+    "/api/v1/ens/",
+    "/api/v1/health",
+    "/api/v1/agent-log",
     "/integrate",
     "/health",
     "/.well-known/",
@@ -35,6 +38,8 @@ FREE_PATH_PREFIXES = (
     "/openapi.json",
     "/a2a",
     "/mcp",
+    "/agent.json",
+    "/agent_log.json",
 )
 
 # Monthly call limits per tier (tracked via rolling 30-day window)
