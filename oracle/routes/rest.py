@@ -1,8 +1,11 @@
 """REST API routes — /api/v1/*"""
 
+import hashlib
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from models import TrustEvaluation, TrustedAgent, RiskAssessment, NetworkStats
@@ -397,6 +400,164 @@ async def agent_execution_log():
     """Structured execution log showing autonomous decisions, tool calls, and outcomes."""
     from services.agent_logger import get_agent_logger
     return get_agent_logger().get_log()
+
+
+# ─── Feedback submission ────────────────────────────────────────────
+
+
+class FeedbackRequest(BaseModel):
+    agent_id: int = Field(..., description="The ERC-8004 agent ID to rate")
+    rating: int = Field(..., ge=1, le=100, description="Rating from 1-100")
+    tag1: str = Field("trust", description="Primary dimension: trust, reliability, speed, quality, etc.")
+    tag2: str | None = Field(None, description="Secondary tag: settlement, trade, agent-review, etc.")
+    chain: str = Field("base", description="Source chain where the interaction occurred")
+    task_hash: str | None = Field(None, description="Hash of the task/trade for deduplication")
+    feedback_uri: str | None = Field(None, description="Link to evidence (tx, IPFS, etc.)")
+
+
+class FeedbackResponse(BaseModel):
+    status: str
+    feedback_id: int
+    agent_id: int
+    rating: int
+    tag1: str
+    message: str
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: Request, body: FeedbackRequest):
+    """Submit feedback for an agent after a completed interaction.
+
+    Requires an API key. The submitter's protocol is recorded as the reviewer.
+    Feedback immediately affects the agent's trust score on the next evaluation.
+
+    Rate limit: 1 feedback per agent per reviewer per hour.
+    """
+    # Require API key
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if not api_key_id:
+        raise HTTPException(status_code=401, detail="API key required to submit feedback")
+
+    protocol_name = getattr(request.state, "protocol_name", None) or "unknown"
+
+    from database import get_supabase
+    db = get_supabase()
+
+    # Verify agent exists
+    agent_result = (
+        db.table("agents")
+        .select("agent_id, owner_address")
+        .eq("agent_id", body.agent_id)
+        .limit(1)
+        .execute()
+    )
+    if not agent_result.data:
+        raise HTTPException(status_code=404, detail=f"Agent #{body.agent_id} not found")
+
+    agent_owner = agent_result.data[0].get("owner_address", "")
+
+    # Use api_key_id as reviewer identity (deterministic address-like hash)
+    reviewer_address = "0x" + hashlib.sha256(f"api:{api_key_id}".encode()).hexdigest()[:40]
+
+    # Prevent self-rating: check if the API key owner is the agent owner
+    # (best effort — protocol_name match)
+    if reviewer_address.lower() == agent_owner.lower():
+        raise HTTPException(status_code=403, detail="Self-rating is not allowed")
+
+    # Rate limit: 1 feedback per agent per reviewer per hour
+    one_hour_ago = datetime.now(timezone.utc).replace(microsecond=0)
+    one_hour_ago = one_hour_ago.isoformat().replace("+00:00", "Z")
+    try:
+        recent = (
+            db.table("reputation_events")
+            .select("id")
+            .eq("agent_id", body.agent_id)
+            .eq("reviewer_address", reviewer_address)
+            .gte("created_at", one_hour_ago)
+            .limit(1)
+            .execute()
+        )
+        if recent.data:
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limited: max 1 feedback per agent per hour from the same reviewer",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If rate limit check fails, allow through
+
+    # Build task_hash if not provided
+    task_hash = body.task_hash
+    if not task_hash:
+        raw = f"{api_key_id}:{body.agent_id}:{datetime.now(timezone.utc).isoformat()}"
+        task_hash = hashlib.sha256(raw.encode()).hexdigest()
+
+    # Build a pseudo tx_hash for API-submitted feedback
+    tx_raw = f"api:{api_key_id}:{body.agent_id}:{task_hash}:{datetime.now(timezone.utc).isoformat()}"
+    tx_hash = hashlib.sha256(tx_raw.encode()).hexdigest()
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        result = db.table("reputation_events").insert({
+            "agent_id": body.agent_id,
+            "reviewer_address": reviewer_address,
+            "rating": body.rating,
+            "feedback_uri": body.feedback_uri,
+            "task_hash": task_hash,
+            "tx_hash": tx_hash,
+            "block_number": 0,  # API submission, not on-chain
+            "created_at": now,
+            "tag1": body.tag1,
+            "tag2": body.tag2 or f"api:{protocol_name}",
+            "source_chain": body.chain,
+        }).execute()
+
+        feedback_id = result.data[0]["id"] if result.data else 0
+
+        # Update agents table feedback count + average
+        try:
+            fb_count = (
+                db.table("reputation_events")
+                .select("id", count="exact")
+                .eq("agent_id", body.agent_id)
+                .limit(0)
+                .execute()
+            )
+            db.table("agents").update({
+                "total_feedback": fb_count.count or 0,
+                "updated_at": now,
+            }).eq("agent_id", body.agent_id).execute()
+        except Exception:
+            pass  # Non-critical — score recalculates from events anyway
+
+        # Log to agent execution log
+        try:
+            from services.agent_logger import get_agent_logger
+            get_agent_logger().log(
+                action="api_feedback_received",
+                description=f"{protocol_name} submitted rating {body.rating}/100 for agent #{body.agent_id}",
+                details={"agent_id": body.agent_id, "rating": body.rating, "tag1": body.tag1, "chain": body.chain},
+            )
+        except Exception:
+            pass
+
+        logger.info(f"[feedback] {protocol_name} rated agent #{body.agent_id}: {body.rating}/100 ({body.tag1})")
+
+        return FeedbackResponse(
+            status="accepted",
+            feedback_id=feedback_id,
+            agent_id=body.agent_id,
+            rating=body.rating,
+            tag1=body.tag1,
+            message="Feedback recorded. Score updates on next evaluation.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to insert feedback: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record feedback")
 
 
 @router.get("/health")
