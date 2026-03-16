@@ -1,0 +1,21 @@
+{
+  "name": "trust_check",
+  "description": "Get the trust score and reputation data for any ERC-8004 agent before transacting. Returns composite score (0-100), trust tier, 10-signal breakdown, risk flags, and recommendation. Covers 113,000+ agents across 21 EVM chains including Base, Ethereum, Avalanche, Arbitrum, Optimism, and more.",
+  "jobFee": 1,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "agent_id": {
+        "type": "number",
+        "description": "The ERC-8004 token ID of the agent to evaluate"
+      },
+      "chain": {
+        "type": "string",
+        "description": "Optional: source chain to scope the evaluation (e.g. base, ethereum, avalanche). Omit for cross-chain."
+      }
+    },
+    "required": ["agent_id"]
+  }
+}

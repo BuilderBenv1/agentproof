@@ -1,0 +1,11 @@
+{
+  "name": "agentproof_oracle",
+  "description": "AgentProof Trust Oracle — reputation infrastructure for 113,000+ ERC-8004 AI agents across 21 EVM chains. REST API for trust scores, risk assessments, agent discovery, and network stats. Also available via MCP and A2A protocols.",
+  "url": "https://oracle.agentproof.sh/api/v1",
+  "params": {
+    "auth": "API key via X-Api-Key header. Free endpoints: /network/stats, /ens/, /feed, /health",
+    "docs": "https://agentproof.sh/docs",
+    "mcp": "https://oracle.agentproof.sh/mcp",
+    "a2a": "https://oracle.agentproof.sh/.well-known/agent.json"
+  }
+}

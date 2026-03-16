@@ -1,0 +1,17 @@
+{
+  "name": "risk_assessment",
+  "description": "Deep risk assessment for an ERC-8004 agent. Returns risk level (low/medium/high/critical), concentrated feedback detection, score volatility analysis, deployer reputation, failure history, and actionable recommendation. Use before high-value transactions or escrow commitments.",
+  "jobFee": 2,
+  "jobFeeType": "fixed",
+  "requiredFunds": false,
+  "requirement": {
+    "type": "object",
+    "properties": {
+      "agent_id": {
+        "type": "number",
+        "description": "The ERC-8004 token ID of the agent to assess"
+      }
+    },
+    "required": ["agent_id"]
+  }
+}

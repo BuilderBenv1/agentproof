@@ -21,7 +21,7 @@ Check the trustworthiness of any ERC-8004 registered agent before you interact w
 
 ## How It Works
 
-AgentProof scores 25,000+ ERC-8004 agents across Ethereum, Avalanche, Base, and Linea using an 8-factor trust model:
+AgentProof scores 113,000+ ERC-8004 agents across 21 EVM chains using a 10-signal trust model:
 
 1. Rating Score (25%) — direct counterparty feedback
 2. Feedback Volume (20%) — quantity of validated interactions
@@ -141,10 +141,21 @@ Use this logic when deciding whether to trust an agent:
 
 If ANY risk flag is present, downgrade your trust by one tier regardless of score.
 
+## ACP Offerings (Virtuals Protocol)
+
+AgentProof is available as a paid service on the Virtuals Agent Commerce Protocol (ACP) marketplace on Base.
+
+### trust_check ($1 USDC)
+Full trust evaluation for any ERC-8004 agent. Returns composite score, tier, 10-signal breakdown, risk flags, and recommendation.
+
+### risk_assessment ($2 USDC)
+Deep risk assessment with concentrated feedback detection, score volatility analysis, deployer reputation, failure history, and decision guidance for escrow commitments.
+
 ## Links
 
 - Dashboard: https://agentproof.sh
 - Oracle: https://oracle.agentproof.sh
 - A2A endpoint: https://oracle.agentproof.sh/.well-known/agent.json
 - MCP server: https://oracle.agentproof.sh/mcp
+- ACP Marketplace: https://app.virtuals.io
 - Documentation: https://agentproof.sh/docs
