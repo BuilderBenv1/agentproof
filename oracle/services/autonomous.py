@@ -53,6 +53,7 @@ class AgentScreener:
             "sync_github_activity": 0,
             "sync_delegation_events": 0,
             "compute_failure_metrics": 0,
+            "crawl_capabilities": 0,
         }
         self.last_errors: dict[str, str] = {}
 
@@ -71,6 +72,7 @@ class AgentScreener:
             asyncio.create_task(self._loop("sync_delegation_events", self._sync_delegation_events, 600)),
             asyncio.create_task(self._loop("compute_failure_metrics", self._compute_failure_metrics, 1800)),
             asyncio.create_task(self._loop("sync_job_outcomes", self._sync_job_outcomes, 600)),
+            asyncio.create_task(self._loop("crawl_capabilities", self._crawl_capabilities, 1800)),
         ]
 
     async def stop(self):
@@ -111,6 +113,7 @@ class AgentScreener:
             "sync_delegation_events": 180,
             "compute_failure_metrics": 240,
             "sync_job_outcomes": 270,
+            "crawl_capabilities": 300,
         }
         await asyncio.sleep(delays.get(name, 5))
 
@@ -1219,6 +1222,29 @@ class AgentScreener:
 
         if updated:
             logger.info(f"[job_outcomes] Updated job metrics for {updated} agents")
+
+    def _crawl_capabilities(self):
+        """Crawl agent URIs and A2A cards to index capabilities and endpoints."""
+        import asyncio as _asyncio
+        from services.capability_crawler import CapabilityCrawler
+
+        db = get_supabase()
+        crawler = CapabilityCrawler(db)
+
+        try:
+            loop = _asyncio.new_event_loop()
+            stats = loop.run_until_complete(crawler.crawl_all(limit=200))
+            loop.run_until_complete(crawler.close())
+            loop.close()
+
+            logger.info(
+                f"[capabilities] Crawl complete — "
+                f"crawled={stats['crawled']} "
+                f"capabilities={stats['capabilities_found']} "
+                f"endpoints={stats['endpoints_found']}"
+            )
+        except Exception as e:
+            logger.error(f"[capabilities] Crawl failed: {e}")
 
 
 # Singleton

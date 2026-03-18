@@ -25,7 +25,7 @@ export const CONTRACT_ADDRESSES = {
 export const PROTOCOL_FEE = BigInt("50000000000000000"); // 0.05 ether in wei
 
 // Protocol treasury — AgentProofCore deployer/owner receives protocol fees
-export const TREASURY_ADDRESS = "0x16f057E27189735B424dBA8559e9670103677F35" as const;
+export const TREASURY_ADDRESS = "0x809d59b1Dc5f7f03Aa2F5F02E9679d7f66b4C7C7" as const;
 
 export const TIERS = {
   diamond: { label: "Diamond", color: "#B9F2FF", minScore: 85, minFeedback: 20 },

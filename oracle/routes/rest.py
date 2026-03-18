@@ -102,6 +102,36 @@ async def find_trusted_agents(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/agents/search")
+async def search_agents_by_capability(
+    capability: str = Query(..., description="Capability to search for (e.g. 'trading', 'audit', 'defi')"),
+    min_score: float = Query(0, ge=0, le=100, description="Minimum composite score"),
+    min_tier: str | None = Query(None, description="Filter by minimum tier"),
+    limit: int = Query(20, ge=1, le=100, description="Max results"),
+):
+    """Search agents by capability, ranked by trust score.
+
+    Capabilities are indexed from agent metadata URIs and A2A agent cards.
+    Returns agents that match the capability with their trust scores and full capability list.
+    """
+    from database import get_supabase
+    from services.capability_crawler import search_by_capability
+
+    try:
+        db = get_supabase()
+        results = await search_by_capability(
+            db=db,
+            capability=capability,
+            min_score=min_score,
+            min_tier=min_tier,
+            limit=limit,
+        )
+        return results
+    except Exception as e:
+        logger.error(f"Capability search error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/network/stats", response_model=NetworkStats)
 async def network_stats():
     """Get network-wide trust statistics."""

@@ -50,6 +50,13 @@ class RegisterRequest(BaseModel):
     contact_email: str
 
 
+class BadgeInfo(BaseModel):
+    powered_by_markdown: str
+    powered_by_url: str
+    agent_badge_template: str
+    badge_page: str
+
+
 class RegisterResponse(BaseModel):
     api_key: str
     key_id: str
@@ -57,6 +64,7 @@ class RegisterResponse(BaseModel):
     monthly_limit: int
     price_per_call: str
     message: str
+    badge: BadgeInfo
 
 
 class UpgradeRequest(BaseModel):
@@ -123,6 +131,12 @@ async def register_api_key(request: Request, body: RegisterRequest):
             monthly_limit=999_999_999,
             price_per_call="$0.05",
             message="Store this API key securely. It will not be shown again. You are on pay-per-call pricing ($0.05/call).",
+            badge=BadgeInfo(
+                powered_by_markdown='[![Powered by AgentProof](https://oracle.agentproof.sh/api/v1/badge/powered-by.svg)](https://agentproof.sh)',
+                powered_by_url="https://oracle.agentproof.sh/api/v1/badge/powered-by.svg",
+                agent_badge_template='[![AgentProof](https://oracle.agentproof.sh/api/v1/badge/{agent_id}.svg)](https://agentproof.sh/agents/{agent_id})',
+                badge_page="https://agentproof.sh/badges",
+            ),
         )
     except Exception as e:
         logger.error("Failed to register API key: %s", e)

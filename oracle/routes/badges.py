@@ -163,6 +163,48 @@ def _error_svg(label: str, message: str, style: str) -> str:
 
 # ── Endpoints ────────────────────────────────────────────────
 
+
+def _powered_by_svg() -> str:
+    """Static 'Powered by AgentProof' badge for partner integrations."""
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="26" role="img" aria-label="Powered by AgentProof">
+  <title>Powered by AgentProof — ERC-8004 Trust Network</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="200" y2="0">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="100%" stop-color="#111118"/>
+    </linearGradient>
+    <filter id="g"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="200" height="26" rx="5" fill="url(#bg)" stroke="#2a2a3a" stroke-width="1"/>
+  <g transform="translate(6, 3)" filter="url(#g)">
+    <g transform="scale(1.25)">
+      <path d="{SHIELD_PATH}" fill="none" stroke="#00ff88" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="{CHECK_PATH}" fill="none" stroke="#00ff88" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <text x="32" y="12" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="7" fill="#6b7280" font-weight="400">POWERED BY</text>
+  <text x="32" y="22" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="10" fill="#00ff88" font-weight="700">AGENTPROOF</text>
+  <text x="194" y="17" font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,monospace" font-size="7" fill="#4a4a6a" text-anchor="end">ERC-8004</text>
+</svg>'''
+
+
+@router.get("/powered-by.svg")
+async def badge_powered_by():
+    """Static 'Powered by AgentProof' badge for partner integrations.
+
+    Embed in markdown:
+    ```
+    [![Powered by AgentProof](https://oracle.agentproof.sh/api/v1/badge/powered-by.svg)](https://agentproof.sh)
+    ```
+    """
+    svg = _powered_by_svg()
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 @router.get("/{agent_id}.svg")
 async def badge_score(
     agent_id: int,

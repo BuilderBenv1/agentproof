@@ -45,8 +45,8 @@ railway link
 echo ""
 echo "=== Step 2: Setting environment variables ==="
 railway variables set \
-    SUPABASE_URL="https://oztrefgbigvtzncodcys.supabase.co" \
-    SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dHJlZmdiaWd2dHpuY29kY3lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0MjMxMzEsImV4cCI6MjA4NTk5OTEzMX0.jCDzHOIZGAvC4aDAXJ_uOGNCLTrKpaX2ApE1pmPF7AM" \
+    SUPABASE_URL="$SUPABASE_URL" \
+    SUPABASE_KEY="$SUPABASE_KEY" \
     AVALANCHE_RPC_URL="https://api.avax.network/ext/bc/C/rpc" \
     ORACLE_BASE_URL="https://oracle.agentproof.sh" \
     CORS_ORIGINS="http://localhost:3000,https://agentproof.sh,https://www.agentproof.sh,https://oracle.agentproof.sh"
