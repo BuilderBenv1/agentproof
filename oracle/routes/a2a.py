@@ -1,6 +1,6 @@
 """
 A2A Protocol routes — Google Agent-to-Agent communication.
-- GET /.well-known/agent.json  — agent card discovery
+- GET /.well-known/agent.json  — agent card discovery (JSON for agents, HTML business card for browsers)
 - POST /a2a                    — task execution (JSON-RPC 2.0)
 """
 
@@ -10,7 +10,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from config import get_settings
 from models import (
@@ -99,10 +99,343 @@ def _build_agent_card() -> dict:
     return card.model_dump()
 
 
+def _render_agent_card_html(card: dict) -> str:
+    """Render the A2A agent card as a self-contained HTML business card."""
+    skills = card.get("skills", [])
+    provider = card.get("provider", {})
+    capabilities = card.get("capabilities", {})
+
+    skill_tags_html = ""
+    for skill in skills:
+        tags = "".join(f'<span class="tag">{t}</span>' for t in skill.get("tags", []))
+        examples = "".join(f"<li>{e}</li>" for e in skill.get("examples", []))
+        skill_tags_html += f"""
+        <div class="skill">
+            <div class="skill-header">
+                <span class="skill-name">{skill['name']}</span>
+                <span class="skill-id">{skill['id']}</span>
+            </div>
+            <p class="skill-desc">{skill['description']}</p>
+            <div class="tags">{tags}</div>
+            {f'<ul class="examples">{examples}</ul>' if examples else ''}
+        </div>"""
+
+    caps = []
+    if capabilities.get("streaming"):
+        caps.append("Streaming")
+    if capabilities.get("pushNotifications"):
+        caps.append("Push Notifications")
+    caps_html = ", ".join(caps) if caps else "Request/Response"
+
+    json_blob = json.dumps(card, indent=2)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{card['name']} — A2A Agent Card</title>
+<style>
+  :root {{
+    --bg: #0a0a0a;
+    --surface: #111113;
+    --border: #1e1e22;
+    --border-hover: #2d5a3d;
+    --text: #e4e4e7;
+    --muted: #71717a;
+    --accent: #34d399;
+    --accent-dim: #065f46;
+    --accent-glow: rgba(52, 211, 153, 0.08);
+  }}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1rem;
+  }}
+  .card {{
+    max-width: 640px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 0 80px rgba(52, 211, 153, 0.04);
+  }}
+  .card-header {{
+    padding: 2rem 2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, var(--accent-glow), transparent 60%);
+  }}
+  .card-header .badge {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  }}
+  .card-header .badge .dot {{
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }}
+  @keyframes pulse {{
+    0%, 100% {{ opacity: 1; }}
+    50% {{ opacity: 0.4; }}
+  }}
+  .card-header h1 {{
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }}
+  .card-header .version {{
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }}
+  .card-header .description {{
+    margin-top: 10px;
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+  }}
+  .meta {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }}
+  .meta-item {{
+    background: var(--surface);
+    padding: 14px 20px;
+  }}
+  .meta-item .label {{
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    margin-bottom: 4px;
+  }}
+  .meta-item .value {{
+    font-size: 13px;
+    color: var(--text);
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+  }}
+  .meta-item .value a {{
+    color: var(--accent);
+    text-decoration: none;
+  }}
+  .meta-item .value a:hover {{ text-decoration: underline; }}
+  .skills-section {{
+    padding: 1.5rem 2rem;
+  }}
+  .skills-section h2 {{
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    margin-bottom: 16px;
+  }}
+  .skill {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.2s;
+  }}
+  .skill:hover {{ border-color: var(--border-hover); }}
+  .skill-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }}
+  .skill-name {{
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }}
+  .skill-id {{
+    font-size: 11px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--muted);
+    background: var(--surface);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }}
+  .skill-desc {{
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+    margin-bottom: 8px;
+  }}
+  .tags {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }}
+  .tag {{
+    font-size: 10px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }}
+  .examples {{
+    margin-top: 8px;
+    padding-left: 16px;
+    list-style: none;
+  }}
+  .examples li {{
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    padding: 2px 0;
+  }}
+  .examples li::before {{
+    content: '"';
+    color: var(--accent);
+    font-weight: bold;
+  }}
+  .examples li::after {{
+    content: '"';
+    color: var(--accent);
+    font-weight: bold;
+  }}
+  .json-toggle {{
+    padding: 1rem 2rem 1.5rem;
+    border-top: 1px solid var(--border);
+  }}
+  .json-toggle summary {{
+    font-size: 12px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 0;
+  }}
+  .json-toggle summary:hover {{ color: var(--accent); }}
+  .json-toggle pre {{
+    margin-top: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--muted);
+    line-height: 1.5;
+    max-height: 400px;
+    overflow-y: auto;
+  }}
+  .footer {{
+    padding: 1rem 2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }}
+  .footer .org {{
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }}
+  .footer .org a {{ color: var(--accent); text-decoration: none; }}
+  .footer .org a:hover {{ text-decoration: underline; }}
+  .footer .protocol {{
+    font-size: 10px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }}
+  .hint {{
+    margin-top: 1rem;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Cascadia Code', monospace;
+    color: var(--muted);
+    text-align: center;
+    opacity: 0.5;
+  }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-header">
+      <div class="badge"><span class="dot"></span> A2A Agent</div>
+      <h1>{card['name']}</h1>
+      <span class="version">v{card['version']}</span>
+      <p class="description">{card['description']}</p>
+    </div>
+    <div class="meta">
+      <div class="meta-item">
+        <div class="label">Endpoint</div>
+        <div class="value"><a href="{card['url']}">{card['url']}</a></div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Protocol</div>
+        <div class="value">{caps_html}</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Provider</div>
+        <div class="value">{provider.get('organization', 'Unknown')}</div>
+      </div>
+      <div class="meta-item">
+        <div class="label">Skills</div>
+        <div class="value">{len(skills)}</div>
+      </div>
+    </div>
+    <div class="skills-section">
+      <h2>Skills</h2>
+      {skill_tags_html}
+    </div>
+    <div class="json-toggle">
+      <details>
+        <summary>View raw JSON (machine-readable)</summary>
+        <pre><code>{json_blob}</code></pre>
+      </details>
+    </div>
+    <div class="footer">
+      <div class="org"><a href="{provider.get('url', '#')}">{provider.get('organization', '')}</a></div>
+      <div class="protocol">Google A2A Protocol</div>
+    </div>
+  </div>
+  <div class="hint">Agents: fetch this URL with Accept: application/json</div>
+</body>
+</html>"""
+
+
 @router.get("/.well-known/agent.json")
-async def agent_card():
-    """A2A agent card discovery endpoint."""
-    return JSONResponse(content=_build_agent_card())
+async def agent_card(request: Request):
+    """A2A agent card discovery endpoint. Serves HTML for browsers, JSON for agents."""
+    card = _build_agent_card()
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and "application/json" not in accept:
+        return HTMLResponse(content=_render_agent_card_html(card))
+    return JSONResponse(content=card)
 
 
 def _parse_skill_request(message: dict) -> tuple[str, dict]:
