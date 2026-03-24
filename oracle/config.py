@@ -111,6 +111,11 @@ class OracleSettings(BaseSettings):
     base_oracle_address: str = ""
     ethereum_oracle_address: str = ""
     linea_oracle_address: str = ""
+    bsc_oracle_address: str = ""
+    polygon_oracle_address: str = ""
+    arbitrum_oracle_address: str = ""
+    celo_oracle_address: str = ""
+    monad_oracle_address: str = ""
     score_push_enabled: bool = False
     score_push_min_delta: float = 2.0
 

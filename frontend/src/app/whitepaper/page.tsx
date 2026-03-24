@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 import Link from "next/link";
 
 const SECTIONS = [
-  { title: "The Infrastructure Gap", description: "55,000 agents registered on-chain. Zero trust infrastructure. The registries exist — the integrity layer doesn't." },
+  { title: "The Infrastructure Gap", description: "128,400+ agents registered on-chain. Zero trust infrastructure. The registries exist — the integrity layer doesn't." },
   { title: "The Evidence", description: "Stanford, Harvard, NIST, Google, CrowdStrike, WTW, and Box CEO Aaron Levie — the academic, government, and enterprise case for a trust oracle." },
   { title: "What AgentProof Is", description: "Not a scoring model. Infrastructure. An on-chain oracle that other protocols query before delegating capital, hiring agents, or underwriting coverage." },
   { title: "Commerce Integration (ERC-ACP)", description: "The AgentProofHook gates provider assignment in real job escrow flows. Untrusted agents are blocked at the smart contract level, not flagged after the fact." },
@@ -37,13 +37,13 @@ export default function WhitepaperPage() {
       <div className="text-center space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
           <FileText className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v2.1</span>
+          <span className="text-xs font-mono text-emerald-400">Technical Whitepaper v2.2</span>
         </div>
         <h1 className="text-3xl font-bold text-white">
           Trust Infrastructure for the Agent Economy
         </h1>
         <p className="text-sm text-gray-400 max-w-xl mx-auto">
-          55,000 agents are registered on-chain. Protocols need to know which ones to trust
+          128,400+ agents registered on-chain across 21 chains. 214.6K+ evaluations. 307.2K+ screenings. 43.8 average trust score. Protocols need to know which ones to trust
           before delegating capital. AgentProof is the oracle they query.
         </p>
       </div>
@@ -52,7 +52,7 @@ export default function WhitepaperPage() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
         <h2 className="text-xl font-bold text-white">1. The Infrastructure Gap</h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 55,000+ agents registered. The standard works.
+          ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 128,400+ agents registered. The standard works.
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">
           But the standard explicitly leaves the <span className="text-white font-semibold">integrity layer</span> as an exercise for the ecosystem. The registries store data. They don&rsquo;t evaluate it. A 5-star rating from a bot farm sits next to a 5-star rating from a verified counterparty. The contract can&rsquo;t tell the difference. Neither can the agent querying it at machine speed.
@@ -326,37 +326,51 @@ export default function WhitepaperPage() {
         </h2>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Base Mainnet</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Score Pushing &mdash; TrustScoreOracle V2 (9 chains)</p>
           <div className="grid gap-2">
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">TrustScoreOracle V2</span>
-                <a href="https://basescan.org/address/0xE74e9C994b8F65db01725DdAE603EAE397aBa432#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Basescan &rarr;</a>
+            {[
+              { chain: "Base Mainnet", addr: "0xE74e9C994b8F65db01725DdAE603EAE397aBa432", explorer: "https://basescan.org/address/0xE74e9C994b8F65db01725DdAE603EAE397aBa432#code", label: "Basescan" },
+              { chain: "Avalanche Mainnet", addr: "0xA9D7a613Ce349d15827CB8C54F08e24549219B4f", explorer: "https://snowtrace.io/address/0xA9D7a613Ce349d15827CB8C54F08e24549219B4f#code", label: "Snowtrace" },
+              { chain: "Ethereum Mainnet", addr: "Deployed", explorer: null, label: null },
+              { chain: "Linea", addr: "Deployed", explorer: null, label: null },
+              { chain: "BSC (new)", addr: "0xE6D5ad50e7bb5A13b8E2F674FCDEB48f98849371", explorer: "https://bscscan.com/address/0xE6D5ad50e7bb5A13b8E2F674FCDEB48f98849371", label: "BscScan" },
+              { chain: "Polygon (new)", addr: "0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", explorer: "https://polygonscan.com/address/0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", label: "PolygonScan" },
+              { chain: "Celo (new)", addr: "0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", explorer: "https://celoscan.io/address/0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", label: "CeloScan" },
+              { chain: "Arbitrum (new)", addr: "0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", explorer: "https://arbiscan.io/address/0x7471C0fD57658ABBf8065Ee816080D42F67DBB1c", label: "Arbiscan" },
+              { chain: "Monad (new)", addr: "0xB5Be2426f3b930AdD6Bc4e4A277a76b9cE4855e1", explorer: null, label: null },
+            ].map((c) => (
+              <div key={c.chain} className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">{c.chain}</span>
+                  {c.explorer ? (
+                    <a href={c.explorer} target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">{c.label} &rarr;</a>
+                  ) : (
+                    <span className="text-[10px] font-mono text-gray-600">Verified</span>
+                  )}
+                </div>
+                <code className="text-[10px] font-mono text-gray-500 break-all">{c.addr}</code>
               </div>
-              <code className="text-[10px] font-mono text-gray-500 break-all">0xE74e9C994b8F65db01725DdAE603EAE397aBa432</code>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">ReputationGateV2</span>
-                <a href="https://basescan.org/address/0x882e22FBB913b53Ab062f3f5f42C3E8838373d23#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Basescan &rarr;</a>
-              </div>
-              <code className="text-[10px] font-mono text-gray-500 break-all">0x882e22FBB913b53Ab062f3f5f42C3E8838373d23</code>
-            </div>
+            ))}
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Avalanche Mainnet</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Base Mainnet &mdash; ReputationGateV2</p>
           <div className="bg-gray-800/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white">TrustScoreOracle V2</span>
-              <a href="https://snowtrace.io/address/0xA9D7a613Ce349d15827CB8C54F08e24549219B4f#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Snowtrace &rarr;</a>
+              <span className="text-xs font-bold text-white">ReputationGateV2</span>
+              <a href="https://basescan.org/address/0x882e22FBB913b53Ab062f3f5f42C3E8838373d23#code" target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300">Basescan &rarr;</a>
             </div>
-            <code className="text-[10px] font-mono text-gray-500 break-all">0xA9D7a613Ce349d15827CB8C54F08e24549219B4f</code>
+            <code className="text-[10px] font-mono text-gray-500 break-all">0x882e22FBB913b53Ab062f3f5f42C3E8838373d23</code>
           </div>
         </div>
 
-        <p className="text-[10px] text-gray-600 italic">All contracts verified with full source code. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus.</p>
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Feedback Submission &mdash; 21 EVM chains + Solana</p>
+          <p className="text-[10px] text-gray-500">Auto-routes to any chain with an RPC URL via ERC-8004 ReputationRegistry (deterministic CREATE2 addresses).</p>
+        </div>
+
+        <p className="text-[10px] text-gray-600 italic">All contracts verified with full source code. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus. 5 new oracle deployments added March 2026.</p>
       </div>
 
       {/* ReputationGateV2 Integration */}
@@ -525,7 +539,7 @@ contract MyProtocol {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-bold text-white">AgentProof Whitepaper</p>
-            <p className="text-xs text-gray-500 font-mono mt-1">March 2026 &middot; v2.1 &middot; PDF</p>
+            <p className="text-xs text-gray-500 font-mono mt-1">March 2026 &middot; v2.2 &middot; PDF</p>
           </div>
           <a
             href="/agentproof-whitepaper.pdf"
@@ -567,7 +581,7 @@ contract MyProtocol {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { icon: Shield, label: "Chains", value: "21", sub: "AVAX \u00B7 ETH \u00B7 Base \u00B7 Solana + 17 more" },
-          { icon: Globe, label: "Indexed", value: "55K+", sub: "Agent identities" },
+          { icon: Globe, label: "Indexed", value: "128.4K+", sub: "Agent identities" },
           { icon: Layers, label: "Oracles", value: "2", sub: "Independent operators with consensus" },
           { icon: Lock, label: "Signals", value: "11", sub: "Reviewer-weighted, Bayesian-smoothed" },
         ].map((stat, i) => (

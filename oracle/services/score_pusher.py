@@ -5,7 +5,7 @@ Runs after each scoring cycle in the autonomous screener. Only pushes agents
 whose scores changed by >= min_delta since last push. Batch updates in groups
 of 50 to stay under gas limits.
 
-Deploys on ALL configured chains (Avalanche, Base, Ethereum, Linea).
+Deploys on ALL configured chains (Avalanche, Base, BNB, Polygon, Celo, Arbitrum, Monad, Linea, Ethereum).
 Each chain gets its own oracle contract and independent push cycle.
 
 Disabled by default (score_push_enabled = False in config). Enable after
@@ -65,12 +65,17 @@ def _get_chain_configs(settings) -> list[dict]:
     both an RPC URL and an oracle address configured."""
     chains = []
 
-    # Per-chain settings
+    # Per-chain settings — ordered cheapest gas first
     chain_defs = [
         ("avalanche", settings.avalanche_rpc_url, settings.avax_oracle_address),
         ("base", settings.base_rpc_url, settings.base_oracle_address),
-        ("ethereum", settings.ethereum_rpc_url, settings.ethereum_oracle_address),
+        ("bsc", settings.bsc_rpc_url, settings.bsc_oracle_address),
+        ("polygon", settings.polygon_rpc_url, settings.polygon_oracle_address),
+        ("celo", settings.celo_rpc_url, settings.celo_oracle_address),
+        ("arbitrum", settings.arbitrum_rpc_url, settings.arbitrum_oracle_address),
+        ("monad", settings.monad_rpc_url, settings.monad_oracle_address),
         ("linea", settings.linea_rpc_url, settings.linea_oracle_address),
+        ("ethereum", settings.ethereum_rpc_url, settings.ethereum_oracle_address),
     ]
 
     for name, rpc_url, oracle_addr in chain_defs:
@@ -195,10 +200,13 @@ def push_scores():
     chains = _get_chain_configs(settings)
     if not chains:
         logger.warning("[ScorePusher] No oracle addresses configured on any chain")
-        logger.warning("[ScorePusher] avax=%s base=%s eth=%s linea=%s legacy=%s",
+        logger.warning("[ScorePusher] avax=%s base=%s bsc=%s polygon=%s celo=%s "
+                       "arbitrum=%s monad=%s linea=%s eth=%s legacy=%s",
                        settings.avax_oracle_address, settings.base_oracle_address,
-                       settings.ethereum_oracle_address, settings.linea_oracle_address,
-                       settings.trust_score_oracle_address)
+                       settings.bsc_oracle_address, settings.polygon_oracle_address,
+                       settings.celo_oracle_address, settings.arbitrum_oracle_address,
+                       settings.monad_oracle_address, settings.linea_oracle_address,
+                       settings.ethereum_oracle_address, settings.trust_score_oracle_address)
         return 0
     logger.info("[ScorePusher] Chains configured: %s", [c['name'] for c in chains])
 
