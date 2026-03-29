@@ -67,26 +67,30 @@ DEFAULT_START_BLOCK = int(os.getenv("INDEXER_DEFAULT_START_BLOCK", "77000000"))
 # Per-chain start blocks — prevents scanning millions of irrelevant blocks.
 # Set to approximate block when ERC-8004 contracts were deployed on each chain.
 # Chains not listed here will query their current block and start from recent history.
+# All ERC-8004 contracts deployed ~Feb 3 2026 via CREATE2.
+# Confirmed blocks: Avalanche 77000000, Base 41663783, BSC 79027268.
+# Others estimated from approximate block times around that date.
+# Override any via env var (e.g. BASE_START_BLOCK=41663783).
 CHAIN_START_BLOCKS = {
-    "avalanche": DEFAULT_START_BLOCK,
-    "base": int(os.getenv("BASE_START_BLOCK", "0")),
-    "ethereum": int(os.getenv("ETHEREUM_START_BLOCK", "0")),
-    "linea": int(os.getenv("LINEA_START_BLOCK", "0")),
-    "polygon": int(os.getenv("POLYGON_START_BLOCK", "0")),
-    "bsc": int(os.getenv("BSC_START_BLOCK", "0")),
-    "gnosis": int(os.getenv("GNOSIS_START_BLOCK", "0")),
-    "celo": int(os.getenv("CELO_START_BLOCK", "0")),
-    "mantle": int(os.getenv("MANTLE_START_BLOCK", "0")),
-    "scroll": int(os.getenv("SCROLL_START_BLOCK", "0")),
-    "arbitrum": int(os.getenv("ARBITRUM_START_BLOCK", "0")),
-    "optimism": int(os.getenv("OPTIMISM_START_BLOCK", "0")),
+    "avalanche": int(os.getenv("AVALANCHE_START_BLOCK", str(DEFAULT_START_BLOCK))),
+    "base": int(os.getenv("BASE_START_BLOCK", "41663783")),
+    "ethereum": int(os.getenv("ETHEREUM_START_BLOCK", "21770000")),
+    "linea": int(os.getenv("LINEA_START_BLOCK", "16000000")),
+    "polygon": int(os.getenv("POLYGON_START_BLOCK", "67800000")),
+    "bsc": int(os.getenv("BSC_START_BLOCK", "79027268")),
+    "gnosis": int(os.getenv("GNOSIS_START_BLOCK", "38000000")),
+    "celo": int(os.getenv("CELO_START_BLOCK", "30000000")),
+    "mantle": int(os.getenv("MANTLE_START_BLOCK", "73000000")),
+    "scroll": int(os.getenv("SCROLL_START_BLOCK", "12000000")),
+    "arbitrum": int(os.getenv("ARBITRUM_START_BLOCK", "290000000")),
+    "optimism": int(os.getenv("OPTIMISM_START_BLOCK", "131000000")),
     "monad": int(os.getenv("MONAD_START_BLOCK", "0")),
     "abstract": int(os.getenv("ABSTRACT_START_BLOCK", "0")),
-    "taiko": int(os.getenv("TAIKO_START_BLOCK", "0")),
+    "taiko": int(os.getenv("TAIKO_START_BLOCK", "600000")),
     "megaeth": int(os.getenv("MEGAETH_START_BLOCK", "0")),
     "skale": int(os.getenv("SKALE_START_BLOCK", "0")),
-    "xlayer": int(os.getenv("XLAYER_START_BLOCK", "0")),
+    "xlayer": int(os.getenv("XLAYER_START_BLOCK", "24000000")),
     "soneium": int(os.getenv("SONEIUM_START_BLOCK", "0")),
-    "metis": int(os.getenv("METIS_START_BLOCK", "0")),
+    "metis": int(os.getenv("METIS_START_BLOCK", "19000000")),
     "shape": int(os.getenv("SHAPE_START_BLOCK", "0")),
 }
