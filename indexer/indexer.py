@@ -39,6 +39,7 @@ from config import (
     MAX_BLOCK_RANGE,
     DEFAULT_START_BLOCK,
     ACTIVE_CHAINS,
+    CHAIN_START_BLOCKS,
 )
 from scoring import (
     calculate_composite_score,
@@ -230,7 +231,28 @@ class AgentProofIndexer:
 
     # ─── State persistence ───────────────────────────────────────────────────
 
+    def _get_chain_start_block(self, chain_name: str) -> int:
+        """Get the appropriate start block for a chain.
+        Uses per-chain config if set (non-zero), otherwise starts from
+        recent history (current block - 10000) to avoid scanning from genesis."""
+        configured = CHAIN_START_BLOCKS.get(chain_name, 0)
+        if configured > 0:
+            return configured
+        # No configured start block — start from recent history
+        try:
+            conn = self.chains.get(chain_name)
+            if conn:
+                current = conn.w3.eth.block_number
+                return max(0, current - 10000)
+        except Exception:
+            pass
+        return 0
+
     def get_last_block(self, contract_name: str) -> int:
+        # Extract chain name from contract_name (format: "chain:contract")
+        chain_name = contract_name.split(":")[0] if ":" in contract_name else "avalanche"
+        start_block = self._get_chain_start_block(chain_name)
+
         try:
             result = (
                 self.db.table("indexer_state")
@@ -240,20 +262,19 @@ class AgentProofIndexer:
             )
             if result.data:
                 stored = result.data[0]["last_block"]
-                # If stored block is below the default start, fast-forward
-                if stored < DEFAULT_START_BLOCK:
-                    logger.info(f"Fast-forwarding {contract_name} from block {stored} to {DEFAULT_START_BLOCK}")
-                    self.set_last_block(contract_name, DEFAULT_START_BLOCK)
-                    return DEFAULT_START_BLOCK
+                if stored < start_block:
+                    logger.info(f"Fast-forwarding {contract_name} from block {stored} to {start_block}")
+                    self.set_last_block(contract_name, start_block)
+                    return start_block
                 return stored
             self.db.table("indexer_state").insert(
-                {"contract_name": contract_name, "last_block": DEFAULT_START_BLOCK}
+                {"contract_name": contract_name, "last_block": start_block}
             ).execute()
-            logger.info(f"Initialized {contract_name} indexer state at block {DEFAULT_START_BLOCK}")
-            return DEFAULT_START_BLOCK
+            logger.info(f"Initialized {contract_name} indexer state at block {start_block}")
+            return start_block
         except Exception as e:
             logger.error(f"Error getting last block for {contract_name}: {e}")
-            return DEFAULT_START_BLOCK
+            return start_block
 
     def set_last_block(self, contract_name: str, block: int):
         try:
@@ -345,8 +366,8 @@ class AgentProofIndexer:
                 if metadata.get("image"):
                     update["image_url"] = _sanitize_text(metadata["image"])
 
-                self.db.table("agents").update(update).eq("agent_id", agent_id).execute()
-                logger.info(f"[ERC8004-ID] Agent #{agent_id} URI updated")
+                self.db.table("agents").update(update).eq("agent_id", agent_id).eq("source_chain", self._current_chain).execute()
+                logger.info(f"[ERC8004-ID] [{self._current_chain}] Agent #{agent_id} URI updated")
                 count += 1
         except Exception as e:
             logger.error(f"Error processing ERC-8004 URIUpdated events: {e}")
@@ -393,8 +414,8 @@ class AgentProofIndexer:
                 new_uri = event.args.newURI
                 self.db.table("agents").update(
                     {"agent_uri": _sanitize_text(new_uri), "updated_at": datetime.now(timezone.utc).isoformat()}
-                ).eq("agent_id", agent_id).execute()
-                logger.info(f"[CUSTOM-ID] Agent #{agent_id} URI updated")
+                ).eq("agent_id", agent_id).eq("source_chain", self._current_chain).execute()
+                logger.info(f"[CUSTOM-ID] [{self._current_chain}] Agent #{agent_id} URI updated")
                 count += 1
         except Exception as e:
             logger.error(f"Error processing custom AgentURIUpdated events: {e}")
@@ -788,9 +809,32 @@ class AgentProofIndexer:
             logger.error(f"Error fetching agents: {e}")
             return
 
+        # Deduplicate: same agent_id may exist on multiple chains.
+        # Score each agent_id once using cross-chain reputation data,
+        # then write the unified score to all chain rows.
+        seen_agent_ids: set[int] = set()
+        # Find the earliest registration per agent_id (across chains)
+        agent_earliest: dict[int, dict] = {}
+        for agent in all_agents:
+            aid = agent["agent_id"]
+            if aid not in agent_earliest:
+                agent_earliest[aid] = agent
+            else:
+                existing_ts = agent_earliest[aid].get("registered_at", "")
+                new_ts = agent.get("registered_at", "")
+                if new_ts and new_ts < existing_ts:
+                    agent_earliest[aid] = agent
+
         for agent in all_agents:
             agent_id = agent["agent_id"]
+            if agent_id in seen_agent_ids:
+                continue
+            seen_agent_ids.add(agent_id)
 
+            # Use earliest registration for age calculation
+            canonical = agent_earliest.get(agent_id, agent)
+
+            # Pull ratings from ALL chains (reputation_events aren't chain-filtered)
             try:
                 ratings_result = (
                     self.db.table("reputation_events")
@@ -820,10 +864,14 @@ class AgentProofIndexer:
             except Exception:
                 success_rate = 0
 
+            # Use earliest registration across all chains for age
             registered_at = datetime.fromisoformat(
-                agent["registered_at"].replace("Z", "+00:00")
+                canonical["registered_at"].replace("Z", "+00:00")
             )
             age_days = calculate_account_age_days(registered_at)
+
+            # Count how many chains this agent is registered on
+            chains_present = sum(1 for a in all_agents if a["agent_id"] == agent_id)
 
             # Uptime percentage from daily summaries (last 30 days)
             uptime_pct = -1.0  # negative = no data
@@ -861,11 +909,13 @@ class AgentProofIndexer:
                     "composite_score": composite,
                     "validation_success_rate": round(success_rate, 2),
                     "tier": tier,
+                    "chains_active": chains_present,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
                 if uptime_pct >= 0:
                     update_data["uptime_score"] = round(uptime_pct, 2)
 
+                # Write unified score to ALL chain rows for this agent_id
                 self.db.table("agents").update(update_data).eq("agent_id", agent_id).execute()
             except Exception as e:
                 logger.error(f"Error updating scores for agent #{agent_id}: {e}")

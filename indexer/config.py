@@ -60,6 +60,33 @@ CONFIRMATION_BLOCKS = int(os.getenv("INDEXER_CONFIRMATION_BLOCKS", "3"))
 # Avalanche RPC limits get_logs to 2048 blocks per request; use 2000 for safety
 MAX_BLOCK_RANGE = int(os.getenv("INDEXER_MAX_BLOCK_RANGE", "2000"))
 
-# Default starting block — ERC-8004 registries were deployed around block 77,000,000
-# Avoids scanning from block 0 on first run
+# Default starting block — Avalanche-specific (ERC-8004 deployed ~block 77M).
+# Other chains start from a recent block to avoid scanning from genesis.
 DEFAULT_START_BLOCK = int(os.getenv("INDEXER_DEFAULT_START_BLOCK", "77000000"))
+
+# Per-chain start blocks — prevents scanning millions of irrelevant blocks.
+# Set to approximate block when ERC-8004 contracts were deployed on each chain.
+# Chains not listed here will query their current block and start from recent history.
+CHAIN_START_BLOCKS = {
+    "avalanche": DEFAULT_START_BLOCK,
+    "base": int(os.getenv("BASE_START_BLOCK", "0")),
+    "ethereum": int(os.getenv("ETHEREUM_START_BLOCK", "0")),
+    "linea": int(os.getenv("LINEA_START_BLOCK", "0")),
+    "polygon": int(os.getenv("POLYGON_START_BLOCK", "0")),
+    "bsc": int(os.getenv("BSC_START_BLOCK", "0")),
+    "gnosis": int(os.getenv("GNOSIS_START_BLOCK", "0")),
+    "celo": int(os.getenv("CELO_START_BLOCK", "0")),
+    "mantle": int(os.getenv("MANTLE_START_BLOCK", "0")),
+    "scroll": int(os.getenv("SCROLL_START_BLOCK", "0")),
+    "arbitrum": int(os.getenv("ARBITRUM_START_BLOCK", "0")),
+    "optimism": int(os.getenv("OPTIMISM_START_BLOCK", "0")),
+    "monad": int(os.getenv("MONAD_START_BLOCK", "0")),
+    "abstract": int(os.getenv("ABSTRACT_START_BLOCK", "0")),
+    "taiko": int(os.getenv("TAIKO_START_BLOCK", "0")),
+    "megaeth": int(os.getenv("MEGAETH_START_BLOCK", "0")),
+    "skale": int(os.getenv("SKALE_START_BLOCK", "0")),
+    "xlayer": int(os.getenv("XLAYER_START_BLOCK", "0")),
+    "soneium": int(os.getenv("SONEIUM_START_BLOCK", "0")),
+    "metis": int(os.getenv("METIS_START_BLOCK", "0")),
+    "shape": int(os.getenv("SHAPE_START_BLOCK", "0")),
+}
