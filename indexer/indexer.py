@@ -2,9 +2,12 @@
 """
 AgentProof Event Indexer — Standalone Service
 
-Indexes events from official ERC-8004 registries (Identity + Reputation) on Avalanche
-and from AgentProof's custom ValidationRegistry. Syncs data to Supabase.
+Indexes events from official ERC-8004 registries (Identity + Reputation) across all
+configured chains and from AgentProof's custom ValidationRegistry on Avalanche.
+Syncs data to Supabase.
 
+Set chain RPC URLs in .env (e.g. BASE_RPC_URL, POLYGON_RPC_URL) to enable indexing
+on those chains. All chains use the same CREATE2-deployed ERC-8004 contracts.
 Set USE_OFFICIAL_ERC8004=True in .env to use the official Ava Labs registries.
 """
 
@@ -35,6 +38,7 @@ from config import (
     CONFIRMATION_BLOCKS,
     MAX_BLOCK_RANGE,
     DEFAULT_START_BLOCK,
+    ACTIVE_CHAINS,
 )
 from scoring import (
     calculate_composite_score,
@@ -119,16 +123,74 @@ def parse_agent_uri(uri: str) -> dict:
     return metadata
 
 
+class ChainConnection:
+    """Holds Web3 connection and contracts for a single chain."""
+
+    def __init__(self, chain_name: str, rpc_url: str, use_official: bool):
+        self.chain_name = chain_name
+        self.w3 = Web3(Web3.HTTPProvider(rpc_url))
+        self.use_official = use_official
+
+        # Same CREATE2 addresses on all chains
+        identity_addr = ERC8004_IDENTITY_REGISTRY if use_official else IDENTITY_REGISTRY_ADDRESS
+        reputation_addr = ERC8004_REPUTATION_REGISTRY if use_official else REPUTATION_REGISTRY_ADDRESS
+
+        # Identity contract
+        self.identity_contract = None
+        self.identity_mode = None
+        if use_official and ERC8004_IDENTITY_REGISTRY:
+            self.identity_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            self.identity_mode = "erc8004"
+        elif IDENTITY_REGISTRY_ADDRESS:
+            self.identity_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(IDENTITY_REGISTRY_ADDRESS),
+                abi=CUSTOM_IDENTITY_ABI,
+            )
+            self.identity_mode = "custom"
+
+        # Reputation contract
+        self.reputation_contract = None
+        self.reputation_mode = None
+        if use_official and ERC8004_REPUTATION_REGISTRY:
+            self.reputation_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_REPUTATION_REGISTRY),
+                abi=ERC8004_REPUTATION_ABI,
+            )
+            self.reputation_mode = "erc8004"
+        elif REPUTATION_REGISTRY_ADDRESS:
+            self.reputation_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(REPUTATION_REGISTRY_ADDRESS),
+                abi=CUSTOM_REPUTATION_ABI,
+            )
+            self.reputation_mode = "custom"
+
+        # Validation, Monitor, Splits — only on Avalanche (custom contracts)
+        self.validation_contract = None
+        self.monitor_contract = None
+        self.splits_contract = None
+        if chain_name == "avalanche":
+            if VALIDATION_REGISTRY_ADDRESS:
+                self.validation_contract = self.w3.eth.contract(
+                    address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
+                    abi=VALIDATION_ABI,
+                )
+            if AGENT_MONITOR_ADDRESS:
+                self.monitor_contract = self.w3.eth.contract(
+                    address=Web3.to_checksum_address(AGENT_MONITOR_ADDRESS),
+                    abi=AGENT_MONITOR_ABI,
+                )
+            if AGENT_SPLITS_ADDRESS:
+                self.splits_contract = self.w3.eth.contract(
+                    address=Web3.to_checksum_address(AGENT_SPLITS_ADDRESS),
+                    abi=AGENT_SPLITS_ABI,
+                )
+
+
 class AgentProofIndexer:
     def __init__(self):
-        logger.info(f"Connecting to {AVALANCHE_RPC_URL}")
-        self.w3 = Web3(Web3.HTTPProvider(AVALANCHE_RPC_URL))
-
-        if not self.w3.is_connected():
-            logger.error("Failed to connect to Avalanche RPC")
-            sys.exit(1)
-        logger.info(f"Connected to chain ID: {self.w3.eth.chain_id}")
-
         if not SUPABASE_URL or not SUPABASE_KEY:
             logger.error("Supabase URL and key must be configured")
             sys.exit(1)
@@ -138,70 +200,33 @@ class AgentProofIndexer:
         self.use_official = USE_OFFICIAL_ERC8004
         logger.info(f"Registry mode: {'Official ERC-8004' if self.use_official else 'Custom AgentProof'}")
 
-        # ─── Identity contract ───
-        if self.use_official and ERC8004_IDENTITY_REGISTRY:
-            self.identity_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
-                abi=ERC8004_IDENTITY_ABI,
-            )
-            self.identity_mode = "erc8004"
-            logger.info(f"Identity Registry (ERC-8004): {ERC8004_IDENTITY_REGISTRY}")
-        elif IDENTITY_REGISTRY_ADDRESS:
-            self.identity_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(IDENTITY_REGISTRY_ADDRESS),
-                abi=CUSTOM_IDENTITY_ABI,
-            )
-            self.identity_mode = "custom"
-            logger.info(f"Identity Registry (custom): {IDENTITY_REGISTRY_ADDRESS}")
-        else:
-            self.identity_contract = None
-            self.identity_mode = None
+        # ─── Connect to all configured chains ───
+        self.chains: dict[str, ChainConnection] = {}
+        for chain_name, rpc_url in ACTIVE_CHAINS.items():
+            try:
+                conn = ChainConnection(chain_name, rpc_url, self.use_official)
+                if conn.w3.is_connected():
+                    self.chains[chain_name] = conn
+                    logger.info(f"[{chain_name}] Connected (chain ID: {conn.w3.eth.chain_id})")
+                else:
+                    logger.warning(f"[{chain_name}] Failed to connect to {rpc_url}")
+            except Exception as e:
+                logger.warning(f"[{chain_name}] Connection error: {e}")
 
-        # ─── Reputation contract ───
-        if self.use_official and ERC8004_REPUTATION_REGISTRY:
-            self.reputation_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(ERC8004_REPUTATION_REGISTRY),
-                abi=ERC8004_REPUTATION_ABI,
-            )
-            self.reputation_mode = "erc8004"
-            logger.info(f"Reputation Registry (ERC-8004): {ERC8004_REPUTATION_REGISTRY}")
-        elif REPUTATION_REGISTRY_ADDRESS:
-            self.reputation_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(REPUTATION_REGISTRY_ADDRESS),
-                abi=CUSTOM_REPUTATION_ABI,
-            )
-            self.reputation_mode = "custom"
-            logger.info(f"Reputation Registry (custom): {REPUTATION_REGISTRY_ADDRESS}")
-        else:
-            self.reputation_contract = None
-            self.reputation_mode = None
+        if not self.chains:
+            logger.error("No chains connected. Check RPC URLs.")
+            sys.exit(1)
 
-        # ─── Validation contract (always custom) ───
-        self.validation_contract = None
-        if VALIDATION_REGISTRY_ADDRESS:
-            self.validation_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(VALIDATION_REGISTRY_ADDRESS),
-                abi=VALIDATION_ABI,
-            )
-            logger.info(f"Validation Registry (custom): {VALIDATION_REGISTRY_ADDRESS}")
+        logger.info(f"Indexing {len(self.chains)} chains: {', '.join(self.chains.keys())}")
 
-        # ─── Phase 4: AgentMonitor ───
-        self.monitor_contract = None
-        if AGENT_MONITOR_ADDRESS:
-            self.monitor_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(AGENT_MONITOR_ADDRESS),
-                abi=AGENT_MONITOR_ABI,
-            )
-            logger.info(f"AgentMonitor: {AGENT_MONITOR_ADDRESS}")
+        # Keep backward-compatible references for scoring/leaderboard methods
+        # (these don't need chain-specific Web3)
+        primary = next(iter(self.chains.values()))
+        self.w3 = primary.w3
 
-        # ─── Phase 4: AgentSplits ───
-        self.splits_contract = None
-        if AGENT_SPLITS_ADDRESS:
-            self.splits_contract = self.w3.eth.contract(
-                address=Web3.to_checksum_address(AGENT_SPLITS_ADDRESS),
-                abi=AGENT_SPLITS_ABI,
-            )
-            logger.info(f"AgentSplits: {AGENT_SPLITS_ADDRESS}")
+        # Store current chain context for event processing methods
+        self._current_chain: str = "avalanche"
+        self._current_conn: ChainConnection | None = None
 
     # ─── State persistence ───────────────────────────────────────────────────
 
@@ -244,26 +269,29 @@ class AgentProofIndexer:
             logger.error(f"Error setting last block for {contract_name}: {e}")
 
     def get_block_timestamp(self, block_number: int) -> datetime:
-        block = self.w3.eth.get_block(block_number)
+        w3 = self._current_conn.w3 if self._current_conn else self.w3
+        block = w3.eth.get_block(block_number)
         return datetime.fromtimestamp(block.timestamp, tz=timezone.utc)
 
     # ─── Identity events ─────────────────────────────────────────────────────
 
     def process_identity_events(self, from_block: int, to_block: int) -> int:
-        if not self.identity_contract:
+        conn = self._current_conn
+        if not conn or not conn.identity_contract:
             return 0
 
-        if self.identity_mode == "erc8004":
+        if conn.identity_mode == "erc8004":
             return self._process_erc8004_identity(from_block, to_block)
         else:
             return self._process_custom_identity(from_block, to_block)
 
     def _process_erc8004_identity(self, from_block: int, to_block: int) -> int:
+        conn = self._current_conn
         count = 0
 
         # Registered events
         try:
-            events = self.identity_contract.events.Registered().get_logs(
+            events = conn.identity_contract.events.Registered().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -287,7 +315,7 @@ class AgentProofIndexer:
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "erc8004",
-                        "source_chain": "avalanche",
+                        "source_chain": self._current_chain,
                     },
                     on_conflict="agent_id,source_chain",
                 ).execute()
@@ -298,7 +326,7 @@ class AgentProofIndexer:
 
         # URIUpdated events
         try:
-            events = self.identity_contract.events.URIUpdated().get_logs(
+            events = conn.identity_contract.events.URIUpdated().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -326,10 +354,11 @@ class AgentProofIndexer:
         return count
 
     def _process_custom_identity(self, from_block: int, to_block: int) -> int:
+        conn = self._current_conn
         count = 0
 
         try:
-            events = self.identity_contract.events.AgentRegistered().get_logs(
+            events = conn.identity_contract.events.AgentRegistered().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -346,7 +375,7 @@ class AgentProofIndexer:
                         "registered_at": ts.isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                         "registry_source": "custom",
-                        "source_chain": "avalanche",
+                        "source_chain": self._current_chain,
                     },
                     on_conflict="agent_id,source_chain",
                 ).execute()
@@ -356,7 +385,7 @@ class AgentProofIndexer:
             logger.error(f"Error processing custom AgentRegistered events: {e}")
 
         try:
-            events = self.identity_contract.events.AgentURIUpdated().get_logs(
+            events = conn.identity_contract.events.AgentURIUpdated().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -375,10 +404,11 @@ class AgentProofIndexer:
     # ─── Reputation events ───────────────────────────────────────────────────
 
     def process_reputation_events(self, from_block: int, to_block: int) -> int:
-        if not self.reputation_contract:
+        conn = self._current_conn
+        if not conn or not conn.reputation_contract:
             return 0
 
-        if self.reputation_mode == "erc8004":
+        if conn.reputation_mode == "erc8004":
             return self._process_erc8004_reputation(from_block, to_block)
         else:
             return self._process_custom_reputation(from_block, to_block)
@@ -391,7 +421,7 @@ class AgentProofIndexer:
         """
         count = 0
         try:
-            events = self.reputation_contract.events.NewFeedback().get_logs(
+            events = self._current_conn.reputation_contract.events.NewFeedback().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -445,7 +475,7 @@ class AgentProofIndexer:
     def _process_custom_reputation(self, from_block: int, to_block: int) -> int:
         count = 0
         try:
-            events = self.reputation_contract.events.FeedbackSubmitted().get_logs(
+            events = self._current_conn.reputation_contract.events.FeedbackSubmitted().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -480,13 +510,14 @@ class AgentProofIndexer:
     # ─── Validation events (always custom) ───────────────────────────────────
 
     def process_validation_events(self, from_block: int, to_block: int) -> int:
-        if not self.validation_contract:
+        conn = self._current_conn
+        if not conn or not conn.validation_contract:
             return 0
 
         count = 0
 
         try:
-            events = self.validation_contract.events.ValidationRequested().get_logs(
+            events = conn.validation_contract.events.ValidationRequested().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -515,7 +546,7 @@ class AgentProofIndexer:
             logger.error(f"Error processing ValidationRequested events: {e}")
 
         try:
-            events = self.validation_contract.events.ValidationSubmitted().get_logs(
+            events = conn.validation_contract.events.ValidationSubmitted().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -541,14 +572,15 @@ class AgentProofIndexer:
     # ─── Phase 4: AgentMonitor events ────────────────────────────────────────
 
     def process_monitor_events(self, from_block: int, to_block: int) -> int:
-        if not self.monitor_contract:
+        conn = self._current_conn
+        if not conn or not conn.monitor_contract:
             return 0
 
         count = 0
 
         # EndpointRegistered
         try:
-            events = self.monitor_contract.events.EndpointRegistered().get_logs(
+            events = conn.monitor_contract.events.EndpointRegistered().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -576,7 +608,7 @@ class AgentProofIndexer:
 
         # EndpointRemoved
         try:
-            events = self.monitor_contract.events.EndpointRemoved().get_logs(
+            events = conn.monitor_contract.events.EndpointRemoved().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -591,7 +623,7 @@ class AgentProofIndexer:
 
         # UptimeCheckLogged
         try:
-            events = self.monitor_contract.events.UptimeCheckLogged().get_logs(
+            events = conn.monitor_contract.events.UptimeCheckLogged().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -617,14 +649,15 @@ class AgentProofIndexer:
     # ─── Phase 4: AgentSplits events ──────────────────────────────────────
 
     def process_splits_events(self, from_block: int, to_block: int) -> int:
-        if not self.splits_contract:
+        conn = self._current_conn
+        if not conn or not conn.splits_contract:
             return 0
 
         count = 0
 
         # SplitCreated
         try:
-            events = self.splits_contract.events.SplitCreated().get_logs(
+            events = conn.splits_contract.events.SplitCreated().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -653,7 +686,7 @@ class AgentProofIndexer:
 
         # SplitDeactivated
         try:
-            events = self.splits_contract.events.SplitDeactivated().get_logs(
+            events = conn.splits_contract.events.SplitDeactivated().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -667,7 +700,7 @@ class AgentProofIndexer:
 
         # SplitPaymentReceived
         try:
-            events = self.splits_contract.events.SplitPaymentReceived().get_logs(
+            events = conn.splits_contract.events.SplitPaymentReceived().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -694,7 +727,7 @@ class AgentProofIndexer:
 
         # SplitDistributed
         try:
-            events = self.splits_contract.events.SplitDistributed().get_logs(
+            events = conn.splits_contract.events.SplitDistributed().get_logs(
                 from_block=from_block, to_block=to_block
             )
             for event in events:
@@ -936,46 +969,55 @@ class AgentProofIndexer:
         return total
 
     def run_cycle(self):
-        try:
-            current_block = self.w3.eth.block_number
-        except Exception as e:
-            logger.error(f"Error getting block number: {e}")
-            return
-
-        safe_block = current_block - CONFIRMATION_BLOCKS
-        if safe_block < 0:
-            return
-
         total_events = 0
 
-        # Process each contract with chunking
-        contracts = [
-            ("identity", self.process_identity_events),
-            ("reputation", self.process_reputation_events),
-            ("validation", self.process_validation_events),
-            ("agent_monitor", self.process_monitor_events),
-            ("agent_splits", self.process_splits_events),
-        ]
+        for chain_name, conn in self.chains.items():
+            self._current_chain = chain_name
+            self._current_conn = conn
 
-        for contract_name, process_fn in contracts:
-            last = self.get_last_block(contract_name)
-            if last < safe_block:
-                start = last + 1
-                gap = safe_block - start + 1
-                if gap > MAX_BLOCK_RANGE:
-                    logger.info(f"[{contract_name}] Catching up {gap} blocks in chunks of {MAX_BLOCK_RANGE}")
-                count = self._process_contract_chunked(contract_name, process_fn, start, safe_block)
-                total_events += count
+            try:
+                current_block = conn.w3.eth.block_number
+            except Exception as e:
+                logger.error(f"[{chain_name}] Error getting block number: {e}")
+                continue
+
+            safe_block = current_block - CONFIRMATION_BLOCKS
+            if safe_block < 0:
+                continue
+
+            # Identity + Reputation on all chains; Validation/Monitor/Splits only on Avalanche
+            contracts = [
+                (f"{chain_name}:identity", self.process_identity_events),
+                (f"{chain_name}:reputation", self.process_reputation_events),
+            ]
+            if chain_name == "avalanche":
+                contracts.extend([
+                    (f"{chain_name}:validation", self.process_validation_events),
+                    (f"{chain_name}:agent_monitor", self.process_monitor_events),
+                    (f"{chain_name}:agent_splits", self.process_splits_events),
+                ])
+
+            for contract_name, process_fn in contracts:
+                last = self.get_last_block(contract_name)
+                if last < safe_block:
+                    start = last + 1
+                    gap = safe_block - start + 1
+                    if gap > MAX_BLOCK_RANGE:
+                        logger.info(f"[{contract_name}] Catching up {gap} blocks in chunks of {MAX_BLOCK_RANGE}")
+                    count = self._process_contract_chunked(contract_name, process_fn, start, safe_block)
+                    total_events += count
 
         if total_events > 0:
-            logger.info(f"Processed {total_events} events up to block {safe_block}")
+            logger.info(f"Processed {total_events} events across {len(self.chains)} chains")
             self.recalculate_scores()
             self.update_leaderboard()
             self.take_daily_snapshot()
 
     def run(self):
         mode = "Official ERC-8004" if self.use_official else "Custom"
-        logger.info(f"Starting indexer [{mode}] (poll: {POLL_INTERVAL}s, confirmations: {CONFIRMATION_BLOCKS})")
+        chains_str = ", ".join(self.chains.keys())
+        logger.info(f"Starting indexer [{mode}] on {len(self.chains)} chains: {chains_str}")
+        logger.info(f"Poll: {POLL_INTERVAL}s, confirmations: {CONFIRMATION_BLOCKS}")
 
         while True:
             try:
