@@ -539,19 +539,53 @@ class AgentScreener:
                         agent_scores[aid] = []
                     agent_scores[aid].append(float(h["composite_score"]))
 
+                # Look up categories for agents with score swings to apply
+                # category-aware thresholds (DeFi agents get wider bands)
+                swing_candidates = [
+                    aid for aid, scores in agent_scores.items()
+                    if len(scores) >= 2 and (max(scores) - min(scores)) > 15
+                ]
+                category_map: dict[int, str] = {}
+                if swing_candidates:
+                    try:
+                        cat_result = (
+                            db.table("agents")
+                            .select("agent_id, category")
+                            .in_("agent_id", swing_candidates[:200])
+                            .execute()
+                        )
+                        category_map = {
+                            a["agent_id"]: (a.get("category") or "general")
+                            for a in (cat_result.data or [])
+                        }
+                    except Exception:
+                        pass
+
+                # DeFi/trading agents get wider thresholds — strategy rotation
+                # and market regime changes cause legitimate volatility
+                DEFI_CATEGORIES = {"defi", "trading"}
+
                 for aid, scores in agent_scores.items():
                     if len(scores) >= 2:
                         swing = max(scores) - min(scores)
-                        if swing > 15:
+                        cat = category_map.get(aid, "general")
+                        is_defi = cat in DEFI_CATEGORIES
+
+                        # DeFi agents: 25pt alert / 45pt critical (vs 15pt / 30pt default)
+                        alert_threshold = 25 if is_defi else 15
+                        critical_threshold = 45 if is_defi else 30
+
+                        if swing > alert_threshold:
                             alerts.append({
                                 "agent_id": aid,
                                 "alert_type": "score_volatility",
-                                "severity": "high" if swing > 30 else "medium",
-                                "details": f"Score swung {swing:.1f} points in 24h ({min(scores):.1f}-{max(scores):.1f})",
+                                "severity": "high" if swing > critical_threshold else "medium",
+                                "details": f"Score swung {swing:.1f} points in 24h ({min(scores):.1f}-{max(scores):.1f})"
+                                           + (f" [DeFi threshold: {alert_threshold}/{critical_threshold}]" if is_defi else ""),
                                 "created_at": now.isoformat(),
                             })
                         # Record score crash as failure event
-                        if swing > 30:
+                        if swing > critical_threshold:
                             try:
                                 db.table("failure_events").insert({
                                     "agent_id": aid,

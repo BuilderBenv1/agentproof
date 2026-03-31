@@ -28,7 +28,7 @@ RED_400 = HexColor("#f87171")
 AMBER_400 = HexColor("#fbbf24")
 WHITE = HexColor("#ffffff")
 
-VERSION = "v2.2"
+VERSION = "v2.3"
 DATE = "March 2026"
 
 styles = getSampleStyleSheet()
@@ -98,7 +98,7 @@ def header_footer(canvas, doc):
     canvas.drawRightString(A4[0] - 20*mm, A4[1] - 13*mm, f"Page {doc.page}")
     # Footer line
     canvas.line(20*mm, 15*mm, A4[0] - 20*mm, 15*mm)
-    canvas.drawCentredString(A4[0]/2, 10*mm, f"AgentProof {VERSION} | 21 Chains | 9 Oracle Deployments | 128.4K+ Agents | {DATE}")
+    canvas.drawCentredString(A4[0]/2, 10*mm, f"AgentProof {VERSION} | 21 Chains | 9 Oracle Deployments | 128.4K+ Agents | 15 Risk Flags | {DATE}")
     canvas.restoreState()
 
 
@@ -124,7 +124,7 @@ def build():
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph(
         "21 Chains Indexed &nbsp;|&nbsp; 9 Oracle Deployments &nbsp;|&nbsp; 128.4K+ Agents &nbsp;|&nbsp; "
-        "214.6K+ Evaluations &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 14 Risk Flags",
+        "214.6K+ Evaluations &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 15 Risk Flags",
         stats_line_style,
     ))
     story.append(Spacer(1, 4*mm))
@@ -292,14 +292,16 @@ def build():
     story.append(Paragraph("5. Scoring Methodology", section_style))
     story.append(Paragraph(
         "The composite score (0-100) blends up to 11 weighted signals, Bayesian-smoothed to prevent gaming. "
+        "Validation score (on-chain, hardest to game) weighted at 20%; rating score (most gameable) at 25%. "
+        "Post-composite penalty registry can hard-floor scores for confirmed bad actors. "
         "Current network average: 43.8/100 across 128,400+ agents.",
         body_style,
     ))
 
     signal_data = [
         ["Signal", "Weight", "Description"],
-        ["Rating Score", "30%", "Bayesian-smoothed avg with reviewer trust weighting (prior=50, k=3)"],
-        ["Validation Score", "15%", "On-chain validation success rate"],
+        ["Rating Score", "25%", "Bayesian-smoothed avg with reviewer trust weighting (prior=50, k=3)"],
+        ["Validation Score", "20%", "On-chain validation success rate (hardest signal to game)"],
         ["Account Age", "12%", "Logarithmic maturity curve (365d baseline)"],
         ["Volume Score", "10%", "Logarithmic feedback count (log10 scale)"],
         ["Consistency Score", "10%", "Inverse standard deviation of ratings"],
@@ -354,10 +356,12 @@ def build():
     story.append(Paragraph("ANTI-GAMING DEFENSES", label_style))
     for name, desc in [
         ("Reviewer Trust Weighting", "Feedback weighted by reviewer's own trust score. A Diamond agent's rating counts more than an Unranked bot's."),
+        ("Reviewer Bootstrap Path", "New reviewers earn weight through accuracy — ratings that align within 15pts of consensus earn up to +20 bonus weight, breaking the bootstrap circularity problem."),
         ("Bayesian Smoothing", "Prior=50, k=3. A single perfect rating scores 62.5, not 100. Gaming requires sustained volume."),
         ("Freshness Penalty", "<7d: 0.70x, 7-30d: 0.85x, 30-90d: 0.95x. Identity rotation costs 30% for a week."),
+        ("Penalty Registry", "Hard-floor slash for confirmed malicious behaviour. Critical=0.0x, High=0.1x, Medium=0.3x, Low=0.6x. Recovery through sustained clean operation (30-180 days). Critical penalties cap at 0.5x — never full auto-recovery."),
         ("Deployer Lineage", "Serial deployers who abandon agents taint all future registrations."),
-        ("Anomaly Detection", "Autonomous job runs every 120s. >20pt drops flagged as SUSPICIOUS_VOLATILITY."),
+        ("Anomaly Detection", "Autonomous job runs every 15 min. Category-aware thresholds: DeFi agents get 25/45pt alert/critical bands (vs 15/30pt default) to avoid false positives from market regime changes."),
         ("Concentration Detection", ">60% feedback from single reviewer triggers CONCENTRATED_FEEDBACK flag."),
     ]:
         story.append(Paragraph(f"<b>{name}</b> &mdash; {desc}", small_style))
@@ -369,10 +373,10 @@ def build():
         "and a dollar-denominated max exposure ceiling for insurance underwriting.",
         body_style,
     ))
-    story.append(Paragraph("14 RISK FLAGS", label_style))
+    story.append(Paragraph("15 RISK FLAGS", label_style))
     flags = [
         "HIGH_RISK_SCORE", "CONCENTRATED_FEEDBACK", "SERIAL_DEPLOYER",
-        "SUSPICIOUS_VOLATILITY", "LOW_UPTIME", "FREQUENT_URI_CHANGES",
+        "PENALIZED", "SUSPICIOUS_VOLATILITY", "LOW_UPTIME", "FREQUENT_URI_CHANGES",
         "NEW_IDENTITY", "LOW_FEEDBACK", "UNVERIFIED",
         "HIGH_FAILURE_RATE", "SLOW_RECOVERY", "ACTIVE_FAILURE",
         "HIGH_JOB_FAILURE_RATE", "JOB_ABANDONMENT",
@@ -390,6 +394,68 @@ def build():
         "<b>Max Exposure Model (Insurance Bridge)</b> &mdash; Dollar-denominated trust ceiling calculated from composite score, "
         "confidence multiplier, age bonus, and validation bonus. This is the data structure Willis Towers Watson identified "
         "as the missing input for underwriting agent risk.",
+        small_style,
+    ))
+
+    # ===== SECTION 6.5: PENALTY REGISTRY =====
+    story.append(Paragraph("6.1 Penalty Registry (Slash &amp; Recovery)", subsection_style))
+    story.append(Paragraph(
+        "A dedicated negative-signal path that can hard-floor an agent's composite score regardless of other signals. "
+        "Unlike additive scoring (where bad behaviour can be masked by strong performance in other dimensions), "
+        "the penalty registry applies a post-composite multiplier that overrides the weighted score.",
+        body_style,
+    ))
+
+    penalty_data = [
+        ["Severity", "Multiplier", "Recovery (Clean Days)", "Max Recovery"],
+        ["Critical", "0.0x", "180 days", "0.5x (manual review required)"],
+        ["High", "0.1x", "90 days", "1.0x (full)"],
+        ["Medium", "0.3x", "60 days", "1.0x (full)"],
+        ["Low", "0.6x", "30 days", "1.0x (full)"],
+    ]
+    t_penalty = Table(penalty_data, colWidths=[60, 60, 120, 170])
+    t_penalty.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), GRAY_800),
+        ("TEXTCOLOR", (0, 0), (-1, 0), EMERALD),
+        ("TEXTCOLOR", (0, 1), (-1, -1), GRAY_300),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("FONTNAME", (0, 0), (-1, 0), "Courier"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY_800),
+    ]))
+    story.append(t_penalty)
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph(
+        "Penalties are a <b>slash, not a ban</b>. An agent can recover trust through sustained clean operation — "
+        "no new flags, stable or rising score, no anomaly alerts. Recovery is linear within the window: a high-severity "
+        "penalty at 45/90 days clean recovers from 0.1x to 0.55x. Critical penalties cap at 0.5x and require manual "
+        "review by an oracle operator for full rehabilitation. The consecutive_good_days counter resets to zero "
+        "if any new penalty event is recorded during recovery.",
+        small_style,
+    ))
+    story.append(Paragraph(
+        "<b>Penalty triggers:</b> confirmed exploits, OFAC-adjacent address associations, verified sybil ring participation, "
+        "repeated validation fraud, demonstrated score manipulation. Evidence URI required for all entries.",
+        small_style,
+    ))
+
+    # ===== SECTION 6.2: REVIEWER BOOTSTRAP =====
+    story.append(Paragraph("6.2 Reviewer Bootstrap Path", subsection_style))
+    story.append(Paragraph(
+        "Reviewer trust weighting creates a bootstrap circularity: you need a high composite score to have review influence, "
+        "but composite score comes from being reviewed. The bootstrap path breaks this cycle by letting new reviewers "
+        "earn weight through demonstrated accuracy — alignment between their ratings and the eventual consensus score "
+        "of the agents they review.",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>Base weight:</b> max(10.0, reviewer_composite_score) — existing floor ensures all feedback counts. "
+        "<b>Accuracy bonus:</b> up to +20 weight for reviewers whose historical ratings align within 15 points of consensus. "
+        "<b>Volume gate:</b> 5+ prior reviews required to activate the accuracy bonus. "
+        "This means a net-new reviewer with zero composite score starts at weight 10, but after 5 accurate reviews "
+        "can reach weight 30 — equivalent to a Bronze-tier agent's natural weight.",
         small_style,
     ))
 
@@ -478,7 +544,7 @@ def build():
     job_data = [
         ["Job", "Interval", "Description"],
         ["Agent Screening", "60s", "Compute evaluations for new agents, submit on-chain"],
-        ["Anomaly Monitor", "120s", "Detect >20pt score drops, flag volatility"],
+        ["Anomaly Monitor", "900s", "Category-aware volatility detection (DeFi: 25/45pt thresholds)"],
         ["Liveness Probing", "300s", "HTTP health checks to agent endpoints"],
         ["Failure Metrics", "300s", "MTTR, active failures, recovery tracking"],
         ["Network Report", "600s", "Publish ecosystem stats via event feed"],

@@ -30,6 +30,7 @@ class RiskFlag(str, Enum):
     ACTIVE_FAILURE = "ACTIVE_FAILURE"
     HIGH_JOB_FAILURE_RATE = "HIGH_JOB_FAILURE_RATE"
     JOB_ABANDONMENT = "JOB_ABANDONMENT"
+    PENALIZED = "PENALIZED"
 
 
 class RiskLevel(str, Enum):

@@ -117,6 +117,49 @@ def _calculate_freshness_multiplier(account_age_days: int) -> float:
     return 1.0
 
 
+def _calculate_penalty_multiplier(
+    penalty_severity: str | None,
+    days_since_penalty: int = 0,
+    consecutive_good_days: int = 0,
+) -> float:
+    """Penalty multiplier with recovery path for reformed agents.
+
+    This is a slash, not a permanent ban. Agents can recover trust through
+    sustained improved behaviour over time. The penalty decays as the agent
+    demonstrates consecutive days of clean operation (no new flags, stable
+    or rising score, no anomaly alerts).
+
+    Base multipliers by severity:
+    - "critical": 0.0 — confirmed exploit, OFAC-adjacent, active threat
+    - "high":     0.1 — confirmed malicious pattern, repeated abuse
+    - "medium":   0.3 — suspicious pattern under investigation
+    - "low":      0.6 — minor violation, probationary
+    - None:       1.0 — no penalty
+
+    Recovery schedule (consecutive_good_days required):
+    - "low":      30 days clean → full recovery
+    - "medium":   60 days clean → full recovery
+    - "high":     90 days clean → full recovery
+    - "critical": 180 days clean → recovers to 0.5 max (never full auto-recovery)
+
+    Recovery is linear within the window. E.g., a "high" penalty at 45/90 days
+    clean recovers from 0.1 → 0.55 (halfway between 0.1 and 1.0).
+    """
+    if penalty_severity is None:
+        return 1.0
+
+    severity = penalty_severity.lower()
+    base = {"critical": 0.0, "high": 0.1, "medium": 0.3, "low": 0.6}.get(severity, 1.0)
+    recovery_days = {"critical": 180, "high": 90, "medium": 60, "low": 30}.get(severity, 30)
+    max_recovery = {"critical": 0.5, "high": 1.0, "medium": 1.0, "low": 1.0}.get(severity, 1.0)
+
+    if consecutive_good_days <= 0:
+        return base
+
+    progress = min(1.0, consecutive_good_days / recovery_days)
+    return base + (max_recovery - base) * progress
+
+
 def _calculate_reviewer_weighted_rating(
     ratings: list[float],
     reviewer_scores: list[float],
@@ -144,6 +187,80 @@ def _calculate_reviewer_weighted_rating(
     return weighted_sum / weight_sum if weight_sum > 0 else sum(ratings) / len(ratings)
 
 
+def _calculate_reviewer_bootstrap_weight(
+    db,
+    reviewer_address: str,
+    reviewer_composite: float,
+) -> float:
+    """Calculate reviewer trust weight with bootstrap path for new reviewers.
+
+    New reviewers start at the floor weight (10.0) but can earn higher weight
+    through demonstrated accuracy — alignment between their ratings and the
+    eventual consensus score of the agents they review. This breaks the
+    bootstrap circularity where you need a high composite score to have
+    review influence, but can't earn a composite score without being reviewed.
+
+    Bootstrap weight formula:
+    - Base: max(10.0, reviewer_composite)  [existing floor]
+    - Accuracy bonus: up to +20 points for reviewers whose historical ratings
+      align within 15 points of the agent's eventual composite score
+    - Volume gate: requires 5+ prior reviews to activate accuracy bonus
+
+    Returns the effective weight for this reviewer (10-120 range).
+    """
+    base_weight = max(10.0, reviewer_composite)
+
+    # Look up reviewer's historical accuracy
+    try:
+        past_reviews = (
+            db.table("reputation_events")
+            .select("agent_id, rating")
+            .eq("reviewer_address", reviewer_address)
+            .limit(50)
+            .execute()
+        )
+        if not past_reviews.data or len(past_reviews.data) < 5:
+            return base_weight
+
+        # Get current composite scores for agents they've reviewed
+        reviewed_ids = list(set(r["agent_id"] for r in past_reviews.data))[:30]
+        agent_scores = (
+            db.table("agents")
+            .select("agent_id, composite_score")
+            .in_("agent_id", reviewed_ids)
+            .execute()
+        )
+        if not agent_scores.data:
+            return base_weight
+
+        score_map = {
+            a["agent_id"]: float(a.get("composite_score") or 0)
+            for a in agent_scores.data
+        }
+
+        # Calculate accuracy: % of reviews within 15 points of consensus
+        aligned = 0
+        total = 0
+        for review in past_reviews.data:
+            consensus = score_map.get(review["agent_id"])
+            if consensus is not None and consensus > 0:
+                total += 1
+                if abs(review["rating"] - consensus) <= 15:
+                    aligned += 1
+
+        if total < 5:
+            return base_weight
+
+        accuracy = aligned / total  # 0.0 to 1.0
+        # Accuracy bonus: up to +20 weight for high-accuracy reviewers
+        accuracy_bonus = accuracy * 20.0
+
+        return base_weight + accuracy_bonus
+
+    except Exception:
+        return base_weight
+
+
 def calculate_composite_score(
     average_rating: float,
     feedback_count: int,
@@ -156,13 +273,20 @@ def calculate_composite_score(
     coding_score: float = -1.0,
     job_score: float = -1.0,
     reviewer_weighted_rating: float = -1.0,
+    penalty_severity: str | None = None,
+    days_since_penalty: int = 0,
+    consecutive_good_days: int = 0,
 ) -> tuple[float, ScoreBreakdown]:
     """
     Composite score (0-100) with 8 base signals + optional coding + job signals.
+    Rating weight: 25%. Validation weight: 20%. Validation is the hardest signal
+    to game (on-chain verifiable) so it gets more weight than the most gameable
+    signal (ratings).
     When coding_score >= 0, weights rebalance to include it at 10%.
     When job_score >= 0, weights rebalance to include it at 8%.
     When reviewer_weighted_rating >= 0, blends it 60/40 with raw Bayesian rating
     to create a trust-graph-aware score.
+    Post-factors: freshness penalty + penalty registry (slash with recovery path).
     Returns (score, breakdown) so the oracle can expose component scores.
     """
     prior_rating = 50.0
@@ -214,10 +338,10 @@ def calculate_composite_score(
     # Base signals always present: rating, volume, consistency, validation, age, deployer, uri_stability
     # Optional signals: uptime, coding, job — when absent, weight redistributed to base signals.
     signals: list[tuple[float, float]] = [
-        (rating_score, 0.30),
+        (rating_score, 0.25),
         (volume_score, 0.10),
         (consistency_score, 0.10),
-        (validation_score, 0.15),
+        (validation_score, 0.20),
         (age_score, 0.12),
         (deployer_score, 0.08),
         (uri_stability, 0.05),
@@ -233,8 +357,9 @@ def calculate_composite_score(
     total_weight = sum(w for _, w in signals)
     composite = sum(score * (w / total_weight) for score, w in signals)
 
-    # Apply freshness penalty
-    composite *= freshness
+    # Apply freshness penalty, then penalty registry slash
+    penalty = _calculate_penalty_multiplier(penalty_severity, days_since_penalty, consecutive_good_days)
+    composite *= freshness * penalty
 
     breakdown = ScoreBreakdown(
         rating_score=round(rating_score, 2),
@@ -354,7 +479,7 @@ def _determine_recommendation(
 ) -> Recommendation:
     has_high_risk_flag = any(
         f in risk_flags
-        for f in [RiskFlag.HIGH_RISK_SCORE, RiskFlag.CONCENTRATED_FEEDBACK]
+        for f in [RiskFlag.HIGH_RISK_SCORE, RiskFlag.CONCENTRATED_FEEDBACK, RiskFlag.PENALIZED]
     )
     if has_high_risk_flag or composite_score < 40:
         return Recommendation.HIGH_RISK
@@ -372,6 +497,7 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
         RiskFlag.HIGH_RISK_SCORE: 3,
         RiskFlag.CONCENTRATED_FEEDBACK: 3,
         RiskFlag.SERIAL_DEPLOYER: 3,
+        RiskFlag.PENALIZED: 3,
         RiskFlag.SUSPICIOUS_VOLATILITY: 2,
         RiskFlag.LOW_UPTIME: 2,
         RiskFlag.FREQUENT_URI_CHANGES: 2,
@@ -520,6 +646,7 @@ class TrustService:
         std_dev = calculate_std_dev(ratings)
 
         # Reviewer trust weighting — look up each reviewer's composite score
+        # Uses bootstrap weights so new reviewers can earn influence through accuracy
         reviewer_weighted_avg = -1.0
         if feedback_count >= 3 and reviewer_addresses:
             try:
@@ -534,8 +661,13 @@ class TrustService:
                     r["owner_address"]: float(r.get("composite_score") or 0)
                     for r in (rev_scores_result.data or [])
                 }
-                reviewer_scores = [rev_score_map.get(addr, 0.0) for addr in reviewer_addresses]
-                reviewer_weighted_avg = _calculate_reviewer_weighted_rating(ratings, reviewer_scores)
+                # Use bootstrap weights: accuracy bonus on top of composite score floor
+                reviewer_weights = []
+                for addr in reviewer_addresses:
+                    base_score = rev_score_map.get(addr, 0.0)
+                    bootstrap_weight = _calculate_reviewer_bootstrap_weight(db, addr, base_score)
+                    reviewer_weights.append(bootstrap_weight)
+                reviewer_weighted_avg = _calculate_reviewer_weighted_rating(ratings, reviewer_weights)
             except Exception:
                 pass  # Fall back to unweighted
 
@@ -632,6 +764,31 @@ class TrustService:
         except Exception:
             pass
 
+        # Penalty registry lookup — slash with recovery path
+        penalty_severity = None
+        days_since_penalty = 0
+        consecutive_good_days = 0
+        try:
+            penalty_result = (
+                db.table("penalty_registry")
+                .select("severity, created_at, consecutive_good_days")
+                .eq("agent_id", agent_id)
+                .eq("active", True)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if penalty_result.data:
+                pen = penalty_result.data[0]
+                penalty_severity = pen.get("severity")
+                consecutive_good_days = int(pen.get("consecutive_good_days") or 0)
+                pen_created = datetime.fromisoformat(
+                    str(pen["created_at"]).replace("Z", "+00:00")
+                )
+                days_since_penalty = (datetime.now(timezone.utc) - pen_created).days
+        except Exception:
+            pass  # Table may not exist yet — no penalty applied
+
         # Compute score
         composite, breakdown = calculate_composite_score(
             average_rating=avg_rating,
@@ -645,6 +802,9 @@ class TrustService:
             coding_score=coding,
             job_score=job_score_val,
             reviewer_weighted_rating=reviewer_weighted_avg,
+            penalty_severity=penalty_severity,
+            days_since_penalty=days_since_penalty,
+            consecutive_good_days=consecutive_good_days,
         )
         tier = determine_tier(composite, feedback_count)
 
@@ -671,6 +831,8 @@ class TrustService:
             risk_flags.append(RiskFlag.FREQUENT_URI_CHANGES)
         if age_days < 7:
             risk_flags.append(RiskFlag.NEW_IDENTITY)
+        if penalty_severity is not None:
+            risk_flags.append(RiskFlag.PENALIZED)
 
         # Failure-based risk flags
         failure_count = int(agent.get("failure_count") or 0)
@@ -811,8 +973,20 @@ class TrustService:
         risk_flags = list(evaluation.risk_flags)
 
         # Additional: score volatility from score_history
+        # DeFi/trading agents get wider threshold (45pt vs 30pt) to avoid
+        # false positives from legitimate strategy rotation or market regimes
         db = get_supabase()
         try:
+            agent_row = (
+                db.table("agents")
+                .select("category")
+                .eq("agent_id", agent_id)
+                .limit(1)
+                .execute()
+            )
+            agent_cat = (agent_row.data[0].get("category") or "general") if agent_row.data else "general"
+            volatility_threshold = 45 if agent_cat in ("defi", "trading") else 30
+
             history = (
                 db.table("score_history")
                 .select("composite_score")
@@ -824,7 +998,7 @@ class TrustService:
             if len(history.data) >= 3:
                 scores = [float(h["composite_score"]) for h in history.data]
                 score_range = max(scores) - min(scores)
-                if score_range > 30:
+                if score_range > volatility_threshold:
                     risk_flags.append(RiskFlag.SUSPICIOUS_VOLATILITY)
         except Exception:
             pass
@@ -880,6 +1054,10 @@ class TrustService:
             )
         if RiskFlag.ACTIVE_FAILURE in risk_flags:
             details_parts.append("Agent has unresolved active failure events")
+        if RiskFlag.PENALIZED in risk_flags:
+            details_parts.append(
+                "Agent is under penalty slash — score hard-floored pending recovery"
+            )
 
         return RiskAssessment(
             agent_id=agent_id,

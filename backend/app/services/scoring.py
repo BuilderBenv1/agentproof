@@ -24,6 +24,50 @@ def calculate_freshness_multiplier(account_age_days: int) -> float:
     return 1.0
 
 
+def calculate_penalty_multiplier(
+    penalty_severity: str | None,
+    days_since_penalty: int = 0,
+    consecutive_good_days: int = 0,
+) -> float:
+    """Penalty multiplier with recovery path for reformed agents.
+
+    This is a slash, not a permanent ban. Agents can recover trust through
+    sustained improved behaviour over time. The penalty decays as the agent
+    demonstrates consecutive days of clean operation (no new flags, stable
+    or rising score, no anomaly alerts).
+
+    Base multipliers by severity:
+    - "critical": 0.0 — confirmed exploit, OFAC-adjacent, active threat
+    - "high":     0.1 — confirmed malicious pattern, repeated abuse
+    - "medium":   0.3 — suspicious pattern under investigation
+    - "low":      0.6 — minor violation, probationary
+    - None:       1.0 — no penalty
+
+    Recovery schedule (consecutive_good_days required):
+    - "low":      30 days clean → full recovery
+    - "medium":   60 days clean → full recovery
+    - "high":     90 days clean → full recovery
+    - "critical": 180 days clean → recovers to 0.5 max (never full auto-recovery)
+
+    Recovery is linear within the window. E.g., a "high" penalty at 45/90 days
+    clean recovers from 0.1 → 0.55 (halfway between 0.1 and 1.0).
+    """
+    if penalty_severity is None:
+        return 1.0
+
+    severity = penalty_severity.lower()
+    base = {"critical": 0.0, "high": 0.1, "medium": 0.3, "low": 0.6}.get(severity, 1.0)
+    recovery_days = {"critical": 180, "high": 90, "medium": 60, "low": 30}.get(severity, 30)
+    max_recovery = {"critical": 0.5, "high": 1.0, "medium": 1.0, "low": 1.0}.get(severity, 1.0)
+
+    if consecutive_good_days <= 0:
+        return base
+
+    # Linear interpolation from base → max_recovery over recovery_days
+    progress = min(1.0, consecutive_good_days / recovery_days)
+    return base + (max_recovery - base) * progress
+
+
 def calculate_deployer_score(
     total_agents: int,
     active_agents: int,
@@ -73,19 +117,23 @@ def calculate_composite_score(
     uptime_pct: float = -1.0,
     deployer_score: float = 50.0,
     uri_change_count: int = 0,
+    penalty_severity: str | None = None,
+    days_since_penalty: int = 0,
+    consecutive_good_days: int = 0,
 ) -> float:
     """
     Composite score (0-100) with 8 signals:
-    - Average rating: 30% (Bayesian smoothed)
+    - Average rating: 25% (Bayesian smoothed)
+    - Validation success rate: 20%
+    - Account age: 12% (log scale)
     - Feedback volume: 10% (log scale)
     - Feedback consistency: 10% (inverse std dev)
-    - Validation success rate: 15%
-    - Account age: 12% (log scale)
     - Uptime score: 10% (agents without uptime data get neutral 50.0)
     - Deployer reputation: 8%
     - URI stability: 5%
 
-    Post-factor: freshness multiplier penalizes new identities.
+    Post-factors: freshness multiplier penalizes new identities,
+    penalty multiplier hard-floors confirmed bad actors.
     """
     prior_rating = 50.0
     k = 3
@@ -122,20 +170,21 @@ def calculate_composite_score(
 
     uri_stability_score = calculate_uri_stability_score(uri_change_count)
     freshness = calculate_freshness_multiplier(account_age_days)
+    penalty = calculate_penalty_multiplier(penalty_severity, days_since_penalty, consecutive_good_days)
 
     composite = (
-        rating_score * 0.30
+        rating_score * 0.25
         + volume_score * 0.10
         + consistency_score * 0.10
-        + validation_score * 0.15
+        + validation_score * 0.20
         + age_score * 0.12
         + uptime_score * 0.10
         + deployer_score * 0.08
         + uri_stability_score * 0.05
     )
 
-    # Apply freshness penalty
-    composite *= freshness
+    # Apply freshness penalty, then hard-floor penalty
+    composite *= freshness * penalty
 
     return round(max(0.0, min(100.0, composite)), 2)
 
