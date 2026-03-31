@@ -6,7 +6,8 @@
 
 CREATE TABLE IF NOT EXISTS penalty_registry (
     id SERIAL PRIMARY KEY,
-    agent_id INTEGER NOT NULL REFERENCES agents(agent_id),
+    agent_id INTEGER NOT NULL,
+    source_chain TEXT NOT NULL DEFAULT 'avalanche',
     severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
     reason TEXT NOT NULL,
     evidence_uri TEXT,
