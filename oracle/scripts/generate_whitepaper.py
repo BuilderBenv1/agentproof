@@ -1,4 +1,4 @@
-"""Generate AgentProof Whitepaper v2.2 PDF using ReportLab."""
+"""Generate AgentProof Whitepaper v2.3 PDF using ReportLab."""
 
 import os
 from reportlab.lib.pagesizes import A4
@@ -98,7 +98,7 @@ def header_footer(canvas, doc):
     canvas.drawRightString(A4[0] - 20*mm, A4[1] - 13*mm, f"Page {doc.page}")
     # Footer line
     canvas.line(20*mm, 15*mm, A4[0] - 20*mm, 15*mm)
-    canvas.drawCentredString(A4[0]/2, 10*mm, f"AgentProof {VERSION} | 21 Chains | 9 Oracle Deployments | 128.4K+ Agents | 15 Risk Flags | {DATE}")
+    canvas.drawCentredString(A4[0]/2, 10*mm, f"AgentProof {VERSION} | 21 Chains | 9 Oracle Deployments | 150.9K+ Agents | 15 Risk Flags | {DATE}")
     canvas.restoreState()
 
 
@@ -123,8 +123,8 @@ def build():
     ))
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph(
-        "21 Chains Indexed &nbsp;|&nbsp; 9 Oracle Deployments &nbsp;|&nbsp; 128.4K+ Agents &nbsp;|&nbsp; "
-        "214.6K+ Evaluations &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 15 Risk Flags",
+        "21 Chains Indexed &nbsp;|&nbsp; 9 Oracle Deployments &nbsp;|&nbsp; 150.9K+ Agents &nbsp;|&nbsp; "
+        "221.3K+ Evaluations &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 15 Risk Flags",
         stats_line_style,
     ))
     story.append(Spacer(1, 4*mm))
@@ -134,7 +134,7 @@ def build():
     ))
     story.append(Spacer(1, 12*mm))
     story.append(Paragraph(
-        "128,400+ agents are registered on-chain across 21 chains. Protocols need to know which ones to trust "
+        "150,900+ agents are registered on-chain across 21 chains. Protocols need to know which ones to trust "
         "before delegating capital. AgentProof is the oracle they query.",
         ParagraphStyle("CoverDesc", parent=body_style, alignment=TA_CENTER, fontSize=10, leading=15),
     ))
@@ -144,8 +144,8 @@ def build():
     story.append(Paragraph("Abstract", section_style))
     story.append(Paragraph(
         "ERC-8004 gave AI agents an on-chain identity standard. Three registries &mdash; identity, reputation, "
-        "validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 128,400+ agents registered. "
-        "214,600+ evaluations computed. 307,200+ screenings performed. Average trust score: 43.8/100. "
+        "validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 150,900+ agents registered. "
+        "221,300+ evaluations computed. 307,200+ screenings performed. Average trust score: 43.8/100. "
         "The standard works. But the standard explicitly leaves the <b>integrity layer</b> as an exercise for the ecosystem.",
         body_style,
     ))
@@ -161,7 +161,7 @@ def build():
     story.append(Paragraph("1. The Infrastructure Gap", section_style))
     story.append(Paragraph(
         "ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation "
-        "&mdash; deployed across 21 chains via deterministic CREATE2 addresses. 128,400+ agents registered. The standard works.",
+        "&mdash; deployed across 21 chains via deterministic CREATE2 addresses. 150,900+ agents registered. The standard works.",
         body_style,
     ))
     story.append(Paragraph(
@@ -294,7 +294,7 @@ def build():
         "The composite score (0-100) blends up to 11 weighted signals, Bayesian-smoothed to prevent gaming. "
         "Validation score (on-chain, hardest to game) weighted at 20%; rating score (most gameable) at 25%. "
         "Post-composite penalty registry can hard-floor scores for confirmed bad actors. "
-        "Current network average: 43.8/100 across 128,400+ agents.",
+        "Current network average: 43.8/100 across 150,900+ agents.",
         body_style,
     ))
 
@@ -601,7 +601,7 @@ def build():
     story.append(Paragraph(
         "Tracking who built the agent, not just the agent. Serial deployers who spawn and abandon agents are "
         "flagged across all future registrations. Deployer score components: 40% abandonment ratio, 30% quality, "
-        "20% longevity, 10% volume. Applied across 128,400+ agents.",
+        "20% longevity, 10% volume. Applied across 150,900+ agents.",
         body_style,
     ))
 
@@ -609,8 +609,8 @@ def build():
     story.append(Paragraph("11. Roadmap", section_style))
     story.append(Paragraph("Q1 2026 (Current)", subsection_style))
     story.append(Paragraph(
-        "128,400+ agents indexed across 21 chains. 9 oracle deployments live. 2 oracle operators with on-chain consensus. "
-        "214,600+ evaluations computed. 307,200+ screenings. ERC-ACP hook integration. ReputationGateV2 on Base. "
+        "150,900+ agents indexed across 21 chains. 9 oracle deployments live. 2 oracle operators with on-chain consensus. "
+        "221,300+ evaluations computed. 307,200+ screenings. ERC-ACP hook integration. ReputationGateV2 on Base. "
         "TypeScript SDK v1.1.0. A2A + MCP protocol support.",
         small_style,
     ))
@@ -630,7 +630,7 @@ def build():
     # ===== SECTION 12: CONCLUSION =====
     story.append(Paragraph("12. Conclusion", section_style))
     story.append(Paragraph(
-        "The agent economy is live. 128,400+ agents are registered on-chain. Commerce protocols are assigning jobs, "
+        "The agent economy is live. 150,900+ agents are registered on-chain. Commerce protocols are assigning jobs, "
         "moving capital, and delegating authority to autonomous agents at machine speed. The registries exist. "
         "The integrity layer doesn't &mdash; or didn't.",
         body_style,
@@ -643,7 +643,7 @@ def build():
     ))
     story.append(Spacer(1, 6*mm))
     story.append(Paragraph(
-        "21 Chains &nbsp;|&nbsp; 9 Oracle Deployments &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 128.4K+ Agents",
+        "21 Chains &nbsp;|&nbsp; 9 Oracle Deployments &nbsp;|&nbsp; 2 Oracle Operators &nbsp;|&nbsp; 150.9K+ Agents",
         stats_line_style,
     ))
     story.append(Spacer(1, 10*mm))
