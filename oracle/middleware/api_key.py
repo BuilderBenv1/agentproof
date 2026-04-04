@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Paths that are free (no API key required)
 FREE_PATH_PREFIXES = (
+    "/api/v1/trust/",          # single-agent trust scores are free
     "/api/v1/network/",
     "/api/v1/integrations/",
     "/api/v1/badge/",
@@ -40,6 +41,11 @@ FREE_PATH_PREFIXES = (
     "/mcp",
     "/agent.json",
     "/agent_log.json",
+)
+
+# Paths that are free for single lookups but paid for bulk/advanced
+PAID_OVERRIDES = (
+    "/api/v1/trust/batch",     # batch evaluation requires API key
 )
 
 # Monthly call limits per tier (tracked via rolling 30-day window)
@@ -127,7 +133,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         # No key: check if this is a free endpoint
         if not raw_key:
             path = request.url.path
-            is_free = path == "/" or any(path.startswith(p) for p in FREE_PATH_PREFIXES)
+            is_paid_override = any(path.startswith(p) for p in PAID_OVERRIDES)
+            is_free = (
+                not is_paid_override
+                and (path == "/" or any(path.startswith(p) for p in FREE_PATH_PREFIXES))
+            )
             if not is_free:
                 return JSONResponse(
                     status_code=401,

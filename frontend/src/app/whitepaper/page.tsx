@@ -263,6 +263,10 @@ export default function WhitepaperPage() {
               <span className="text-xs font-medium text-white">Concentration Detection</span>
               <p className="text-[10px] text-gray-600 mt-1">&gt;60% feedback from single reviewer triggers CONCENTRATED_FEEDBACK flag. Prevents sybil via fake reviews.</p>
             </div>
+            <div className="bg-gray-800/50 rounded-lg p-3">
+              <span className="text-xs font-medium text-white">Penalty Registry</span>
+              <p className="text-[10px] text-gray-600 mt-1">Hard-floor override for confirmed malicious agents. KNOWN_MALICIOUS, CONFIRMED_EXPLOIT, SANCTIONED_ADDRESS, and RUGPULL_ASSOCIATED flags bypass composite scoring entirely — score floored to 0 regardless of other signals.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -278,7 +282,7 @@ export default function WhitepaperPage() {
         </p>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">14 Risk Flags</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">18 Risk Flags</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {[
               "HIGH_RISK_SCORE", "CONCENTRATED_FEEDBACK", "SERIAL_DEPLOYER",
@@ -286,9 +290,11 @@ export default function WhitepaperPage() {
               "NEW_IDENTITY", "LOW_FEEDBACK", "UNVERIFIED",
               "HIGH_FAILURE_RATE", "SLOW_RECOVERY", "ACTIVE_FAILURE",
               "HIGH_JOB_FAILURE_RATE", "JOB_ABANDONMENT",
+              "KNOWN_MALICIOUS", "CONFIRMED_EXPLOIT", "SANCTIONED_ADDRESS",
+              "RUGPULL_ASSOCIATED",
             ].map((flag) => (
-              <div key={flag} className="bg-red-500/5 border border-red-500/10 rounded px-2 py-1.5">
-                <span className="text-[10px] font-mono text-red-400">{flag}</span>
+              <div key={flag} className={`${["KNOWN_MALICIOUS", "CONFIRMED_EXPLOIT", "SANCTIONED_ADDRESS", "RUGPULL_ASSOCIATED"].includes(flag) ? "bg-red-500/15 border-red-500/30" : "bg-red-500/5 border-red-500/10"} border rounded px-2 py-1.5`}>
+                <span className={`text-[10px] font-mono ${["KNOWN_MALICIOUS", "CONFIRMED_EXPLOIT", "SANCTIONED_ADDRESS", "RUGPULL_ASSOCIATED"].includes(flag) ? "text-red-300" : "text-red-400"}`}>{flag}</span>
               </div>
             ))}
           </div>

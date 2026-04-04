@@ -74,6 +74,7 @@ def _get_chain_configs(settings) -> list[dict]:
         ("celo", settings.celo_rpc_url, settings.celo_oracle_address),
         ("arbitrum", settings.arbitrum_rpc_url, settings.arbitrum_oracle_address),
         ("monad", settings.monad_rpc_url, settings.monad_oracle_address),
+        ("optimism", settings.optimism_rpc_url, settings.optimism_oracle_address),
         ("linea", settings.linea_rpc_url, settings.linea_oracle_address),
         ("ethereum", settings.ethereum_rpc_url, settings.ethereum_oracle_address),
     ]

@@ -87,8 +87,8 @@ export default function PricingPage() {
             Trust Scoring <span className="text-emerald-400">API</span>
           </h1>
           <p className="text-gray-400 max-w-2xl mx-auto text-lg">
-            Gate DeFi actions, filter agent marketplaces, or verify reputation before transacting.
-            Pay per call or subscribe for volume discounts.
+            Trust scores are free for everyone. No API key, no signup, no paywall.
+            Batch evaluation, webhooks, and advanced features require an API key.
           </p>
         </div>
 
@@ -96,11 +96,12 @@ export default function PricingPage() {
         <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6 mb-10 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Zap className="w-5 h-5 text-emerald-400" />
-            <span className="text-emerald-400 font-bold text-lg">Start instantly at $0.05/call</span>
+            <span className="text-emerald-400 font-bold text-lg">Trust scores are free. No API key required.</span>
           </div>
           <p className="text-gray-400 text-sm">
-            No minimum spend, no commitment. Register an API key and start querying.
-            Overage on subscription plans automatically bills at pay-per-call rate — you&apos;re never blocked.
+            Query any agent&apos;s trust score instantly — no signup, no key, no paywall.
+            Batch evaluation, webhooks, and advanced risk assessment require an API key.
+            Subscription plans available for production-scale access.
           </p>
         </div>
 
@@ -145,14 +146,15 @@ export default function PricingPage() {
             <div className="flex gap-4">
               <div className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center font-bold text-sm flex-shrink-0">1</div>
               <div className="flex-1">
-                <h3 className="text-white font-semibold mb-2">Get your API key</h3>
+                <h3 className="text-white font-semibold mb-2">Query trust scores (free, no API key)</h3>
                 <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 font-mono text-sm">
                   <div className="flex items-start justify-between">
-                    <code className="text-emerald-400 whitespace-pre-wrap break-all">{`curl -X POST ${ORACLE_URL}/api/v1/integrations/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"protocol_name": "My Protocol", "contact_email": "dev@example.com"}'`}</code>
-                    <CopyButton text={`curl -X POST ${ORACLE_URL}/api/v1/integrations/register -H "Content-Type: application/json" -d '{"protocol_name": "My Protocol", "contact_email": "dev@example.com"}'`} />
+                    <code className="text-emerald-400 whitespace-pre-wrap break-all">{`curl ${ORACLE_URL}/api/v1/trust/1380`}</code>
+                    <CopyButton text={`curl ${ORACLE_URL}/api/v1/trust/1380`} />
                   </div>
+                  <p className="text-gray-500 text-xs mt-2">
+                    Returns: composite_score, tier, recommendation, risk_flags, score_breakdown. No signup required.
+                  </p>
                 </div>
               </div>
             </div>
@@ -161,16 +163,14 @@ export default function PricingPage() {
             <div className="flex gap-4">
               <div className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center font-bold text-sm flex-shrink-0">2</div>
               <div className="flex-1">
-                <h3 className="text-white font-semibold mb-2">Query trust scores</h3>
+                <h3 className="text-white font-semibold mb-2">Need batch, webhooks, or feedback? Get an API key</h3>
                 <div className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 font-mono text-sm">
                   <div className="flex items-start justify-between">
-                    <code className="text-emerald-400 whitespace-pre-wrap break-all">{`curl ${ORACLE_URL}/api/v1/trust/1380 \\
-  -H "X-Api-Key: ap_live_your_key_here"`}</code>
-                    <CopyButton text={`curl ${ORACLE_URL}/api/v1/trust/1380 -H "X-Api-Key: ap_live_your_key_here"`} />
+                    <code className="text-emerald-400 whitespace-pre-wrap break-all">{`curl -X POST ${ORACLE_URL}/api/v1/integrations/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"protocol_name": "My Protocol", "contact_email": "dev@example.com"}'`}</code>
+                    <CopyButton text={`curl -X POST ${ORACLE_URL}/api/v1/integrations/register -H "Content-Type: application/json" -d '{"protocol_name": "My Protocol", "contact_email": "dev@example.com"}'`} />
                   </div>
-                  <p className="text-gray-500 text-xs mt-2">
-                    Returns: composite_score, tier, recommendation, risk_flags, score_breakdown
-                  </p>
                 </div>
               </div>
             </div>

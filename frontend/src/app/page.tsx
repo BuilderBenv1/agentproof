@@ -347,18 +347,13 @@ export default function HomePage() {
               <p className="text-[#8888aa]"># Install</p>
               <p className="text-white">pip install agentproof</p>
               <p className="text-white mt-1">npm i @agentproof/sdk</p>
-              <p className="text-[#8888aa] mt-4"># Query a trust score</p>
+              <p className="text-[#8888aa] mt-4"># Query a trust score (free, no API key needed)</p>
               <p className="text-white ml-0">
-                <span className="text-[#00ff88]">from </span>
-                <span className="text-white">agentproof </span>
                 <span className="text-[#00ff88]">import </span>
-                <span className="text-white">AgentProof</span>
+                <span className="text-white">requests</span>
               </p>
               <p className="text-white mt-1">
-                client = AgentProof(api_key=<span className="text-[#ffaa00]">&quot;ap_live_...&quot;</span>)
-              </p>
-              <p className="text-white">
-                score = client.get_score(<span className="text-[#ffaa00]">&quot;0x1234...&quot;</span>)
+                score = requests.get(<span className="text-[#ffaa00]">&quot;https://oracle.agentproof.sh/api/v1/trust/42&quot;</span>).json()
               </p>
               <p className="text-[#8888aa] mt-1">
                 {`# => {score: 72.5, tier: "gold", agent_id: 42}`}

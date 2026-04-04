@@ -26,6 +26,54 @@ from models import (
 logger = logging.getLogger(__name__)
 
 
+# ─── Penalty Registry ───────────────────────────────────────────────
+# Hard-floor penalties override the composite score regardless of signals.
+# Each entry maps agent_id → (floor_score, flags, reason).
+# In production this would be backed by a DB table; for now it's populated
+# from the penalty_registry Supabase table at startup + cached.
+
+PENALTY_FLAGS = {
+    RiskFlag.KNOWN_MALICIOUS: 0,        # score hard-floored to 0
+    RiskFlag.CONFIRMED_EXPLOIT: 0,      # score hard-floored to 0
+    RiskFlag.SANCTIONED_ADDRESS: 0,     # score hard-floored to 0
+    RiskFlag.RUGPULL_ASSOCIATED: 5,     # score hard-floored to 5
+}
+
+_penalty_cache: dict[int, tuple[float, list[RiskFlag], str]] = {}
+_penalty_cache_lock = threading.Lock()
+_penalty_cache_loaded = False
+
+
+def _load_penalty_registry():
+    """Load penalty registry from Supabase. Called once at startup."""
+    global _penalty_cache_loaded
+    if _penalty_cache_loaded:
+        return
+    try:
+        db = get_supabase()
+        result = db.table("penalty_registry").select("*").eq("active", True).execute()
+        with _penalty_cache_lock:
+            for row in result.data or []:
+                agent_id = row["agent_id"]
+                flag = RiskFlag(row["flag"])
+                floor = PENALTY_FLAGS.get(flag, 0)
+                reason = row.get("reason", "")
+                _penalty_cache[agent_id] = (floor, [flag], reason)
+            _penalty_cache_loaded = True
+        logger.info("Penalty registry loaded: %d entries", len(_penalty_cache))
+    except Exception as e:
+        # Table may not exist yet — degrade gracefully
+        _penalty_cache_loaded = True
+        logger.warning("Penalty registry not available: %s", e)
+
+
+def get_penalty(agent_id: int) -> tuple[float, list[RiskFlag], str] | None:
+    """Check if an agent has an active penalty. Returns (floor, flags, reason) or None."""
+    _load_penalty_registry()
+    with _penalty_cache_lock:
+        return _penalty_cache.get(agent_id)
+
+
 # ─── In-memory TTL cache ─────────────────────────────────────────────
 
 CACHE_TTL_SECONDS = 300  # 5 minutes — matches screener cycle
@@ -477,6 +525,10 @@ def _fetch_delegation_stats(db, agent_id: int) -> tuple[float, int]:
 def _determine_recommendation(
     composite_score: float, feedback_count: int, risk_flags: list[RiskFlag]
 ) -> Recommendation:
+    # Penalty flags always result in HIGH_RISK
+    has_penalty = any(f in risk_flags for f in PENALTY_FLAGS)
+    if has_penalty:
+        return Recommendation.HIGH_RISK
     has_high_risk_flag = any(
         f in risk_flags
         for f in [RiskFlag.HIGH_RISK_SCORE, RiskFlag.CONCENTRATED_FEEDBACK, RiskFlag.PENALIZED]
@@ -507,8 +559,15 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
         RiskFlag.HIGH_FAILURE_RATE: 2,
         RiskFlag.SLOW_RECOVERY: 2,
         RiskFlag.ACTIVE_FAILURE: 3,
+        # Penalty flags are always critical severity
+        RiskFlag.KNOWN_MALICIOUS: 4,
+        RiskFlag.CONFIRMED_EXPLOIT: 4,
+        RiskFlag.SANCTIONED_ADDRESS: 4,
+        RiskFlag.RUGPULL_ASSOCIATED: 4,
     }
     max_severity = max(severity.get(f, 1) for f in risk_flags)
+    if max_severity >= 4:
+        return RiskLevel.CRITICAL
     if max_severity >= 3:
         return RiskLevel.HIGH
     if max_severity >= 2:
@@ -557,6 +616,14 @@ class TrustService:
             risk_flags.append(RiskFlag.UNVERIFIED)
         if age_days < 7:
             risk_flags.append(RiskFlag.NEW_IDENTITY)
+
+        # Apply penalty registry — hard-floor score for known-bad agents
+        penalty = get_penalty(agent_id)
+        if penalty is not None:
+            floor_score, penalty_flags, _reason = penalty
+            composite = min(composite, floor_score)
+            tier = determine_tier(composite, feedback_count)
+            risk_flags.extend(f for f in penalty_flags if f not in risk_flags)
 
         recommendation = _determine_recommendation(composite, feedback_count, risk_flags)
 
@@ -894,6 +961,14 @@ class TrustService:
 
         # Delegation stats
         delegation_rate, delegation_count = _fetch_delegation_stats(db, agent_id)
+
+        # Apply penalty registry — hard-floor score for known-bad agents
+        penalty = get_penalty(agent_id)
+        if penalty is not None:
+            floor_score, penalty_flags, _reason = penalty
+            composite = min(composite, floor_score)
+            tier = determine_tier(composite, feedback_count)
+            risk_flags.extend(f for f in penalty_flags if f not in risk_flags)
 
         recommendation = _determine_recommendation(
             composite, feedback_count, risk_flags

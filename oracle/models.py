@@ -31,6 +31,11 @@ class RiskFlag(str, Enum):
     HIGH_JOB_FAILURE_RATE = "HIGH_JOB_FAILURE_RATE"
     JOB_ABANDONMENT = "JOB_ABANDONMENT"
     PENALIZED = "PENALIZED"
+    # Penalty flags — hard-floor the score regardless of other signals
+    KNOWN_MALICIOUS = "KNOWN_MALICIOUS"
+    CONFIRMED_EXPLOIT = "CONFIRMED_EXPLOIT"
+    SANCTIONED_ADDRESS = "SANCTIONED_ADDRESS"
+    RUGPULL_ASSOCIATED = "RUGPULL_ASSOCIATED"
 
 
 class RiskLevel(str, Enum):

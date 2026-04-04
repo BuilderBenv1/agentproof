@@ -116,6 +116,7 @@ class OracleSettings(BaseSettings):
     arbitrum_oracle_address: str = ""
     celo_oracle_address: str = ""
     monad_oracle_address: str = ""
+    optimism_oracle_address: str = ""
     score_push_enabled: bool = False
     score_push_min_delta: float = 2.0
 
