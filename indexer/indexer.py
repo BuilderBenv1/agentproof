@@ -61,6 +61,17 @@ ERC8004_IDENTITY_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":false,"name":"newURI","type":"string"},{"indexed":true,"name":"updatedBy","type":"address"}],"name":"URIUpdated","type":"event"}
 ]""")
 
+# ERC-721 fallback ABI — some chains (SKALE) use NFT-based registries where
+# agent registration emits Transfer(address(0), owner, tokenId) instead of Registered.
+ERC721_IDENTITY_ABI = json.loads("""[
+    {"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":true,"name":"tokenId","type":"uint256"}],"name":"Transfer","type":"event"},
+    {"inputs":[{"name":"tokenId","type":"uint256"}],"name":"tokenURI","outputs":[{"name":"","type":"string"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"tokenId","type":"uint256"}],"name":"ownerOf","outputs":[{"name":"","type":"address"}],"stateMutability":"view","type":"function"}
+]""")
+
+# Chains whose ERC-8004 registry uses ERC-721 Transfer events instead of Registered
+ERC721_REGISTRY_CHAINS = {"skale"}
+
 ERC8004_REPUTATION_ABI = json.loads("""[
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":false,"name":"feedbackIndex","type":"uint64"},{"indexed":false,"name":"value","type":"int128"},{"indexed":false,"name":"valueDecimals","type":"uint8"},{"indexed":true,"name":"indexedTag1","type":"string"},{"indexed":false,"name":"tag1","type":"string"},{"indexed":false,"name":"tag2","type":"string"},{"indexed":false,"name":"endpoint","type":"string"},{"indexed":false,"name":"feedbackURI","type":"string"},{"indexed":false,"name":"feedbackHash","type":"bytes32"}],"name":"NewFeedback","type":"event"},
     {"anonymous":false,"inputs":[{"indexed":true,"name":"agentId","type":"uint256"},{"indexed":true,"name":"clientAddress","type":"address"},{"indexed":true,"name":"feedbackIndex","type":"uint64"}],"name":"FeedbackRevoked","type":"event"}
@@ -139,7 +150,20 @@ class ChainConnection:
         # Identity contract
         self.identity_contract = None
         self.identity_mode = None
-        if use_official and ERC8004_IDENTITY_REGISTRY:
+        self.erc721_identity_contract = None
+        if chain_name in ERC721_REGISTRY_CHAINS and ERC8004_IDENTITY_REGISTRY:
+            # ERC-721 based registry — listen for Transfer events, read tokenURI/ownerOf
+            self.erc721_identity_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
+                abi=ERC721_IDENTITY_ABI,
+            )
+            # Also set up standard contract for URIUpdated if supported
+            self.identity_contract = self.w3.eth.contract(
+                address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
+                abi=ERC8004_IDENTITY_ABI,
+            )
+            self.identity_mode = "erc721"
+        elif use_official and ERC8004_IDENTITY_REGISTRY:
             self.identity_contract = self.w3.eth.contract(
                 address=Web3.to_checksum_address(ERC8004_IDENTITY_REGISTRY),
                 abi=ERC8004_IDENTITY_ABI,
@@ -298,12 +322,18 @@ class AgentProofIndexer:
 
     def process_identity_events(self, from_block: int, to_block: int) -> int:
         conn = self._current_conn
-        if not conn or not conn.identity_contract:
+        if not conn:
             return 0
 
-        if conn.identity_mode == "erc8004":
+        if conn.identity_mode == "erc721":
+            return self._process_erc721_identity(from_block, to_block)
+        elif conn.identity_mode == "erc8004":
+            if not conn.identity_contract:
+                return 0
             return self._process_erc8004_identity(from_block, to_block)
         else:
+            if not conn.identity_contract:
+                return 0
             return self._process_custom_identity(from_block, to_block)
 
     def _process_erc8004_identity(self, from_block: int, to_block: int) -> int:
@@ -371,6 +401,63 @@ class AgentProofIndexer:
                 count += 1
         except Exception as e:
             logger.error(f"Error processing ERC-8004 URIUpdated events: {e}")
+
+        return count
+
+    def _process_erc721_identity(self, from_block: int, to_block: int) -> int:
+        """Process ERC-721 based identity registries (e.g. SKALE).
+
+        Listens for Transfer(address(0), owner, tokenId) mint events, then reads
+        tokenURI() and ownerOf() to extract agent metadata.
+        """
+        conn = self._current_conn
+        if not conn or not conn.erc721_identity_contract:
+            return 0
+        count = 0
+        nft = conn.erc721_identity_contract
+        zero = "0x0000000000000000000000000000000000000000"
+
+        try:
+            # Filter for mints only (from = address(0))
+            events = nft.events.Transfer().get_logs(
+                from_block=from_block,
+                to_block=to_block,
+                argument_filters={"from": zero},
+            )
+            for event in events:
+                token_id = event.args.tokenId
+                owner = event.args.to
+                ts = self.get_block_timestamp(event.blockNumber)
+
+                # Read URI from the contract
+                uri = ""
+                try:
+                    uri = nft.functions.tokenURI(token_id).call()
+                except Exception:
+                    pass
+
+                metadata = parse_agent_uri(uri) if uri else {}
+
+                self.db.table("agents").upsert(
+                    {
+                        "agent_id": token_id,
+                        "owner_address": owner,
+                        "agent_uri": _sanitize_text(uri),
+                        "name": _sanitize_text(metadata.get("name")),
+                        "description": _sanitize_text(metadata.get("description")),
+                        "category": metadata.get("category", "general"),
+                        "image_url": _sanitize_text(metadata.get("image")),
+                        "registered_at": ts.isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "registry_source": "erc8004",
+                        "source_chain": self._current_chain,
+                    },
+                    on_conflict="agent_id,source_chain",
+                ).execute()
+                logger.info(f"[ERC721-ID] [{self._current_chain}] Agent #{token_id} registered by {owner}")
+                count += 1
+        except Exception as e:
+            logger.error(f"Error processing ERC-721 Transfer (mint) events: {e}")
 
         return count
 

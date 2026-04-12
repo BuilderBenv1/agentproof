@@ -4,6 +4,10 @@ import { CATEGORIES } from "@/lib/constants";
 
 const CHAINS = [
   { value: "", label: "All Chains" },
+  { value: "skale", label: "SKALE", color: "#4DFFD2" },
+  { value: "goat", label: "GOAT Network", color: "#F7931A" },
+  { value: "citrea", label: "Citrea", color: "#E25822" },
+  { value: "tempo", label: "Tempo", color: "#00D4AA" },
   { value: "avalanche", label: "Avalanche", color: "#E84142" },
   { value: "ethereum", label: "Ethereum", color: "#627EEA" },
   { value: "base", label: "Base", color: "#0052FF" },
@@ -21,7 +25,6 @@ const CHAINS = [
   { value: "abstract", label: "Abstract", color: "#0066FF" },
   { value: "taiko", label: "Taiko", color: "#E81899" },
   { value: "megaeth", label: "MegaETH", color: "#FF6B35" },
-  { value: "skale", label: "SKALE", color: "#4DFFD2" },
   { value: "xlayer", label: "X Layer", color: "#1E1E1E" },
   { value: "soneium", label: "Soneium", color: "#7B61FF" },
   { value: "metis", label: "Metis", color: "#00DACC" },

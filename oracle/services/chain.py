@@ -279,6 +279,10 @@ _CREATE2_IDENTITY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
 _CREATE2_REPUTATION = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63"
 
 EVM_CHAINS = [
+    {"name": "skale",      "chain_id": 1187947933,  "rpc_attr": "skale_rpc_url",      "poa": False},  # SKALE Base (Expand v1) — gasless L3 on Base
+    {"name": "goat",       "chain_id": 2345,        "rpc_attr": "goat_rpc_url",       "poa": False},  # GOAT Network — Bitcoin L2, ERC-8004 live
+    {"name": "citrea",     "chain_id": 4114,        "rpc_attr": "citrea_rpc_url",     "poa": False},  # Citrea — Bitcoin zkEVM L2
+    {"name": "tempo",      "chain_id": 4217,        "rpc_attr": "tempo_rpc_url",      "poa": False},  # Tempo — ERC-8004 predeployed, no native gas token
     {"name": "avalanche",  "chain_id": 43114,       "rpc_attr": "avalanche_rpc_url",  "poa": True},
     {"name": "base",       "chain_id": 8453,        "rpc_attr": "base_rpc_url",       "poa": False},
     {"name": "linea",      "chain_id": 59144,       "rpc_attr": "linea_rpc_url",      "poa": False},
@@ -294,7 +298,6 @@ EVM_CHAINS = [
     {"name": "abstract",   "chain_id": 2741,        "rpc_attr": "abstract_rpc_url",   "poa": False},
     {"name": "taiko",      "chain_id": 167000,      "rpc_attr": "taiko_rpc_url",      "poa": False},
     {"name": "megaeth",    "chain_id": 4326,        "rpc_attr": "megaeth_rpc_url",    "poa": False},  # mainnet.megaeth.com/rpc
-    {"name": "skale",      "chain_id": 1187947933,  "rpc_attr": "skale_rpc_url",      "poa": False},
     {"name": "xlayer",     "chain_id": 196,         "rpc_attr": "xlayer_rpc_url",     "poa": False},
     {"name": "soneium",    "chain_id": 1868,        "rpc_attr": "soneium_rpc_url",    "poa": False},
     {"name": "metis",      "chain_id": 1088,        "rpc_attr": "metis_rpc_url",      "poa": False},

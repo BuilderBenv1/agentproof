@@ -14,6 +14,7 @@ Only deploys to chains that have an RPC URL but no oracle address configured yet
 
 import json
 import os
+import secrets
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -83,12 +84,49 @@ contract TrustScoreOracle {
 
 # Chains to deploy to
 CHAINS = [
+    {"name": "skale",     "chain_id": 1187947933, "rpc_env": "SKALE_RPC_URL",     "addr_env": "SKALE_ORACLE_ADDRESS",     "poa": False, "gasless": True},
+    {"name": "goat",      "chain_id": 2345,   "rpc_env": "GOAT_RPC_URL",      "addr_env": "GOAT_ORACLE_ADDRESS",      "poa": False},
+    {"name": "citrea",    "chain_id": 4114,   "rpc_env": "CITREA_RPC_URL",    "addr_env": "CITREA_ORACLE_ADDRESS",    "poa": False},
+    {"name": "tempo",     "chain_id": 4217,   "rpc_env": "TEMPO_RPC_URL",     "addr_env": "TEMPO_ORACLE_ADDRESS",     "poa": False},
     {"name": "bsc",       "chain_id": 56,     "rpc_env": "BSC_RPC_URL",       "addr_env": "BSC_ORACLE_ADDRESS",       "poa": True},
     {"name": "polygon",   "chain_id": 137,    "rpc_env": "POLYGON_RPC_URL",   "addr_env": "POLYGON_ORACLE_ADDRESS",   "poa": True},
     {"name": "celo",      "chain_id": 42220,  "rpc_env": "CELO_RPC_URL",      "addr_env": "CELO_ORACLE_ADDRESS",      "poa": False},
     {"name": "arbitrum",  "chain_id": 42161,  "rpc_env": "ARBITRUM_RPC_URL",  "addr_env": "ARBITRUM_ORACLE_ADDRESS",  "poa": False},
     {"name": "monad",     "chain_id": 143,    "rpc_env": "MONAD_RPC_URL",     "addr_env": "MONAD_ORACLE_ADDRESS",     "poa": False},
 ]
+
+
+def mine_skale_gas_price(gas_amount: int, from_address: str, nonce: int, difficulty: int = 1) -> int:
+    """Mine a PoW gasPrice for SKALE gasless transactions.
+
+    SKALE chains accept transactions with 0 balance if the gasPrice encodes
+    a valid proof-of-work. The algorithm XORs keccak256(nonce) with
+    keccak256(address), then searches for a random 32-byte value whose hash,
+    XORed with that result, satisfies the difficulty requirement.
+    """
+    max_uint256 = (1 << 256) - 1
+    div_constant = max_uint256 // difficulty
+
+    nonce_hash = int.from_bytes(Web3.keccak(nonce.to_bytes(32, "big")), "big")
+    addr_hash = int.from_bytes(
+        Web3.keccak(bytes.fromhex(from_address[2:].lower().zfill(40).rjust(64, "0"))),
+        "big",
+    )
+    nonce_addr_xor = nonce_hash ^ addr_hash
+
+    attempts = 0
+    while True:
+        candidate = secrets.token_bytes(32)
+        candidate_hash = int.from_bytes(Web3.keccak(candidate), "big")
+        result_hash = nonce_addr_xor ^ candidate_hash
+        if result_hash == 0:
+            continue
+        external_gas = div_constant // result_hash
+        attempts += 1
+        if external_gas >= gas_amount:
+            gas_price = int.from_bytes(candidate, "big")
+            print(f"    PoW mined in {attempts} attempts")
+            return gas_price
 
 
 def compile_contract():
@@ -151,7 +189,7 @@ def deploy_to_chain(chain: dict, private_key: str, abi: list, bytecode: str) -> 
     balance_native = w3.from_wei(balance, "ether")
     print(f"  [{name}] Wallet: {account.address}  Balance: {balance_native:.6f}")
 
-    if balance == 0:
+    if balance == 0 and not chain.get("gasless"):
         print(f"  [{name}] FAIL — zero balance")
         return None
 
@@ -173,20 +211,30 @@ def deploy_to_chain(chain: dict, private_key: str, abi: list, bytecode: str) -> 
         print(f"  [{name}] FAIL — gas estimation: {e}")
         return None
 
-    # Gas pricing — Polygon needs high priority fee (25+ gwei)
-    try:
-        base_fee = w3.eth.gas_price
-        if chain["chain_id"] == 137:  # Polygon
-            priority_fee = max(w3.to_wei(30, "gwei"), base_fee)
-        else:
-            priority_fee = min(w3.to_wei(2, "gwei"), base_fee)
-        tx["maxFeePerGas"] = base_fee * 2 + priority_fee
-        tx["maxPriorityFeePerGas"] = priority_fee
-    except Exception:
+    # Gas pricing
+    if chain.get("gasless"):
+        # SKALE — use chain's reported gas price with CREDIT balance
+        tx.pop("maxFeePerGas", None)
+        tx.pop("maxPriorityFeePerGas", None)
         tx["gasPrice"] = w3.eth.gas_price
+    else:
+        # Polygon needs high priority fee (25+ gwei)
+        try:
+            base_fee = w3.eth.gas_price
+            if chain["chain_id"] == 137:  # Polygon
+                priority_fee = max(w3.to_wei(30, "gwei"), base_fee)
+            else:
+                priority_fee = min(w3.to_wei(2, "gwei"), base_fee)
+            tx["maxFeePerGas"] = base_fee * 2 + priority_fee
+            tx["maxPriorityFeePerGas"] = priority_fee
+        except Exception:
+            tx["gasPrice"] = w3.eth.gas_price
 
-    gas_cost = w3.from_wei(tx.get("maxFeePerGas", tx.get("gasPrice", 0)) * tx["gas"], "ether")
-    print(f"  [{name}] Gas estimate: {tx['gas']} (~{gas_cost:.6f} native)")
+    if chain.get("gasless"):
+        print(f"  [{name}] Gas estimate: {tx['gas']} (gasless PoW)")
+    else:
+        gas_cost = w3.from_wei(tx.get("maxFeePerGas", tx.get("gasPrice", 0)) * tx["gas"], "ether")
+        print(f"  [{name}] Gas estimate: {tx['gas']} (~{gas_cost:.6f} native)")
 
     # Sign and send
     signed = account.sign_transaction(tx)

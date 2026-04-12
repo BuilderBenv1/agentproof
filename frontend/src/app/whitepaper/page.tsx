@@ -22,7 +22,7 @@ const SECTIONS = [
   { title: "Multi-Oracle Consensus", description: "Multiple independent oracle operators push scores. The contract averages them, detects divergence, and flags disagreement on-chain. No single point of failure." },
   { title: "Scoring Methodology", description: "11-signal composite with Bayesian smoothing. The signals are inputs to the oracle — not the product. The product is the infrastructure that makes scores queryable." },
   { title: "Risk Detection & Max Exposure", description: "14 automated risk flags, 4 risk levels, and dollar-denominated trust ceilings for insurance underwriting." },
-  { title: "Multi-Chain Indexing", description: "21 chains — Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, Solana." },
+  { title: "Multi-Chain Indexing", description: "24 chains — SKALE, GOAT Network, Citrea, Tempo, Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB, Scroll, Gnosis, Mantle, Celo, Monad, Abstract, Taiko, MegaETH, X Layer, Soneium, Metis, Solana." },
   { title: "Protocol Endpoints", description: "REST API, A2A agent-to-agent protocol, MCP server, webhooks, TypeScript SDK. Every interface an agent or protocol needs to query trust." },
   { title: "Deployer Reputation", description: "Tracking who built the agent, not just the agent. Serial deployers who spawn and abandon agents are flagged across all future registrations." },
   { title: "Autonomous Oracle Operations", description: "8 background jobs running continuously — screening, anomaly detection, liveness probing, failure tracking, delegation sync." },
@@ -43,7 +43,7 @@ export default function WhitepaperPage() {
           Trust Infrastructure for the Agent Economy
         </h1>
         <p className="text-sm text-gray-400 max-w-xl mx-auto">
-          128,400+ agents registered on-chain across 21 chains. 214.6K+ evaluations. 307.2K+ screenings. 43.8 average trust score. Protocols need to know which ones to trust
+          128,400+ agents registered on-chain across 24 chains. 214.6K+ evaluations. 307.2K+ screenings. 43.8 average trust score. Protocols need to know which ones to trust
           before delegating capital. AgentProof is the oracle they query.
         </p>
       </div>
@@ -52,7 +52,7 @@ export default function WhitepaperPage() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
         <h2 className="text-xl font-bold text-white">1. The Infrastructure Gap</h2>
         <p className="text-sm text-gray-400 leading-relaxed">
-          ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation &mdash; deployed across 21 chains via deterministic CREATE2 addresses. 128,400+ agents registered. The standard works.
+          ERC-8004 gave agents an identity standard. Three on-chain registries &mdash; identity, reputation, validation &mdash; deployed across 24 chains via deterministic CREATE2 addresses. 128,400+ agents registered. The standard works.
         </p>
         <p className="text-sm text-gray-400 leading-relaxed">
           But the standard explicitly leaves the <span className="text-white font-semibold">integrity layer</span> as an exercise for the ecosystem. The registries store data. They don&rsquo;t evaluate it. A 5-star rating from a bot farm sits next to a 5-star rating from a verified counterparty. The contract can&rsquo;t tell the difference. Neither can the agent querying it at machine speed.
@@ -332,9 +332,10 @@ export default function WhitepaperPage() {
         </h2>
 
         <div className="space-y-2">
-          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Score Pushing &mdash; TrustScoreOracle V2 (9 chains)</p>
+          <p className="text-xs font-mono text-gray-500 uppercase tracking-wider">Score Pushing &mdash; TrustScoreOracle V2 (10 chains)</p>
           <div className="grid gap-2">
             {[
+              { chain: "SKALE (new)", addr: "Deployed", explorer: null, label: null },
               { chain: "Base Mainnet", addr: "0xE74e9C994b8F65db01725DdAE603EAE397aBa432", explorer: "https://basescan.org/address/0xE74e9C994b8F65db01725DdAE603EAE397aBa432#code", label: "Basescan" },
               { chain: "Avalanche Mainnet", addr: "0xA9D7a613Ce349d15827CB8C54F08e24549219B4f", explorer: "https://snowtrace.io/address/0xA9D7a613Ce349d15827CB8C54F08e24549219B4f#code", label: "Snowtrace" },
               { chain: "Ethereum Mainnet", addr: "Deployed", explorer: null, label: null },
@@ -376,7 +377,7 @@ export default function WhitepaperPage() {
           <p className="text-[10px] text-gray-500">Auto-routes to any chain with an RPC URL via ERC-8004 ReputationRegistry (deterministic CREATE2 addresses).</p>
         </div>
 
-        <p className="text-[10px] text-gray-600 italic">All contracts verified with full source code. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus. 5 new oracle deployments added March 2026.</p>
+        <p className="text-[10px] text-gray-600 italic">All contracts verified with full source code. Scores pushed autonomously every 5 minutes. 2 oracle operators with on-chain consensus. SKALE oracle deployed April 2026. 5 new oracle deployments added March 2026.</p>
       </div>
 
       {/* ReputationGateV2 Integration */}

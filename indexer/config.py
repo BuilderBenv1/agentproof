@@ -9,6 +9,10 @@ AVALANCHE_RPC_URL = os.getenv("AVALANCHE_RPC_URL", "https://api.avax-test.networ
 # All chains use the same CREATE2-deployed ERC-8004 contracts.
 # Only chains with a configured RPC URL will be indexed.
 CHAIN_RPC_URLS = {
+    "skale": os.getenv("SKALE_RPC_URL", "https://skale-base.skalenodes.com/v1/base"),
+    "goat": os.getenv("GOAT_RPC_URL", "https://rpc.goat.network"),
+    "citrea": os.getenv("CITREA_RPC_URL", "https://rpc.mainnet.citrea.xyz"),
+    "tempo": os.getenv("TEMPO_RPC_URL", "https://rpc.tempo.xyz"),
     "avalanche": os.getenv("AVALANCHE_RPC_URL", "https://api.avax.network/ext/bc/C/rpc"),
     "base": os.getenv("BASE_RPC_URL", ""),
     "ethereum": os.getenv("ETHEREUM_RPC_URL", ""),
@@ -25,7 +29,6 @@ CHAIN_RPC_URLS = {
     "abstract": os.getenv("ABSTRACT_RPC_URL", ""),
     "taiko": os.getenv("TAIKO_RPC_URL", ""),
     "megaeth": os.getenv("MEGAETH_RPC_URL", ""),
-    "skale": os.getenv("SKALE_RPC_URL", ""),
     "xlayer": os.getenv("XLAYER_RPC_URL", ""),
     "soneium": os.getenv("SONEIUM_RPC_URL", ""),
     "metis": os.getenv("METIS_RPC_URL", ""),
@@ -89,6 +92,9 @@ CHAIN_START_BLOCKS = {
     "taiko": int(os.getenv("TAIKO_START_BLOCK", "600000")),
     "megaeth": int(os.getenv("MEGAETH_START_BLOCK", "0")),
     "skale": int(os.getenv("SKALE_START_BLOCK", "0")),
+    "goat": int(os.getenv("GOAT_START_BLOCK", "11400000")),
+    "citrea": int(os.getenv("CITREA_START_BLOCK", "5800000")),
+    "tempo": int(os.getenv("TEMPO_START_BLOCK", "14000000")),
     "xlayer": int(os.getenv("XLAYER_START_BLOCK", "24000000")),
     "soneium": int(os.getenv("SONEIUM_START_BLOCK", "0")),
     "metis": int(os.getenv("METIS_START_BLOCK", "19000000")),

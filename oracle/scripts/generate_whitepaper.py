@@ -507,14 +507,14 @@ def build():
 
     story.append(Paragraph("FEEDBACK SUBMISSION - 21 EVM CHAINS + SOLANA", label_style))
     story.append(Paragraph(
-        "Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB, Scroll, Gnosis, Mantle, Celo, "
-        "Monad, Abstract, Taiko, MegaETH, SKALE, X Layer, Soneium, Metis, Solana. "
+        "SKALE, GOAT Network, Citrea, Avalanche, Ethereum, Base, Linea, Polygon, Arbitrum, Optimism, BNB, Scroll, Gnosis, Mantle, Celo, "
+        "Monad, Abstract, Taiko, MegaETH, X Layer, Soneium, Metis, Solana. "
         "Auto-routes to any chain with an RPC URL via deterministic CREATE2 addresses.",
         small_style,
     ))
     story.append(Paragraph(
         "All contracts verified with full source code. Scores pushed autonomously every 5 minutes. "
-        "2 oracle operators with on-chain consensus. 5 new oracle deployments added March 2026.",
+        "2 oracle operators with on-chain consensus. SKALE oracle deployed April 2026. 5 new oracle deployments added March 2026.",
         ParagraphStyle("Note", parent=small_style, textColor=GRAY_600, fontStyle="italic"),
     ))
 

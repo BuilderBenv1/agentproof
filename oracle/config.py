@@ -59,6 +59,9 @@ class OracleSettings(BaseSettings):
     taiko_rpc_url: str = ""
     megaeth_rpc_url: str = ""
     skale_rpc_url: str = ""
+    goat_rpc_url: str = ""
+    citrea_rpc_url: str = ""
+    tempo_rpc_url: str = ""
     xlayer_rpc_url: str = ""
     soneium_rpc_url: str = ""
     metis_rpc_url: str = ""
@@ -117,6 +120,10 @@ class OracleSettings(BaseSettings):
     celo_oracle_address: str = ""
     monad_oracle_address: str = ""
     optimism_oracle_address: str = ""
+    skale_oracle_address: str = ""
+    goat_oracle_address: str = ""
+    citrea_oracle_address: str = ""
+    tempo_oracle_address: str = ""
     score_push_enabled: bool = False
     score_push_min_delta: float = 2.0
 

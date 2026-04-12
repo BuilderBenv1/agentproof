@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | AgentProof",
   },
   description:
-    "On-chain reputation oracle for AI agents. 68,000+ agents scored across 21 chains. ERC-8004 trust infrastructure for the autonomous agent economy.",
+    "On-chain reputation oracle for AI agents. 68,000+ agents scored across 24 chains. ERC-8004 trust infrastructure for the autonomous agent economy.",
   keywords: [
     "AI agents", "ERC-8004", "agent reputation", "AI agent trust score",
     "autonomous agent security", "agent reputation oracle", "on-chain reputation",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "AgentProof — Trust Oracle for the ERC-8004 Agent Economy",
-    description: "On-chain reputation oracle for AI agents. 68,000+ agents scored across 21 chains. The trust layer for autonomous AI.",
+    description: "On-chain reputation oracle for AI agents. 68,000+ agents scored across 24 chains. The trust layer for autonomous AI.",
     type: "website",
     siteName: "AgentProof",
     url: "https://agentproof.sh",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AgentProof — Trust Oracle for the ERC-8004 Agent Economy",
-    description: "On-chain reputation oracle for AI agents. 68,000+ agents scored across 21 chains. The trust layer for autonomous AI.",
+    description: "On-chain reputation oracle for AI agents. 68,000+ agents scored across 24 chains. The trust layer for autonomous AI.",
   },
   alternates: {
     canonical: "https://agentproof.sh",

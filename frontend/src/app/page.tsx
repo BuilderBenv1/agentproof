@@ -93,7 +93,7 @@ export default function HomePage() {
             </span>
             <span className="text-[#2a2a3a]">·</span>
             <span>
-              <span className="text-white font-bold font-mono">21</span> chains
+              <span className="text-white font-bold font-mono">24</span> chains
             </span>
             <span className="text-[#2a2a3a]">·</span>
             <span className="flex items-center gap-1.5">

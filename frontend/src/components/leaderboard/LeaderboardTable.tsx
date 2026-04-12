@@ -23,9 +23,10 @@ interface LeaderboardEntry {
 }
 
 const CHAIN_COLORS: Record<string, string> = {
-  avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
+  skale: "#4DFFD2", goat: "#F7931A", citrea: "#E25822", tempo: "#00D4AA", avalanche: "#E84142", ethereum: "#627EEA", base: "#0052FF", linea: "#61DFFF",
   polygon: "#8247E5", arbitrum: "#28A0F0", optimism: "#FF0420", bsc: "#F0B90B",
   scroll: "#FFEEDA", gnosis: "#3E6957", mantle: "#000000", celo: "#FCFF52", monad: "#836EF9", abstract: "#0066FF",
+  taiko: "#E81899", megaeth: "#FF6B35", xlayer: "#1E1E1E", soneium: "#7B61FF", metis: "#00DACC", solana: "#9945FF",
 };
 
 interface LeaderboardTableProps {

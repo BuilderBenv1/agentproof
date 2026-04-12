@@ -137,6 +137,10 @@ export default function DiscoverPage() {
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white font-mono"
             >
               <option value="">All Chains</option>
+              <option value="skale">SKALE</option>
+              <option value="goat">GOAT Network</option>
+              <option value="citrea">Citrea</option>
+              <option value="tempo">Tempo</option>
               <option value="avalanche">Avalanche</option>
               <option value="ethereum">Ethereum</option>
               <option value="base">Base</option>
@@ -153,7 +157,6 @@ export default function DiscoverPage() {
               <option value="abstract">Abstract</option>
               <option value="taiko">Taiko</option>
               <option value="megaeth">MegaETH</option>
-              <option value="skale">SKALE</option>
               <option value="xlayer">X Layer</option>
               <option value="soneium">Soneium</option>
               <option value="metis">Metis</option>

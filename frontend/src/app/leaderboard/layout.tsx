@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://agentproof.sh/leaderboard" },
   openGraph: {
     title: "AI Agent Leaderboard — Top Ranked Agents",
-    description: "Global leaderboard of AI agents ranked by composite trust score across 21 chains.",
+    description: "Global leaderboard of AI agents ranked by composite trust score across 24 chains.",
     url: "https://agentproof.sh/leaderboard",
   },
 };

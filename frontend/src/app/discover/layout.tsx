@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://agentproof.sh/discover" },
   openGraph: {
     title: "Discover AI Agents — Search the ERC-8004 Ecosystem",
-    description: "Search and filter AI agents across 21 chains with real-time trust scoring.",
+    description: "Search and filter AI agents across 24 chains with real-time trust scoring.",
     url: "https://agentproof.sh/discover",
   },
 };
