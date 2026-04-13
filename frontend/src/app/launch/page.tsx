@@ -7,7 +7,6 @@ import {
   ArrowRight, ExternalLink, Plus, X, Loader2,
 } from "lucide-react";
 import { CATEGORIES } from "@/lib/constants";
-import { apiFetch } from "@/lib/supabase";
 
 const FACTORY_API = process.env.NEXT_PUBLIC_FACTORY_URL || "https://factory.agentproof.sh";
 
