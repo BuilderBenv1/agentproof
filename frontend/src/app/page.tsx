@@ -209,7 +209,7 @@ export default function HomePage() {
               {loading ? "Loading agents..." : "No agents registered yet"}
             </p>
             <Link
-              href="/register"
+              href="/launch"
               className="inline-block mt-3 text-sm text-[#00ff88] hover:text-[#00dd77]"
             >
               Be the first to register

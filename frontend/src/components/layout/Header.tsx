@@ -11,7 +11,7 @@ const NAV_LINKS = [
   { href: "/evidence", label: "Evidence" },
   { href: "/discover", label: "Discover" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/register", label: "Register" },
+  { href: "/launch", label: "Launch" },
   { href: "/a2a", label: "A2A" },
   { href: "/mcp", label: "MCP" },
   { href: "/pricing", label: "API Pricing" },
