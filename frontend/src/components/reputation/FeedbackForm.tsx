@@ -43,7 +43,7 @@ export default function FeedbackForm({ agentId, agentName, ownerAddress, sourceC
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!taskDescription.trim()) return;
-    submitFeedback(agentId, rating, taskDescription.trim());
+    submitFeedback(agentId, rating, taskDescription.trim(), sourceChain);
   }
 
   function handleReset() {

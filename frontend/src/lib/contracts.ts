@@ -101,6 +101,27 @@ export const REPUTATION_REGISTRY_ABI = [
   },
 ] as const;
 
+// ─── SKALE Reputation Registry ABI (string tags instead of bytes32) ──
+// SKALE's ERC-8004 implementation uses string for tag1/tag2 params
+export const SKALE_REPUTATION_REGISTRY_ABI = [
+  {
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "value", type: "int128" },
+      { name: "valueDecimals", type: "uint8" },
+      { name: "tag1", type: "string" },
+      { name: "tag2", type: "string" },
+      { name: "endpoint", type: "string" },
+      { name: "feedbackURI", type: "string" },
+      { name: "feedbackHash", type: "bytes32" },
+    ],
+    name: "giveFeedback",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 // ─── AgentProof Payments ABI (escrow-based agent hiring) ────────────
 export const AGENT_PAYMENTS_ABI = [
   {

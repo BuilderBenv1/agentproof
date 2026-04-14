@@ -8,7 +8,7 @@ import {
   useSendTransaction,
 } from "wagmi";
 import { keccak256, toHex, decodeEventLog } from "viem";
-import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI, AGENT_PAYMENTS_ABI } from "@/lib/contracts";
+import { IDENTITY_REGISTRY_ABI, REPUTATION_REGISTRY_ABI, SKALE_REPUTATION_REGISTRY_ABI, AGENT_PAYMENTS_ABI } from "@/lib/contracts";
 import { CONTRACT_ADDRESSES, PROTOCOL_FEE, TREASURY_ADDRESS } from "@/lib/constants";
 
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
@@ -209,7 +209,7 @@ export function useSubmitFeedback() {
     hash,
   });
 
-  function submitFeedback(agentId: number, rating: number, taskDescription: string) {
+  function submitFeedback(agentId: number, rating: number, taskDescription: string, sourceChain?: string) {
     if (!CONTRACT_ADDRESSES.reputationRegistry) {
       throw new Error("Reputation Registry address not configured");
     }
@@ -222,22 +222,40 @@ export function useSubmitFeedback() {
 
     const feedbackHash = keccak256(toHex(taskDescription));
 
-    // Official ERC-8004: giveFeedback(agentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash)
-    writeContract({
-      address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
-      abi: REPUTATION_REGISTRY_ABI,
-      functionName: "giveFeedback",
-      args: [
-        BigInt(agentId),
-        BigInt(rating),     // int128 value
-        0,                  // uint8 valueDecimals
-        ZERO_BYTES32,       // tag1
-        ZERO_BYTES32,       // tag2
-        "",                 // endpoint
-        feedbackURI,
-        feedbackHash,
-      ],
-    });
+    // SKALE uses string tags; standard ERC-8004 uses bytes32
+    if (sourceChain === "skale") {
+      writeContract({
+        address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
+        abi: SKALE_REPUTATION_REGISTRY_ABI,
+        functionName: "giveFeedback",
+        args: [
+          BigInt(agentId),
+          BigInt(rating),
+          0,
+          "",               // tag1 (string)
+          "",               // tag2 (string)
+          "",               // endpoint
+          feedbackURI,
+          feedbackHash,
+        ],
+      });
+    } else {
+      writeContract({
+        address: CONTRACT_ADDRESSES.reputationRegistry as `0x${string}`,
+        abi: REPUTATION_REGISTRY_ABI,
+        functionName: "giveFeedback",
+        args: [
+          BigInt(agentId),
+          BigInt(rating),
+          0,
+          ZERO_BYTES32,     // tag1 (bytes32)
+          ZERO_BYTES32,     // tag2 (bytes32)
+          "",               // endpoint
+          feedbackURI,
+          feedbackHash,
+        ],
+      });
+    }
   }
 
   return { submitFeedback, hash, isPending, isConfirming, isSuccess, error, reset };
