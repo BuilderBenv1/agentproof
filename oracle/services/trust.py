@@ -76,7 +76,7 @@ def get_penalty(agent_id: int) -> tuple[float, list[RiskFlag], str] | None:
 
 # ─── In-memory TTL cache ─────────────────────────────────────────────
 
-CACHE_TTL_SECONDS = 300  # 5 minutes — matches screener cycle
+CACHE_TTL_SECONDS = 30  # 30 seconds — scores are pre-computed by indexer, cache just saves DB round trips
 
 
 class TrustCache:
@@ -690,7 +690,16 @@ class TrustService:
             raise ValueError(f"Agent #{agent_id} not found")
         agent = result.data[0]
 
-        # Fetch ratings scoped to the requested chain (or agent's source_chain)
+        # Use the indexer's pre-computed score as the canonical composite/tier.
+        # The indexer is the source of truth — the frontend reads the same values.
+        # We still run full risk flag analysis below for oracle-specific insights.
+        precomputed_score = float(agent.get("composite_score") or 0)
+        precomputed_tier = agent.get("tier", "unranked")
+        precomputed_feedback = int(agent.get("total_feedback") or 0)
+        precomputed_avg_rating = float(agent.get("average_rating") or 0)
+        precomputed_success_rate = float(agent.get("validation_success_rate") or 0)
+
+        # Fetch ratings for risk flag analysis (concentrated feedback, etc.)
         agent_chain = chain or agent.get("source_chain", "avalanche")
         ratings_query = (
             db.table("reputation_events")
@@ -708,7 +717,7 @@ class TrustService:
             )
         ratings = [r["rating"] for r in ratings_result.data]
         reviewer_addresses = [r["reviewer_address"] for r in ratings_result.data]
-        feedback_count = len(ratings)
+        feedback_count = precomputed_feedback
         avg_rating = sum(ratings) / len(ratings) if ratings else 0
         std_dev = calculate_std_dev(ratings)
 
@@ -856,8 +865,14 @@ class TrustService:
         except Exception:
             pass  # Table may not exist yet — no penalty applied
 
-        # Compute score
-        composite, breakdown = calculate_composite_score(
+        # Use the indexer's pre-computed score as canonical — keeps API and frontend in sync.
+        # Still compute breakdown for the response detail, but composite/tier come from DB.
+        composite = precomputed_score
+        tier = precomputed_tier
+        avg_rating = precomputed_avg_rating
+        success_rate = precomputed_success_rate
+
+        _, breakdown = calculate_composite_score(
             average_rating=avg_rating,
             feedback_count=feedback_count,
             rating_std_dev=std_dev,
@@ -873,7 +888,6 @@ class TrustService:
             days_since_penalty=days_since_penalty,
             consecutive_good_days=consecutive_good_days,
         )
-        tier = determine_tier(composite, feedback_count)
 
         # Risk flags
         risk_flags: list[RiskFlag] = []
