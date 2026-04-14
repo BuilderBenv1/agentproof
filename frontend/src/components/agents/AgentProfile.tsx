@@ -534,6 +534,7 @@ export default function AgentProfile({ agent }: AgentProfileProps) {
         agentId={agent.agent_id}
         agentName={agent.name || `Agent #${agent.agent_id}`}
         ownerAddress={agent.owner_address}
+        sourceChain={agent.source_chain}
       />
 
       {/* Score History Chart */}

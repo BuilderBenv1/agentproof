@@ -1,22 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSwitchChain, useChainId } from "wagmi";
 import { useSubmitFeedback } from "@/hooks/useContract";
 import WalletButton from "@/components/ui/WalletButton";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { Star, CheckCircle, AlertCircle, MessageSquare } from "lucide-react";
+import { Star, CheckCircle, AlertCircle, MessageSquare, ArrowRightLeft } from "lucide-react";
 import { explorerTxUrl } from "@/lib/utils";
+
+const CHAIN_IDS: Record<string, number> = {
+  avalanche: 43114,
+  skale: 1187947933,
+};
+
+const CHAIN_NAMES: Record<number, string> = {
+  43114: "Avalanche",
+  1187947933: "SKALE Base",
+};
 
 interface FeedbackFormProps {
   agentId: number;
   agentName: string;
   ownerAddress: string;
+  sourceChain?: string;
 }
 
-export default function FeedbackForm({ agentId, agentName, ownerAddress }: FeedbackFormProps) {
+export default function FeedbackForm({ agentId, agentName, ownerAddress, sourceChain }: FeedbackFormProps) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
   const { submitFeedback, hash, isPending, isConfirming, isSuccess, error, reset } = useSubmitFeedback();
+
+  const requiredChainId = sourceChain ? CHAIN_IDS[sourceChain] || 43114 : 43114;
+  const isWrongChain = isConnected && chainId !== requiredChainId;
 
   const [rating, setRating] = useState(75);
   const [taskDescription, setTaskDescription] = useState("");
@@ -100,6 +116,19 @@ export default function FeedbackForm({ agentId, agentName, ownerAddress }: Feedb
           <div className="flex justify-center">
             <WalletButton />
           </div>
+        </div>
+      ) : isWrongChain ? (
+        <div className="text-center py-4">
+          <p className="text-gray-400 text-sm mb-3">
+            This agent is on <span className="text-white font-semibold">{CHAIN_NAMES[requiredChainId] || sourceChain}</span>. Switch networks to submit feedback.
+          </p>
+          <button
+            onClick={() => switchChain({ chainId: requiredChainId })}
+            className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-mono hover:bg-emerald-500/20 transition-colors"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            Switch to {CHAIN_NAMES[requiredChainId] || sourceChain}
+          </button>
         </div>
       ) : isOwnAgent ? (
         <div className="flex items-center gap-2 text-yellow-400 text-sm py-4">

@@ -1,7 +1,7 @@
 "use client";
 
 import { WagmiProvider, http } from "wagmi";
-import { avalanche } from "wagmi/chains";
+import { avalanche, type Chain } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
@@ -10,14 +10,27 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 
+const skaleBase: Chain = {
+  id: 1187947933,
+  name: "SKALE Base",
+  nativeCurrency: { name: "CREDIT", symbol: "CREDIT", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://skale-base.skalenodes.com/v1/base"] },
+  },
+  blockExplorers: {
+    default: { name: "SKALE Explorer", url: "https://skale-base-explorer.skalenodes.com" },
+  },
+};
+
 const config = getDefaultConfig({
   appName: "AgentProof",
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "agentproof-dev",
-  chains: [avalanche],
+  chains: [avalanche, skaleBase],
   transports: {
     [avalanche.id]: http(
       process.env.NEXT_PUBLIC_AVALANCHE_RPC || "https://api.avax.network/ext/bc/C/rpc"
     ),
+    [skaleBase.id]: http("https://skale-base.skalenodes.com/v1/base"),
   },
 });
 
