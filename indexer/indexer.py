@@ -253,6 +253,9 @@ class AgentProofIndexer:
         self._current_chain: str = "avalanche"
         self._current_conn: ChainConnection | None = None
 
+        # Track which agents need rescoring each cycle (event-driven)
+        self._affected_agents: set[int] = set()
+
     # ─── State persistence ───────────────────────────────────────────────────
 
     def _get_chain_start_block(self, chain_name: str) -> int:
@@ -370,6 +373,7 @@ class AgentProofIndexer:
                     },
                     on_conflict="agent_id,source_chain",
                 ).execute()
+                self._affected_agents.add(agent_id)
                 logger.info(f"[ERC8004-ID] Agent #{agent_id} registered by {owner}")
                 count += 1
         except Exception as e:
@@ -397,6 +401,7 @@ class AgentProofIndexer:
                     update["image_url"] = _sanitize_text(metadata["image"])
 
                 self.db.table("agents").update(update).eq("agent_id", agent_id).eq("source_chain", self._current_chain).execute()
+                self._affected_agents.add(agent_id)
                 logger.info(f"[ERC8004-ID] [{self._current_chain}] Agent #{agent_id} URI updated")
                 count += 1
         except Exception as e:
@@ -454,6 +459,7 @@ class AgentProofIndexer:
                     },
                     on_conflict="agent_id,source_chain",
                 ).execute()
+                self._affected_agents.add(token_id)
                 logger.info(f"[ERC721-ID] [{self._current_chain}] Agent #{token_id} registered by {owner}")
                 count += 1
         except Exception as e:
@@ -487,6 +493,7 @@ class AgentProofIndexer:
                     },
                     on_conflict="agent_id,source_chain",
                 ).execute()
+                self._affected_agents.add(agent_id)
                 logger.info(f"[CUSTOM-ID] Agent #{agent_id} registered by {owner}")
                 count += 1
         except Exception as e:
@@ -570,6 +577,7 @@ class AgentProofIndexer:
                     },
                     on_conflict="tx_hash",
                 ).execute()
+                self._affected_agents.add(agent_id)
                 logger.info(
                     f"[ERC8004-REP] Agent #{agent_id} rated {rating} "
                     f"(raw={raw_value}, dec={decimals}) by {client[:10]}..."
@@ -608,6 +616,7 @@ class AgentProofIndexer:
                     },
                     on_conflict="tx_hash",
                 ).execute()
+                self._affected_agents.add(agent_id)
                 logger.info(f"[CUSTOM-REP] Agent #{agent_id} rated {rating} by {reviewer[:10]}...")
                 count += 1
         except Exception as e:
@@ -874,214 +883,148 @@ class AgentProofIndexer:
 
     # ─── Scoring / Leaderboard ───────────────────────────────────────────────
 
-    def recalculate_scores(self):
+    def rescore_agent(self, agent_id: int):
+        """Rescore a single agent. Called only when that agent has new data."""
         try:
-            # Paginate to avoid Supabase default 1000-row limit
-            all_agents: list[dict] = []
-            offset = 0
-            while True:
-                batch = (
-                    self.db.table("agents")
-                    .select("*")
-                    .range(offset, offset + 999)
-                    .execute()
-                )
-                if not batch.data:
-                    break
-                all_agents.extend(batch.data)
-                if len(batch.data) < 1000:
-                    break
-                offset += 1000
-        except Exception as e:
-            logger.error(f"Error fetching agents: {e}")
-            return
-
-        # Deduplicate: same agent_id may exist on multiple chains.
-        # Score each agent_id once using cross-chain reputation data,
-        # then write the unified score to all chain rows.
-        seen_agent_ids: set[int] = set()
-        # Find the earliest registration per agent_id (across chains)
-        agent_earliest: dict[int, dict] = {}
-        for agent in all_agents:
-            aid = agent["agent_id"]
-            if aid not in agent_earliest:
-                agent_earliest[aid] = agent
-            else:
-                existing_ts = agent_earliest[aid].get("registered_at", "")
-                new_ts = agent.get("registered_at", "")
-                if new_ts and new_ts < existing_ts:
-                    agent_earliest[aid] = agent
-
-        for agent in all_agents:
-            agent_id = agent["agent_id"]
-            if agent_id in seen_agent_ids:
-                continue
-            seen_agent_ids.add(agent_id)
-
-            # Use earliest registration for age calculation
-            canonical = agent_earliest.get(agent_id, agent)
-
-            # Pull ratings from ALL chains (reputation_events aren't chain-filtered)
-            try:
-                ratings_result = (
-                    self.db.table("reputation_events")
-                    .select("rating")
-                    .eq("agent_id", agent_id)
-                    .execute()
-                )
-                ratings = [r["rating"] for r in ratings_result.data]
-            except Exception:
-                ratings = []
-
-            feedback_count = len(ratings)
-            avg_rating = sum(ratings) / len(ratings) if ratings else 0
-            std_dev = calculate_std_dev(ratings)
-
-            try:
-                validations = (
-                    self.db.table("validation_records")
-                    .select("is_valid")
-                    .eq("agent_id", agent_id)
-                    .not_.is_("is_valid", "null")
-                    .execute()
-                )
-                completed = len(validations.data)
-                successful = sum(1 for v in validations.data if v["is_valid"])
-                success_rate = (successful / completed * 100) if completed > 0 else 0
-            except Exception:
-                success_rate = 0
-
-            # Use earliest registration across all chains for age
-            registered_at = datetime.fromisoformat(
-                canonical["registered_at"].replace("Z", "+00:00")
-            )
-            age_days = calculate_account_age_days(registered_at)
-
-            # Count how many chains this agent is registered on
-            chains_present = sum(1 for a in all_agents if a["agent_id"] == agent_id)
-
-            # Uptime percentage from daily summaries (last 30 days)
-            uptime_pct = -1.0  # negative = no data
-            try:
-                uptime_result = (
-                    self.db.table("uptime_daily_summary")
-                    .select("total_checks,successful_checks")
-                    .eq("agent_id", agent_id)
-                    .order("summary_date", desc=True)
-                    .limit(30)
-                    .execute()
-                )
-                if uptime_result.data:
-                    total_checks = sum(s["total_checks"] for s in uptime_result.data)
-                    successful_checks = sum(s["successful_checks"] for s in uptime_result.data)
-                    if total_checks > 0:
-                        uptime_pct = (successful_checks / total_checks) * 100
-            except Exception:
-                pass
-
-            composite = calculate_composite_score(
-                average_rating=avg_rating,
-                feedback_count=feedback_count,
-                rating_std_dev=std_dev,
-                validation_success_rate=success_rate,
-                account_age_days=age_days,
-                uptime_pct=uptime_pct,
-            )
-            tier = determine_tier(composite, feedback_count)
-
-            try:
-                update_data = {
-                    "total_feedback": feedback_count,
-                    "average_rating": round(avg_rating, 2),
-                    "composite_score": composite,
-                    "validation_success_rate": round(success_rate, 2),
-                    "tier": tier,
-                    "chains_active": chains_present,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                if uptime_pct >= 0:
-                    update_data["uptime_score"] = round(uptime_pct, 2)
-
-                # Write unified score to ALL chain rows for this agent_id
-                self.db.table("agents").update(update_data).eq("agent_id", agent_id).execute()
-            except Exception as e:
-                logger.error(f"Error updating scores for agent #{agent_id}: {e}")
-
-    def update_leaderboard(self):
-        try:
-            agents = (
+            agent_rows = (
                 self.db.table("agents")
-                .select("agent_id, category, composite_score")
-                .order("composite_score", desc=True)
+                .select("*")
+                .eq("agent_id", agent_id)
                 .execute()
             )
+            if not agent_rows.data:
+                return
         except Exception as e:
-            logger.error(f"Error fetching agents for leaderboard: {e}")
+            logger.error(f"Error fetching agent #{agent_id} for rescore: {e}")
             return
 
+        # Use earliest registration across chains for age
+        canonical = min(agent_rows.data, key=lambda a: a.get("registered_at", "9"))
+
         try:
-            self.db.table("leaderboard_cache").delete().neq("id", 0).execute()
+            ratings_result = (
+                self.db.table("reputation_events")
+                .select("rating")
+                .eq("agent_id", agent_id)
+                .execute()
+            )
+            ratings = [r["rating"] for r in ratings_result.data]
+        except Exception:
+            ratings = []
+
+        feedback_count = len(ratings)
+        avg_rating = sum(ratings) / len(ratings) if ratings else 0
+        std_dev = calculate_std_dev(ratings)
+
+        try:
+            validations = (
+                self.db.table("validation_records")
+                .select("is_valid")
+                .eq("agent_id", agent_id)
+                .not_.is_("is_valid", "null")
+                .execute()
+            )
+            completed = len(validations.data)
+            successful = sum(1 for v in validations.data if v["is_valid"])
+            success_rate = (successful / completed * 100) if completed > 0 else 0
+        except Exception:
+            success_rate = 0
+
+        registered_at = datetime.fromisoformat(
+            canonical["registered_at"].replace("Z", "+00:00")
+        )
+        age_days = calculate_account_age_days(registered_at)
+        chains_present = len(agent_rows.data)
+
+        uptime_pct = -1.0
+        try:
+            uptime_result = (
+                self.db.table("uptime_daily_summary")
+                .select("total_checks,successful_checks")
+                .eq("agent_id", agent_id)
+                .order("summary_date", desc=True)
+                .limit(30)
+                .execute()
+            )
+            if uptime_result.data:
+                total_checks = sum(s["total_checks"] for s in uptime_result.data)
+                successful_checks = sum(s["successful_checks"] for s in uptime_result.data)
+                if total_checks > 0:
+                    uptime_pct = (successful_checks / total_checks) * 100
         except Exception:
             pass
 
-        now = datetime.now(timezone.utc).isoformat()
-        categories: dict[str, list] = {}
+        old_score = canonical.get("composite_score", 0)
 
-        for rank, agent in enumerate(agents.data, 1):
-            try:
-                self.db.table("agents").update({"rank": rank}).eq(
-                    "agent_id", agent["agent_id"]
-                ).execute()
-            except Exception:
-                pass
-
-            cat = agent.get("category", "general") or "general"
-            if cat not in categories:
-                categories[cat] = []
-            categories[cat].append(agent)
-
-        for category, cat_agents in categories.items():
-            for cat_rank, agent in enumerate(cat_agents, 1):
-                try:
-                    self.db.table("leaderboard_cache").insert(
-                        {
-                            "category": category,
-                            "agent_id": agent["agent_id"],
-                            "rank": cat_rank,
-                            "composite_score": agent["composite_score"],
-                            "trend": "stable",
-                            "updated_at": now,
-                        }
-                    ).execute()
-                except Exception:
-                    pass
-
-    def take_daily_snapshot(self):
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        composite = calculate_composite_score(
+            average_rating=avg_rating,
+            feedback_count=feedback_count,
+            rating_std_dev=std_dev,
+            validation_success_rate=success_rate,
+            account_age_days=age_days,
+            uptime_pct=uptime_pct,
+        )
+        tier = determine_tier(composite, feedback_count)
 
         try:
-            agents = self.db.table("agents").select(
-                "agent_id, composite_score, average_rating, total_feedback, validation_success_rate"
-            ).execute()
+            update_data = {
+                "total_feedback": feedback_count,
+                "average_rating": round(avg_rating, 2),
+                "composite_score": composite,
+                "validation_success_rate": round(success_rate, 2),
+                "tier": tier,
+                "chains_active": chains_present,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if uptime_pct >= 0:
+                update_data["uptime_score"] = round(uptime_pct, 2)
+
+            self.db.table("agents").update(update_data).eq("agent_id", agent_id).execute()
         except Exception as e:
-            logger.error(f"Error fetching agents for snapshot: {e}")
+            logger.error(f"Error updating scores for agent #{agent_id}: {e}")
             return
 
-        for agent in agents.data:
+        # Write score_history only if score actually changed
+        if round(composite, 2) != round(old_score, 2):
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             try:
                 self.db.table("score_history").upsert(
                     {
-                        "agent_id": agent["agent_id"],
-                        "composite_score": agent["composite_score"],
-                        "average_rating": agent["average_rating"],
-                        "total_feedback": agent["total_feedback"],
-                        "validation_success_rate": agent["validation_success_rate"],
+                        "agent_id": agent_id,
+                        "composite_score": composite,
+                        "average_rating": round(avg_rating, 2),
+                        "total_feedback": feedback_count,
+                        "validation_success_rate": round(success_rate, 2),
                         "snapshot_date": today,
                     },
                     on_conflict="agent_id,snapshot_date",
                 ).execute()
             except Exception:
                 pass
+
+        # Incremental leaderboard update — upsert this agent's rank
+        try:
+            cat = canonical.get("category", "general") or "general"
+            self.db.table("leaderboard_cache").upsert(
+                {
+                    "agent_id": agent_id,
+                    "category": cat,
+                    "composite_score": composite,
+                    "trend": "up" if composite > old_score else "down" if composite < old_score else "stable",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                on_conflict="agent_id",
+            ).execute()
+        except Exception:
+            pass
+
+    def rescore_agents(self, agent_ids: set[int]):
+        """Rescore only the agents that received new events this cycle."""
+        if not agent_ids:
+            return
+        logger.info(f"Rescoring {len(agent_ids)} affected agents")
+        for agent_id in agent_ids:
+            self.rescore_agent(agent_id)
 
     # ─── Main loop ───────────────────────────────────────────────────────────
 
@@ -1146,9 +1089,8 @@ class AgentProofIndexer:
 
         if total_events > 0:
             logger.info(f"Processed {total_events} events across {len(self.chains)} chains")
-            self.recalculate_scores()
-            self.update_leaderboard()
-            self.take_daily_snapshot()
+            self.rescore_agents(self._affected_agents)
+        self._affected_agents = set()
 
     def run(self):
         mode = "Official ERC-8004" if self.use_official else "Custom"
