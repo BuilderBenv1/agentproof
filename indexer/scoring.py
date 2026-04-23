@@ -4,6 +4,13 @@ import math
 from datetime import datetime, timezone
 
 
+# Weight applied to unverified feedback (no AgentProofHook jobId anchor).
+# Unverified ratings still count, just less — half an "effective" rating.
+# Backwards-compatible: when verified_feedback_count is None, behavior is
+# identical to the pre-ERC-8183 scorer.
+UNVERIFIED_FEEDBACK_WEIGHT = 0.5
+
+
 def calculate_composite_score(
     average_rating: float,
     feedback_count: int,
@@ -11,26 +18,49 @@ def calculate_composite_score(
     validation_success_rate: float,
     account_age_days: int,
     uptime_pct: float = -1.0,
+    verified_feedback_count: int | None = None,
 ) -> float:
     """
     Composite score (0-100) with 6 signals:
-    - Average rating: 35% (Bayesian smoothed)
-    - Feedback volume: 12% (log scale)
+    - Average rating: 35% (Bayesian smoothed, weighted by verification state)
+    - Feedback volume: 12% (log scale of effective count)
     - Feedback consistency: 13% (inverse std dev)
     - Validation success rate: 18%
     - Account age: 7% (log scale)
     - Uptime score: 15% (agents without uptime data get neutral 50.0)
+
+    When `verified_feedback_count` is supplied, ratings anchored to an
+    ERC-8183 AgentProofHook.JobOutcomeRecorded event count full, and
+    unverified ratings count `UNVERIFIED_FEEDBACK_WEIGHT` (0.5). This
+    pushes verified-heavy agents away from the Bayesian prior faster
+    than sybil-prone unverified feedback, without hard-discarding
+    legacy ratings.
     """
+    # Effective feedback count: verified ratings weigh 1.0, unverified weigh 0.5.
+    # Fall back to raw count when verification data isn't available (legacy path).
+    if verified_feedback_count is None:
+        effective_count = float(feedback_count)
+    else:
+        verified = max(0, min(verified_feedback_count, feedback_count))
+        unverified = feedback_count - verified
+        effective_count = verified + UNVERIFIED_FEEDBACK_WEIGHT * unverified
+
     prior_rating = 50.0
     k = 3
-    smoothed_rating = (average_rating * feedback_count + prior_rating * k) / (feedback_count + k)
+    smoothed_rating = (
+        (average_rating * effective_count + prior_rating * k)
+        / (effective_count + k)
+    )
 
     rating_score = smoothed_rating
 
-    if feedback_count == 0:
+    if effective_count <= 0:
         volume_score = 0.0
     else:
-        volume_score = min(100.0, (math.log10(feedback_count + 1) / math.log10(101)) * 100)
+        volume_score = min(
+            100.0,
+            (math.log10(effective_count + 1) / math.log10(101)) * 100,
+        )
 
     if feedback_count < 2:
         consistency_score = 50.0

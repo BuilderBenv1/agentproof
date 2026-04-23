@@ -13,7 +13,14 @@ export interface ContractAddresses {
   // ERC-8183 hook contracts (optional — populated after deployment)
   agentProofHook?: string;
   addressResolver?: string;
+  // On-chain trust score store — populated by the score pusher every ~5min.
+  // This is what AgentProof.gateX402() reads from.
+  trustScoreOracle?: string;
 }
+
+// Zero address placeholder for optional/not-yet-deployed registries.
+// Used on chains where only the ERC-8183 hook stack is live.
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 // Official ERC-8004 registries deployed by Ava Labs
 export const OFFICIAL_ERC8004 = {
@@ -47,7 +54,7 @@ export const CHAIN_ADDRESSES: Record<number, ContractAddresses> = {
     validationRegistry: AGENTPROOF_CUSTOM.fuji.validationRegistry,
     agentProofCore: AGENTPROOF_CUSTOM.fuji.agentProofCore,
   },
-  // Avalanche Mainnet
+  // Avalanche Mainnet — v2 hook + gate deployed 2026-04-21
   43114: {
     identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
     reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
@@ -55,9 +62,62 @@ export const CHAIN_ADDRESSES: Record<number, ContractAddresses> = {
     agentProofCore: "0xCB4cc5DA1Abf188756f1fA50005B14113e4f7554",
     insurancePool: "0x154DFef33222D090808f3A0F50cbef864990939A",
     agentPayments: "0x4E3092E46233c32F3A0E4b782230cA67E359f35f",
-    reputationGate: "0xD66C677Cf394D68fD847d760151304697D3A1a0B",
+    // reputationGate was 0xD66C677Cf394D68fD847d760151304697D3A1a0B (v1, legacy).
+    // v2 (job-anchored attestation gate) deployed 2026-04-21 — use this going forward.
+    reputationGate: "0x2a1F64fd4A402eD7A8b570C008A941A05F1EdAF8",
+    agentProofHook: "0x9c872066A1E484Fda0fCb4cCc301E8488Ba23Cfc",
     agentMonitor: "0xaF28359675d2365EF3a5235CEda02aAbd0e670DC",
     agentSplits: "0xE243046e2C378F49AF0f94Ea7d72c95E4F88AcFc",
+  },
+  // SKALE Base Mainnet — ERC-8183 hook + gate deployed 2026-04-21
+  1187947933: {
+    identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
+    reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
+    validationRegistry: ZERO_ADDRESS,
+    agentProofCore: ZERO_ADDRESS,
+    agentProofHook: "0x47542257F7d839C8986837C9Adb9c931B0C00AA0",
+    reputationGate: "0x61A2a41F987bf55Ef7eAB478bF575Cd05Abd3650",
+    trustScoreOracle: "0xe4eBEf67D698C1b45A2aaacB9ce7c4B0B4E53682",
+  },
+  // Optimism Mainnet — deployed 2026-04-21
+  10: {
+    identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
+    reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
+    validationRegistry: ZERO_ADDRESS,
+    agentProofCore: ZERO_ADDRESS,
+    agentProofHook: "0xbe9eC346429F9B57Ce4e8d001E25C6d1204F4E91",
+    reputationGate: "0x42e85B5488791751CC7465C3c368d5bD6c43A591",
+    trustScoreOracle: "0xe4eBEf67D698C1b45A2aaacB9ce7c4B0B4E53682",
+  },
+  // Polygon Mainnet — deployed 2026-04-21
+  137: {
+    identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
+    reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
+    validationRegistry: ZERO_ADDRESS,
+    agentProofCore: ZERO_ADDRESS,
+    agentProofHook: "0x4314B80c773234dDcadFd078dDD3068F48f8E130",
+    reputationGate: "0x5Cce2740CB96c8478424787feD1350aAf0B4c942",
+    trustScoreOracle: "0xe4eBEf67D698C1b45A2aaacB9ce7c4B0B4E53682",
+  },
+  // Linea Mainnet — deployed 2026-04-21
+  59144: {
+    identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
+    reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
+    validationRegistry: ZERO_ADDRESS,
+    agentProofCore: ZERO_ADDRESS,
+    agentProofHook: "0xe32c2fF8cbc2A0090233142b2428d734A5c07271",
+    reputationGate: "0x6D407a900aEE83922C4A7267522D6FF0066C017a",
+    trustScoreOracle: "0xe4eBEf67D698C1b45A2aaacB9ce7c4B0B4E53682",
+  },
+  // Celo Mainnet — deployed 2026-04-21
+  42220: {
+    identityRegistry: OFFICIAL_ERC8004.mainnet.identityRegistry,
+    reputationRegistry: OFFICIAL_ERC8004.mainnet.reputationRegistry,
+    validationRegistry: ZERO_ADDRESS,
+    agentProofCore: ZERO_ADDRESS,
+    agentProofHook: "0x758Eb3BFC07e809e425a64b807Ed3890Fe3311a8",
+    reputationGate: "0xd3985aCf56EFC308e35D82c0f9EFd6BE76907524",
+    trustScoreOracle: "0x5Cce2740CB96c8478424787feD1350aAf0B4c942",
   },
 };
 

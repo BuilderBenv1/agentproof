@@ -904,13 +904,18 @@ class AgentProofIndexer:
         try:
             ratings_result = (
                 self.db.table("reputation_events")
-                .select("rating")
+                .select("rating, verified")
                 .eq("agent_id", agent_id)
                 .execute()
             )
-            ratings = [r["rating"] for r in ratings_result.data]
+            rows = ratings_result.data or []
+            ratings = [r["rating"] for r in rows]
+            # `verified` column is migration-006 — older DBs may not have it.
+            # Treat missing/null as unverified (False).
+            verified_count = sum(1 for r in rows if r.get("verified") is True)
         except Exception:
             ratings = []
+            verified_count = 0
 
         feedback_count = len(ratings)
         avg_rating = sum(ratings) / len(ratings) if ratings else 0
@@ -963,6 +968,7 @@ class AgentProofIndexer:
             validation_success_rate=success_rate,
             account_age_days=age_days,
             uptime_pct=uptime_pct,
+            verified_feedback_count=verified_count,
         )
         tier = determine_tier(composite, feedback_count)
 

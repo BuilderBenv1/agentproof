@@ -443,6 +443,17 @@ class FeedbackRequest(BaseModel):
     chain: str = Field("base", description="Source chain where the interaction occurred")
     task_hash: str | None = Field(None, description="Hash of the task/trade for deduplication")
     feedback_uri: str | None = Field(None, description="Link to evidence (tx, IPFS, etc.)")
+    # ERC-8183 job anchor — turns a rating into a service-verified attestation.
+    # When present, the oracle looks up JobOutcomeRecorded(agent_id, job_id, completed=true)
+    # on the AgentProofHook for `hook_chain` and rejects (or flags) if missing.
+    job_id: int | None = Field(
+        None,
+        description="ERC-8183 jobId from AgentProofHook. If set, rating is tied to a verifiable on-chain job.",
+    )
+    hook_chain: str | None = Field(
+        None,
+        description="Chain where the AgentProofHook recorded the job outcome. Defaults to `chain`.",
+    )
 
 
 class FeedbackResponse(BaseModel):
@@ -452,6 +463,9 @@ class FeedbackResponse(BaseModel):
     rating: int
     tag1: str
     message: str
+    verified: bool = False
+    verification_reason: str | None = None
+    job_id: int | None = None
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
@@ -494,28 +508,89 @@ async def submit_feedback(request: Request, body: FeedbackRequest):
     if reviewer_address.lower() == agent_owner.lower():
         raise HTTPException(status_code=403, detail="Self-rating is not allowed")
 
-    # Rate limit: 1 feedback per agent per reviewer per hour
-    one_hour_ago = datetime.now(timezone.utc).replace(microsecond=0)
-    one_hour_ago = one_hour_ago.isoformat().replace("+00:00", "Z")
-    try:
-        recent = (
-            db.table("reputation_events")
-            .select("id")
-            .eq("agent_id", body.agent_id)
-            .eq("reviewer_address", reviewer_address)
-            .gte("created_at", one_hour_ago)
-            .limit(1)
-            .execute()
-        )
-        if recent.data:
+    # ── ERC-8183 job verification ────────────────────────────────────
+    # When a job_id is supplied, prove on-chain via AgentProofHook that the
+    # job exists and was recorded as completed for this agent. If the deployer
+    # has flipped FEEDBACK_REQUIRE_JOB_ID, unverifiable ratings are rejected.
+    from config import get_settings
+    settings = get_settings()
+    hook_chain = (body.hook_chain or body.chain or "").strip().lower()
+    verification_reason: str | None = None
+    verified = False
+    hook_address: str | None = None
+
+    if body.job_id is not None:
+        from services.hook_verification import get_hook_verification_service
+        hook_svc = get_hook_verification_service()
+        v = hook_svc.verify_job(hook_chain, body.job_id, body.agent_id)
+        verified = v.verified
+        verification_reason = v.reason
+        hook_address = v.hook_address
+        if not verified:
             raise HTTPException(
-                status_code=429,
-                detail="Rate limited: max 1 feedback per agent per hour from the same reviewer",
+                status_code=400,
+                detail=(
+                    f"Job verification failed: {verification_reason}. "
+                    f"No JobOutcomeRecorded(agent={body.agent_id}, job={body.job_id}, completed=true) "
+                    f"found on {hook_chain}."
+                ),
             )
-    except HTTPException:
-        raise
-    except Exception:
-        pass  # If rate limit check fails, allow through
+
+        # One rating per job — absolute anti-sybil guarantee.
+        try:
+            dup = (
+                db.table("reputation_events")
+                .select("id")
+                .eq("job_id", body.job_id)
+                .eq("hook_chain", hook_chain)
+                .limit(1)
+                .execute()
+            )
+            if dup.data:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A rating already exists for job {body.job_id} on {hook_chain}",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # If dup check fails, DB unique index is the backstop
+
+    elif settings.feedback_require_job_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "job_id is required: this oracle only accepts ratings anchored to "
+                "an ERC-8183 AgentProofHook JobOutcomeRecorded event."
+            ),
+        )
+
+    # Rate limit: 1 feedback per agent per reviewer per hour
+    # Verified job-anchored ratings bypass this — the per-job uniqueness check
+    # above already prevents spam, and legitimate clients may complete multiple
+    # jobs with the same provider within an hour.
+    if not verified:
+        one_hour_ago = datetime.now(timezone.utc).replace(microsecond=0)
+        one_hour_ago = one_hour_ago.isoformat().replace("+00:00", "Z")
+        try:
+            recent = (
+                db.table("reputation_events")
+                .select("id")
+                .eq("agent_id", body.agent_id)
+                .eq("reviewer_address", reviewer_address)
+                .gte("created_at", one_hour_ago)
+                .limit(1)
+                .execute()
+            )
+            if recent.data:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limited: max 1 feedback per agent per hour from the same reviewer",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # If rate limit check fails, allow through
 
     # Build task_hash if not provided
     task_hash = body.task_hash
@@ -542,6 +617,10 @@ async def submit_feedback(request: Request, body: FeedbackRequest):
             "tag1": body.tag1,
             "tag2": body.tag2 or f"api:{protocol_name}",
             "source_chain": body.chain,
+            "job_id": body.job_id,
+            "verified": verified,
+            "hook_chain": hook_chain if body.job_id is not None else None,
+            "hook_address": hook_address,
         }).execute()
 
         feedback_id = result.data[0]["id"] if result.data else 0
@@ -573,7 +652,11 @@ async def submit_feedback(request: Request, body: FeedbackRequest):
         except Exception:
             pass
 
-        logger.info(f"[feedback] {protocol_name} rated agent #{body.agent_id}: {body.rating}/100 ({body.tag1})")
+        anchor = f" (job={body.job_id}, verified)" if verified else " (unverified)"
+        logger.info(
+            f"[feedback] {protocol_name} rated agent #{body.agent_id}: "
+            f"{body.rating}/100 ({body.tag1}){anchor}"
+        )
 
         return FeedbackResponse(
             status="accepted",
@@ -581,13 +664,54 @@ async def submit_feedback(request: Request, body: FeedbackRequest):
             agent_id=body.agent_id,
             rating=body.rating,
             tag1=body.tag1,
-            message="Feedback recorded. Score updates on next evaluation.",
+            message=(
+                "Feedback recorded and anchored to on-chain job. Score updates on next evaluation."
+                if verified
+                else "Feedback recorded (unverified — no job_id supplied). Score updates on next evaluation."
+            ),
+            verified=verified,
+            verification_reason=verification_reason,
+            job_id=body.job_id,
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to insert feedback: {e}")
         raise HTTPException(status_code=500, detail="Failed to record feedback")
+
+
+@router.get("/feedback/verify")
+async def feedback_verify_job(
+    agent_id: int = Query(..., description="Agent being rated"),
+    job_id: int = Query(..., description="ERC-8183 jobId from AgentProofHook"),
+    hook_chain: str = Query(..., description="Chain where the hook recorded the job"),
+):
+    """Pre-check whether a (agent_id, job_id) pair would pass the hook gate.
+
+    Use this before POST /feedback to avoid a 400 on submission. Returns the
+    raw JobVerification — exists/completed/block/tx — so clients can display
+    the on-chain anchor to end users.
+    """
+    from services.hook_verification import get_hook_verification_service
+    svc = get_hook_verification_service()
+    chain = hook_chain.strip().lower()
+    if not svc.is_configured(chain):
+        raise HTTPException(
+            status_code=503,
+            detail=f"No AgentProofHook configured for chain '{chain}'",
+        )
+    v = svc.verify_job(chain, job_id, agent_id)
+    return {
+        "agent_id": agent_id,
+        "job_id": job_id,
+        "hook_chain": chain,
+        "hook_address": v.hook_address,
+        "verified": v.verified,
+        "completed": v.completed,
+        "reason": v.reason,
+        "block_number": v.block_number,
+        "tx_hash": v.tx_hash,
+    }
 
 
 @router.get("/health")

@@ -189,6 +189,15 @@ export const ADDRESS_RESOLVER_ABI = [
   "error NotRegistered(address account)",
 ] as const;
 
+// ─── TrustScoreOracle ABI (on-chain score store, populated by score pusher) ─────
+export const TRUST_SCORE_ORACLE_ABI = [
+  "function getScore(uint256 agentId) external view returns (uint16 compositeScore, uint8 tier, uint40 updatedAt)",
+  "function updateScore(uint256 agentId, uint16 compositeScore, uint8 tier) external",
+  "function batchUpdateScores(uint256[] agentIds, uint16[] compositeScores, uint8[] tiers) external",
+  "function owner() external view returns (address)",
+  "event ScoreUpdated(uint256 indexed agentId, uint16 compositeScore, uint8 tier)",
+] as const;
+
 // ─── AgentProof Core ABI (custom aggregation contract) ─────────────
 export const AGENTPROOF_CORE_ABI = [
   "function getAgentProfile(uint256 agentId) external view returns (tuple(uint256 agentId, address owner, string agentURI, uint256 feedbackCount, uint256 averageRating, uint256 validationSuccessRate, uint256 totalValidations, uint256 completedValidations, uint256 successfulValidations))",

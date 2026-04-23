@@ -15,6 +15,7 @@ export interface AgentProofConfig {
     reputationGate?: string;
     agentMonitor?: string;
     agentSplits?: string;
+    trustScoreOracle?: string;
   };
 }
 

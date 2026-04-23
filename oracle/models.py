@@ -92,6 +92,9 @@ class TrustEvaluation(BaseModel):
     # ERC-8183 job outcome signals
     job_completion_rate: float | None = None
     job_count: int = 0
+    # Ratings anchored to a verified AgentProofHook JobOutcomeRecorded event.
+    # Counts a subset of feedback_count where verified=TRUE in reputation_events.
+    verified_feedback_count: int = 0
 
 
 class TrustedAgent(BaseModel):

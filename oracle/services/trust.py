@@ -575,6 +575,26 @@ def _determine_risk_level(risk_flags: list[RiskFlag]) -> RiskLevel:
     return RiskLevel.LOW
 
 
+def _count_verified_feedback(db, agent_id: int) -> int:
+    """Count reputation_events rows with verified=TRUE for this agent.
+
+    Returns 0 if the column doesn't exist yet (pre-migration-006 databases) or
+    if the query fails for any reason — never raises.
+    """
+    try:
+        res = (
+            db.table("reputation_events")
+            .select("id", count="exact")
+            .eq("agent_id", agent_id)
+            .eq("verified", True)
+            .limit(0)
+            .execute()
+        )
+        return int(res.count or 0)
+    except Exception:
+        return 0
+
+
 # ─── TrustService ─────────────────────────────────────────────────────
 
 
@@ -639,6 +659,8 @@ class TrustService:
             uri_stability_score=0,
         )
 
+        verified_count = _count_verified_feedback(db, agent_id)
+
         evaluation = TrustEvaluation(
             agent_id=agent_id,
             name=agent.get("name"),
@@ -653,6 +675,7 @@ class TrustService:
             account_age_days=age_days,
             uptime_pct=-1.0,
             evaluated_at=datetime.now(timezone.utc),
+            verified_feedback_count=verified_count,
         )
 
         # Cache under a distinct prefix so full eval doesn't read fast-path results
@@ -1010,6 +1033,7 @@ class TrustService:
             last_failure_at=last_failure_at,
             job_completion_rate=job_completion_rate,
             job_count=job_count,
+            verified_feedback_count=_count_verified_feedback(db, agent_id),
         )
 
         # Populate cache

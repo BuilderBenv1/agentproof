@@ -9,6 +9,7 @@ import {
   REPUTATION_GATE_ABI,
   AGENT_MONITOR_ABI,
   AGENT_SPLITS_ABI,
+  TRUST_SCORE_ORACLE_ABI,
 } from "./contracts/abis";
 import { getAddresses, ContractAddresses } from "./contracts/addresses";
 import type {
@@ -64,6 +65,10 @@ export class AgentProof {
   public readonly agentMonitor: ethers.Contract | null;
   public readonly agentSplits: ethers.Contract | null;
 
+  // On-chain trust score oracle (per-chain, populated by the score pusher).
+  // Reads via gateX402(), freshScore(), etc. Gasless on SKALE.
+  public readonly trustScoreOracle: ethers.Contract | null;
+
   constructor(config: AgentProofConfig) {
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
 
@@ -113,6 +118,15 @@ export class AgentProof {
       : null;
     this.agentSplits = this.addresses.agentSplits
       ? new ethers.Contract(this.addresses.agentSplits, AGENT_SPLITS_ABI, signerOrProvider)
+      : null;
+
+    // Merge any custom trustScoreOracle override, then wire if available.
+    const trustScoreOracleAddr = customAddresses?.trustScoreOracle || defaults.trustScoreOracle;
+    if (trustScoreOracleAddr) {
+      (this.addresses as any).trustScoreOracle = trustScoreOracleAddr;
+    }
+    this.trustScoreOracle = trustScoreOracleAddr
+      ? new ethers.Contract(trustScoreOracleAddr, TRUST_SCORE_ORACLE_ABI, signerOrProvider)
       : null;
   }
 
@@ -702,5 +716,94 @@ export class AgentProof {
     this.validationRegistry.removeAllListeners();
     this.agentMonitor?.removeAllListeners();
     this.agentSplits?.removeAllListeners();
+  }
+
+  // ─── gateX402 — on-chain reputation gate for x402 payment flows ────────
+  //
+  // Reads the TrustScoreOracle on the configured chain (SKALE by default for
+  // the Thursday demo) and returns an allow/block decision plus the raw
+  // tier/score. An x402 client calls this BEFORE signing a payment to a
+  // counterparty agent: if gateX402(...).allowed is false, the payment is
+  // refused. Gasless on SKALE — so a client can check every counterparty
+  // on every payment without running up gas costs.
+
+  static readonly TIER_NAMES = ["unranked", "bronze", "silver", "gold", "platinum", "diamond"] as const;
+  static readonly TIER_NUMS: Record<string, number> = {
+    unranked: 0, bronze: 1, silver: 2, gold: 3, platinum: 4, diamond: 5,
+  };
+
+  /**
+   * Gated on-chain check used by x402 treasurers before signing a payment.
+   *
+   * @param agentId  ERC-8004 agent ID to check
+   * @param minTier  Minimum tier name ("bronze" | "silver" | "gold" | "platinum" | "diamond")
+   *                 or numeric (1-5). Defaults to "bronze".
+   * @param opts     Optional max staleness — reject scores older than N seconds
+   *                 (default 3600 = 1 hour; 0 = ignore freshness)
+   * @returns Decision + on-chain snapshot
+   */
+  async gateX402(
+    agentId: number | bigint,
+    minTier: string | number = "bronze",
+    opts: { maxScoreAgeSeconds?: number } = {},
+  ): Promise<{
+    allowed: boolean;
+    reason: string | null;
+    agentId: bigint;
+    score: number;
+    scoreRaw: number;
+    tier: string;
+    tierNum: number;
+    updatedAt: number;
+    ageSeconds: number;
+    minTier: string;
+    source: string;
+  }> {
+    if (!this.trustScoreOracle) {
+      throw new Error(
+        "gateX402 requires a trustScoreOracle address. Pass contracts.trustScoreOracle in config or use a chainId with a deployed oracle (e.g. 1187947933 for SKALE).",
+      );
+    }
+    const minTierNum = typeof minTier === "number"
+      ? minTier
+      : (AgentProof.TIER_NUMS[String(minTier).toLowerCase()] ?? 1);
+    const minTierName = AgentProof.TIER_NAMES[minTierNum] ?? "bronze";
+    const maxAge = opts.maxScoreAgeSeconds ?? 3600;
+
+    const raw = await this.trustScoreOracle.getScore(agentId);
+    const scoreRaw = Number(raw[0]);        // uint16, 0-10000
+    const tierNum = Number(raw[1]);         // uint8, 0-5
+    const updatedAt = Number(raw[2]);       // uint40 seconds
+    const tierName = AgentProof.TIER_NAMES[tierNum] ?? "unranked";
+    const score = scoreRaw / 100;           // display units 0-100
+    const now = Math.floor(Date.now() / 1000);
+    const ageSeconds = updatedAt > 0 ? now - updatedAt : -1;
+
+    let reason: string | null = null;
+    let allowed = true;
+    if (updatedAt === 0) {
+      allowed = false;
+      reason = "AgentNotScored";
+    } else if (maxAge > 0 && ageSeconds > maxAge) {
+      allowed = false;
+      reason = "ScoreExpired";
+    } else if (tierNum < minTierNum) {
+      allowed = false;
+      reason = "TierTooLow";
+    }
+
+    return {
+      allowed,
+      reason,
+      agentId: BigInt(agentId),
+      score,
+      scoreRaw,
+      tier: tierName,
+      tierNum,
+      updatedAt,
+      ageSeconds,
+      minTier: minTierName,
+      source: (this.addresses as any).trustScoreOracle,
+    };
   }
 }

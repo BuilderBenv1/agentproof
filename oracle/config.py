@@ -131,6 +131,28 @@ class OracleSettings(BaseSettings):
     agent402_oracle_wallet: str = ""  # Agent402's wallet address for on-chain reads
     divergence_threshold: float = 10.0  # points on 0-100 scale
 
+    # ERC-8183 AgentProofHook — job-anchored reputation
+    # When a hook address is configured for a chain, /api/v1/feedback can verify
+    # that a rating references a real JobOutcomeRecorded event on that chain.
+    # Addresses are per-chain because the hook is not a CREATE2 deploy.
+    agentproof_hook_avalanche: str = ""
+    agentproof_hook_base: str = ""
+    agentproof_hook_ethereum: str = ""
+    agentproof_hook_linea: str = ""
+    agentproof_hook_polygon: str = ""
+    agentproof_hook_arbitrum: str = ""
+    agentproof_hook_optimism: str = ""
+    agentproof_hook_bsc: str = ""
+    agentproof_hook_celo: str = ""
+    agentproof_hook_skale: str = ""
+    # When true, /api/v1/feedback rejects any submission without a verified job_id.
+    # When false (default), unverified ratings are accepted but flagged verified=false
+    # so scoring can weight them lower.
+    feedback_require_job_id: bool = False
+    # Max block range to scan when searching for a JobOutcomeRecorded event.
+    # Jobs that completed earlier than this won't be verifiable — tune up if needed.
+    hook_event_scan_blocks: int = 200_000
+
     # Self-registration (opt-in)
     self_register: bool = False
 

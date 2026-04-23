@@ -65,8 +65,10 @@ def _get_chain_configs(settings) -> list[dict]:
     both an RPC URL and an oracle address configured."""
     chains = []
 
-    # Per-chain settings — ordered cheapest gas first
+    # Per-chain settings — ordered cheapest gas first. SKALE is gasless so it
+    # sits at the front; running out of sFUEL is the only failure mode.
     chain_defs = [
+        ("skale", settings.skale_rpc_url, settings.skale_oracle_address),
         ("avalanche", settings.avalanche_rpc_url, settings.avax_oracle_address),
         ("base", settings.base_rpc_url, settings.base_oracle_address),
         ("bsc", settings.bsc_rpc_url, settings.bsc_oracle_address),
@@ -143,19 +145,28 @@ def _push_to_chain(chain_cfg: dict, agents_to_push: list[tuple], account, min_de
         tiers_uint8 = [b[2] for b in batch]
 
         try:
-            nonce = w3.eth.get_transaction_count(account.address)
-            base_fee = w3.eth.gas_price
-            priority_fee = min(w3.to_wei(2, "gwei"), base_fee)  # never exceed base
-            max_fee = base_fee * 2 + priority_fee
-            tx = contract.functions.batchUpdateScores(
-                ids, scores_uint16, tiers_uint8
-            ).build_transaction({
+            # 'pending' avoids "nonce too low" when the RPC node hasn't
+            # finished propagating the previous batch.
+            nonce = w3.eth.get_transaction_count(account.address, "pending")
+            gas_price = w3.eth.gas_price
+            # SKALE (and other gasless L3s) return gas_price = 0, at which point
+            # EIP-1559 fee fields resolve to 0 and the RPC rejects the tx.
+            # Use legacy gasPrice there; EIP-1559 everywhere else.
+            is_gasless = chain_name == "skale" or gas_price == 0
+            base_tx = {
                 "from": account.address,
                 "nonce": nonce,
                 "gas": 300_000 + 80_000 * len(batch),
-                "maxFeePerGas": max_fee,
-                "maxPriorityFeePerGas": priority_fee,
-            })
+            }
+            if is_gasless:
+                base_tx["gasPrice"] = gas_price
+            else:
+                priority_fee = min(w3.to_wei(2, "gwei"), gas_price)  # never exceed base
+                base_tx["maxFeePerGas"] = gas_price * 2 + priority_fee
+                base_tx["maxPriorityFeePerGas"] = priority_fee
+            tx = contract.functions.batchUpdateScores(
+                ids, scores_uint16, tiers_uint8
+            ).build_transaction(base_tx)
             signed = account.sign_transaction(tx)
             tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
