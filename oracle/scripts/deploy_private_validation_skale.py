@@ -169,7 +169,7 @@ def main():
     }
     with open(ARTIFACT_OUT, "w") as f:
         json.dump(artifact, f, indent=2)
-    print(f"\nWrote artifact → {ARTIFACT_OUT}")
+    print(f"\nWrote artifact to {ARTIFACT_OUT}")
 
 
 if __name__ == "__main__":
