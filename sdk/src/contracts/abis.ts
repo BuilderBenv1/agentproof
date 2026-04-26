@@ -65,6 +65,27 @@ export const VALIDATION_REGISTRY_ABI = [
   "event ValidationSubmitted(uint256 indexed validationId, address indexed validator, bool isValid)",
 ] as const;
 
+// ─── Private Validation Registry ABI (SKALE Base + BITE) ───────────
+// Sealed-ballot validation via threshold-encrypted votes. Lives on SKALE
+// Base Sepolia (324705682) / SKALE Base (1187947933) — chains with BITE
+// precompiles. See contracts/src/PrivateValidationRegistry.sol.
+export const PRIVATE_VALIDATION_REGISTRY_ABI = [
+  "function requestValidation(uint256 agentId, bytes32 taskHash, string taskURI, uint8 quorum, uint40 votingPeriod) external returns (uint256)",
+  "function submitEncryptedVote(uint256 validationId, bytes teEncryptedVote) external",
+  "function triggerReveal(uint256 validationId) external payable",
+  "function hasVoted(uint256 validationId, address validator) external view returns (bool)",
+  "function getEncryptedBallotCount(uint256 validationId) external view returns (uint256)",
+  "function getValidationsForAgent(uint256 agentId) external view returns (uint256[])",
+  "function getSuccessRate(uint256 agentId) external view returns (uint16 rate, uint32 resolved)",
+  "function getValidation(uint256 validationId) external view returns (uint256 agentId, bytes32 taskHash, string taskURI, address requester, uint40 createdAt, uint40 deadline, uint8 quorum, uint8 votesReceived, uint8 state, bool consensusValid, uint8 yesVotes)",
+  "function validationCount() external view returns (uint256)",
+  "event ValidationRequested(uint256 indexed validationId, uint256 indexed agentId, bytes32 taskHash)",
+  "event PrivateVoteSubmitted(uint256 indexed validationId, address indexed validator, uint8 votesSoFar)",
+  "event QuorumReached(uint256 indexed validationId, uint8 votes)",
+  "event ConsensusReached(uint256 indexed validationId, bool consensusValid, uint8 yesVotes, uint8 totalVotes)",
+  "event ValidationSubmitted(uint256 indexed validationId, address indexed validator, bool isValid)",
+] as const;
+
 // ─── InsurancePool ABI (Phase 3) ─────────────────────────────────────
 export const INSURANCE_POOL_ABI = [
   "function stakeForAgent(uint256 agentId, string tier) external payable",
